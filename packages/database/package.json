@@ -11,7 +11,8 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"No database package tests yet\"",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {

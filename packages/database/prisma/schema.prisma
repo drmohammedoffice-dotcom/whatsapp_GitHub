@@ -947,8 +947,21 @@ model AiKnowledgeChunk {
   createdAt   DateTime @default(now())
   team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   document    AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embedding   AiKnowledgeEmbedding?
 
   @@index([teamId, documentId])
+}
+
+/// Managed by the `20260625223000_ai_pgvector` SQL migration (pgvector extension + ivfflat index).
+model AiKnowledgeEmbedding {
+  chunkId   String                      @id @map("chunk_id")
+  teamId    String                      @map("team_id")
+  embedding Unsupported("vector(1536)")
+  createdAt DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  chunk     AiKnowledgeChunk            @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@index([teamId], map: "ai_knowledge_embedding_team_idx")
+  @@map("ai_knowledge_embedding")
 }
 
 model AiMemory {
