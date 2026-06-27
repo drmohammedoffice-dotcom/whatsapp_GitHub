@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/api/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "sh -c \"pnpm --filter @watsapp/database exec prisma db push --skip-generate --accept-data-loss && (pnpm --filter @watsapp/database exec prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260625223000_ai_pgvector/migration.sql || echo 'pgvector step skipped') && pnpm --filter @watsapp/api start\"",
+    "healthcheckPath": "/api/v1/health",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}

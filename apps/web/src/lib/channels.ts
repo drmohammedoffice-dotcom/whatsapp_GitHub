@@ -1,4 +1,4 @@
-import { Facebook, Instagram, MessageSquare, Send, type LucideIcon } from 'lucide-react';
+import { Camera, MessageCircle, MessageSquare, Send, type LucideIcon } from 'lucide-react';
 
 export type ChannelSlug = 'whatsapp' | 'messenger' | 'instagram' | 'telegram';
 
@@ -39,7 +39,7 @@ export const channelDefinitions: ChannelDefinition[] = [
     provider: 'META_MESSENGER',
     connectHref: '/messenger',
     inboxHref: '/inbox/messenger',
-    icon: Facebook,
+    icon: MessageCircle,
     navConnectKey: 'nav.messenger',
     navConnectDescKey: 'nav.messengerDesc',
     navInboxKey: 'nav.inboxMessenger',
@@ -53,7 +53,7 @@ export const channelDefinitions: ChannelDefinition[] = [
     provider: 'META_INSTAGRAM',
     connectHref: '/instagram',
     inboxHref: '/inbox/instagram',
-    icon: Instagram,
+    icon: Camera,
     navConnectKey: 'nav.instagram',
     navConnectDescKey: 'nav.instagramDesc',
     navInboxKey: 'nav.inboxInstagram',
