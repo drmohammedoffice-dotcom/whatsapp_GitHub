@@ -1,0 +1,34 @@
+# Keep the Docker build context small and free of host-specific artifacts.
+# This is critical: host node_modules (e.g. Windows binaries) must NOT be
+# copied into the Linux image, and build outputs are regenerated inside Docker.
+
+# Dependencies (reinstalled inside the image)
+**/node_modules
+
+# Build outputs / caches (rebuilt inside the image)
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+
+# Local env files (provide these via Railway variables instead)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Version control & editor
+.git
+.gitignore
+**/.vscode
+**/.idea
+
+# Logs & OS files
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+
+# Runtime/session data that must never be baked into the image
+**/sessions
+**/baileys_auth
+**/uploads

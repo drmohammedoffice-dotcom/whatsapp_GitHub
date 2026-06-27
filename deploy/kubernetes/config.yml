@@ -1,0 +1,32 @@
+﻿apiVersion: v1
+kind: Secret
+metadata:
+  name: watsapp-secrets
+type: Opaque
+stringData:
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/watsapp?schema=public
+  REDIS_URL: redis://redis:6379
+  JWT_ACCESS_SECRET: replace-with-strong-secret
+  JWT_REFRESH_SECRET: replace-with-strong-secret
+  ENCRYPTION_KEY: replace-with-strong-secret
+  API_KEY_PEPPER: replace-with-strong-secret
+  WEBHOOK_SIGNING_SECRET: replace-with-strong-secret
+  AI_API_KEY: replace-with-ai-key
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: watsapp-config
+data:
+  NODE_ENV: production
+  API_PORT: "4000"
+  API_PUBLIC_URL: https://api.example.com
+  WEB_PUBLIC_URL: https://app.example.com
+  CORS_ORIGINS: https://app.example.com
+  LOCAL_STORAGE_ROOT: /app/storage
+  AI_API_BASE_URL: https://api.openai.com/v1
+  AI_CHAT_MODEL: gpt-4o-mini
+  AI_EMBEDDING_MODEL: text-embedding-3-small
+  AI_EMBEDDING_DIMENSIONS: "1536"
+  AI_MONTHLY_BUDGET_CENTS: "10000"
+  AI_RATE_LIMIT_PER_MINUTE: "60"

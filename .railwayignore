@@ -1,0 +1,44 @@
+# Railway upload ignore — keeps `railway up` payload small.
+# Without this, `railway up` on a non-git folder uploads everything
+# (node_modules, .pnpm-store, build outputs) and the server rejects it (HTTP 500).
+
+# Dependencies (reinstalled during the Railway build)
+node_modules
+**/node_modules
+.pnpm-store
+**/.pnpm-store
+
+# Build outputs / caches (rebuilt during the Railway build)
+.next
+**/.next
+dist
+**/dist
+.turbo
+**/.turbo
+coverage
+**/coverage
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Local env files (set these as Railway variables instead)
+.env
+.env.*
+!.env.example
+
+# Version control & editor
+.git
+.gitignore
+**/.vscode
+**/.idea
+
+# Logs & OS files
+*.log
+**/.DS_Store
+**/Thumbs.db
+
+# Runtime/session data that must never be uploaded
+**/sessions
+**/baileys_auth
+**/uploads
+storage/sessions/*
+storage/media/*

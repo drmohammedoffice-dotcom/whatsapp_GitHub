@@ -1,0 +1,35 @@
+﻿# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs & caches
+.next
+dist
+build
+out
+coverage
+.turbo
+*.tsbuildinfo
+
+# Environment & secrets (NEVER commit real secrets)
+.env
+.env.*
+!.env.example
+
+# Runtime data (WhatsApp sessions, uploaded media)
+storage/sessions/*
+storage/media/*
+!storage/sessions/.gitkeep
+!storage/media/.gitkeep
+**/baileys_auth
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+.vscode
+.idea

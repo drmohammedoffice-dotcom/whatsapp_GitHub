@@ -1,0 +1,21 @@
+{
+  "name": "whatsapp-saas",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @watsapp/api --filter @watsapp/web --filter @watsapp/worker dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "prisma:generate": "pnpm --filter @watsapp/database prisma:generate",
+    "prisma:migrate": "pnpm --filter @watsapp/database prisma:migrate",
+    "prisma:studio": "pnpm --filter @watsapp/database prisma:studio"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "prettier": "latest",
+    "typescript": "latest"
+  }
+}

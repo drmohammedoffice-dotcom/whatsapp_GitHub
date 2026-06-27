@@ -1,0 +1,1485 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum Permission {
+  INBOX_READ
+  INBOX_WRITE
+  CONVERSATION_ASSIGN
+  CONVERSATION_CLOSE
+  CONTACT_READ
+  CONTACT_WRITE
+  AGENT_MANAGE
+  DEPARTMENT_MANAGE
+  ANALYTICS_READ
+  SETTINGS_MANAGE
+  API_KEY_MANAGE
+  WEBHOOK_MANAGE
+  AI_ACCESS
+  AI_MANAGE_KNOWLEDGE
+  AI_MANAGE_TOOLS
+  AI_VIEW_COSTS
+  TIKTOK_VIEW
+  TIKTOK_MANAGE
+}
+
+enum WhatsAppSessionStatus {
+  PENDING_QR
+  CONNECTING
+  CONNECTED
+  DISCONNECTED
+  FAILED
+}
+
+enum WhatsAppConnectionLogEvent {
+  QR_GENERATED
+  QR_UPDATED
+  CONNECTING
+  CONNECTED
+  DISCONNECTED
+  RECONNECTING
+  SESSION_RESTORED
+  LOGGED_OUT
+  FAILED
+  MESSAGE_RECEIVED
+  PRESENCE_UPDATED
+  CONTACTS_UPDATED
+}
+
+enum ChannelProvider {
+  WHATSAPP_BAILEYS
+  META_MESSENGER
+  META_INSTAGRAM
+  TELEGRAM
+}
+
+enum ChannelStatus {
+  PENDING
+  CONNECTING
+  CONNECTED
+  DISCONNECTED
+  FAILED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  AUDIO
+  VIDEO
+  LOCATION
+  CONTACT
+  STICKER
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+
+enum ConversationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ConversationEventType {
+  CREATED
+  MESSAGE_CREATED
+  MESSAGE_STATUS_UPDATED
+  ASSIGNED
+  UNASSIGNED
+  STATUS_CHANGED
+  ARCHIVED
+  UNARCHIVED
+  PINNED
+  UNPINNED
+  TAGGED
+  UNTAGGED
+  NOTE_CREATED
+  COMMENT_CREATED
+  CONTACT_UPDATED
+  AI_REPLY_SENT
+  AI_TRANSFERRED
+  AI_PAUSED
+  AI_REACTIVATED
+  AUTOMATION_EXECUTED
+}
+
+enum AgentPresence {
+  OFFLINE
+  AVAILABLE
+  BUSY
+  AWAY
+}
+
+enum NotificationType {
+  ASSIGNMENT
+  MESSAGE
+  MENTION
+  SYSTEM
+  SLA
+}
+
+enum WebhookEvent {
+  INCOMING_MESSAGE
+  DELIVERY_STATUS
+  READ_STATUS
+  TYPING
+  PRESENCE
+  CONVERSATION_CREATED
+  CONVERSATION_UPDATED
+  CONVERSATION_ASSIGNED
+  CONVERSATION_MESSAGE_CREATED
+  CONTACT_UPDATED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+enum AiDocumentStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum AiMemoryScope {
+  CONVERSATION
+  CUSTOMER
+  BUSINESS
+  LONG_TERM
+}
+
+enum AiToolKind {
+  HTTP_REQUEST
+  CRM
+  CALENDAR
+  EMAIL
+  CUSTOM_API
+}
+
+enum AiRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AiAgentType {
+  SUPERVISOR
+  SALES
+  SUPPORT
+  MARKETING
+  ADMIN
+}
+
+enum ConversationAiMode {
+  AI_ACTIVE
+  AI_PAUSED
+  HUMAN_ONLY
+}
+
+enum AiTransferReason {
+  CUSTOMER_REQUEST
+  LOW_CONFIDENCE
+  COMPLAINT
+  REFUND_REQUEST
+  SENSITIVE_ISSUE
+  CUSTOM_RULE
+  KNOWLEDGE_GAP
+}
+
+enum AiProviderType {
+  OPENAI_COMPATIBLE
+  OPENROUTER
+  GROQ
+  GEMINI
+  CUSTOM
+}
+
+enum AutomationTriggerType {
+  CONVERSATION_OPENED
+  MESSAGE_RECEIVED
+  INACTIVITY
+  BUSINESS_HOURS
+  OUT_OF_OFFICE
+  ABANDONED_CART
+  FOLLOW_UP
+}
+
+enum AutomationActionType {
+  SEND_GREETING
+  SEND_MESSAGE
+  SEND_FOLLOW_UP
+  SEND_REMINDER
+  AUTO_TAG
+  AUTO_ASSIGN
+  TRANSFER_TO_HUMAN
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  CONTACTED
+  CONVERTED
+  LOST
+}
+
+enum SatisfactionSource {
+  AI_CONVERSATION
+  HUMAN_CONVERSATION
+  SURVEY
+}
+model User {
+  id                  String                   @id @default(cuid())
+  email               String                   @unique
+  name                String
+  passwordHash        String
+  emailVerifiedAt     DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  teamMembers         TeamMember[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
+  assignedConversations Conversation[]         @relation("ConversationAssignee")
+  authoredNotes       ConversationNote[]
+  authoredComments    InternalComment[]
+  notifications       Notification[]
+  agentStatuses       AgentStatus[]
+  aiMemories          AiMemory[]
+  aiRuns              AiRun[]
+  createdWhatsAppSessions WhatsAppSession[] @relation("WhatsAppSessionCreator")
+  initiatedTransfers ConversationTransfer[] @relation("TransferInitiator")
+  assignedTransfers  ConversationTransfer[] @relation("TransferAssignee")
+}
+model Team {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  members     TeamMember[]
+  sessions    WhatsAppSession[]
+  chats       Chat[]
+  messages    Message[]
+  apiKeys     ApiKey[]
+  webhooks    WebhookEndpoint[]
+  settings    Setting[]
+  auditLogs   AuditLog[]
+  channels    Channel[]
+  contacts    Contact[]
+  identities  ContactIdentity[]
+  labels      Label[]
+  customFields ContactCustomField[]
+  conversations Conversation[]
+  conversationMessages ConversationMessage[]
+  departments Department[]
+  notifications Notification[]
+  notificationPreferences NotificationPreference[]
+  analyticsDailyMetrics AnalyticsDailyMetric[]
+  aiAgents AiAgent[]
+  aiKnowledgeSources AiKnowledgeSource[]
+  aiKnowledgeDocuments AiKnowledgeDocument[]
+  aiKnowledgeChunks AiKnowledgeChunk[]
+  aiMemories AiMemory[]
+  aiTools AiTool[]
+  aiRuns AiRun[]
+  aiCostEvents AiCostEvent[]
+  aiSettings AiSettings?
+  aiProviderConfig AiProviderConfig?
+  products Product[]
+  automationRules AutomationRule[]
+  conversationTransfers ConversationTransfer[]
+  leads Lead[]
+  customerSatisfactions CustomerSatisfaction[]
+  bookings Booking[]
+  aiTrainingMedia AiTrainingMedia[]
+  tikTokAccount TikTokAccount?
+  tikTokSettings TikTokSettings?
+  tikTokEvents TikTokEvent[]
+  tikTokLogs TikTokLog[]
+  tikTokTrackingClicks TikTokTrackingClick[]
+  tikTokCampaigns TikTokCampaign[]
+}
+model TeamMember {
+  id          String       @id @default(cuid())
+  teamId      String
+  userId      String
+  role        TeamRole     @default(MEMBER)
+  permissions Permission[] @default([])
+  createdAt   DateTime     @default(now())
+  team        Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departmentMemberships DepartmentMember[]
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id           String    @id @default(cuid())
+  userId       String
+  tokenHash    String    @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  replacedById String?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Channel {
+  id                String          @id @default(cuid())
+  teamId            String
+  provider          ChannelProvider
+  name              String
+  status            ChannelStatus   @default(PENDING)
+  externalId        String?
+  whatsAppSessionId String?         @unique
+  lastSeenAt        DateTime?
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  team              Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  whatsAppSession   WhatsAppSession? @relation(fields: [whatsAppSessionId], references: [id], onDelete: SetNull)
+  identities        ContactIdentity[]
+  conversations     Conversation[]
+
+  @@unique([teamId, provider, externalId])
+  @@index([teamId, status])
+}
+
+model WhatsAppSession {
+  id                 String                @id @default(cuid())
+  teamId             String
+  createdByUserId    String?
+  displayName        String?
+  phoneNumber        String?
+  jid                String?
+  profilePhotoUrl    String?
+  status             WhatsAppSessionStatus @default(PENDING_QR)
+  qrCode             String?
+  qrCodeUpdatedAt    DateTime?
+  connectedAt        DateTime?
+  disconnectedAt     DateTime?
+  lastHeartbeatAt    DateTime?
+  lastSeenAt         DateTime?
+  failureReason      String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  team               Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy          User?                 @relation("WhatsAppSessionCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  channel            Channel?
+  credentials        SessionCredential[]
+  chats              Chat[]
+  messages           Message[]
+  connectionLogs     WhatsAppConnectionLog[]
+  whatsAppContacts   WhatsAppContact[]
+
+  @@index([teamId, status])
+  @@index([teamId, createdByUserId])
+  @@unique([teamId, phoneNumber])
+}
+
+model WhatsAppConnectionLog {
+  id        String                    @id @default(cuid())
+  teamId    String
+  sessionId String
+  event     WhatsAppConnectionLogEvent
+  message   String?
+  metadata  Json?
+  createdAt DateTime                  @default(now())
+  session   WhatsAppSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([teamId, createdAt])
+}
+
+model WhatsAppContact {
+  id                String          @id @default(cuid())
+  teamId            String
+  sessionId         String
+  providerContactId String
+  displayName       String?
+  phoneNumber       String?
+  profilePhotoUrl   String?
+  isBlocked         Boolean         @default(false)
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  session           WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, providerContactId])
+  @@index([teamId, sessionId])
+}
+
+model SessionCredential {
+  id        String          @id @default(cuid())
+  sessionId String
+  key       String
+  value     String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  session   WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, key])
+}
+
+model Contact {
+  id          String     @id @default(cuid())
+  teamId      String
+  displayName String
+  email       String?
+  phone       String?
+  avatarUrl   String?
+  notes       String?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  team        Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  identities  ContactIdentity[]
+  labels      ContactLabel[]
+  customValues ContactCustomFieldValue[]
+  conversations Conversation[]
+  leads         Lead[]
+  satisfactions CustomerSatisfaction[]
+  bookings      Booking[]
+  tikTokEvents  TikTokEvent[]
+  tikTokClicks  TikTokTrackingClick[]
+
+  @@index([teamId, displayName])
+  @@index([teamId, phone])
+  @@index([teamId, email])
+}
+
+model ContactIdentity {
+  id          String          @id @default(cuid())
+  teamId      String
+  contactId   String
+  channelId   String
+  externalId  String
+  displayName String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  team        Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contact     Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channel     Channel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([channelId, externalId])
+  @@index([teamId, contactId])
+}
+
+model ContactCustomField {
+  id        String   @id @default(cuid())
+  teamId    String
+  key       String
+  label     String
+  type      String
+  required  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  values    ContactCustomFieldValue[]
+
+  @@unique([teamId, key])
+}
+
+model ContactCustomFieldValue {
+  id        String             @id @default(cuid())
+  contactId String
+  fieldId   String
+  value     Json
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  contact   Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  field     ContactCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, fieldId])
+}
+
+model Label {
+  id        String   @id @default(cuid())
+  teamId    String
+  name      String
+  color     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contacts  ContactLabel[]
+  conversations ConversationTag[]
+
+  @@unique([teamId, name])
+}
+
+model ContactLabel {
+  contactId String
+  labelId   String
+  createdAt DateTime @default(now())
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, labelId])
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  teamId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members     DepartmentMember[]
+  conversations Conversation[]
+
+  @@unique([teamId, name])
+}
+
+model DepartmentMember {
+  id           String     @id @default(cuid())
+  departmentId String
+  teamMemberId String
+  createdAt    DateTime   @default(now())
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, teamMemberId])
+}
+
+model AgentStatus {
+  id        String        @id @default(cuid())
+  userId    String
+  teamId    String
+  presence  AgentPresence @default(OFFLINE)
+  capacity  Int           @default(10)
+  updatedAt DateTime      @updatedAt
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId, presence])
+}
+
+model Conversation {
+  id              String               @id @default(cuid())
+  teamId          String
+  channelId       String
+  contactId       String
+  identityId      String?
+  departmentId    String?
+  assigneeUserId  String?
+  subject         String?
+  status          ConversationStatus   @default(OPEN)
+  priority        ConversationPriority @default(NORMAL)
+  isArchived      Boolean              @default(false)
+  isPinned        Boolean              @default(false)
+  unreadCount     Int                  @default(0)
+  firstOpenedAt   DateTime             @default(now())
+  lastMessageAt   DateTime?
+  lastReadAt      DateTime?
+  closedAt        DateTime?
+  aiMode          ConversationAiMode @default(AI_ACTIVE)
+  aiPausedAt      DateTime?
+  aiPausedByUserId String?
+  lastAiReplyAt   DateTime?
+  greetingSentAt  DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  team            Team                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  channel         Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  contact         Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  identity        ContactIdentity?     @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  department      Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignee        User?                @relation("ConversationAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  messages        ConversationMessage[]
+  notes           ConversationNote[]
+  comments        InternalComment[]
+  tags            ConversationTag[]
+  events          ConversationEvent[]
+  transfers       ConversationTransfer[]
+  leads           Lead[]
+  satisfactions   CustomerSatisfaction[]
+  bookings        Booking[]
+  tikTokEvents    TikTokEvent[]
+  tikTokClicks    TikTokTrackingClick[]
+
+  @@index([teamId, status, isArchived, lastMessageAt])
+  @@index([teamId, assigneeUserId, status])
+  @@index([teamId, aiMode])
+  @@index([contactId])
+}
+
+model ConversationMessage {
+  id                String           @id @default(cuid())
+  teamId            String
+  conversationId    String
+  sourceMessageId   String?          @unique
+  providerMessageId String?
+  direction         MessageDirection
+  type              MessageType
+  status            MessageStatus    @default(PENDING)
+  text              String?
+  payload           Json?
+  mediaStorageKey   String?
+  mediaMimeType     String?
+  mediaFileName     String?
+  mediaSizeBytes    Int?
+  sentAt            DateTime?
+  receivedAt        DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  team              Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, providerMessageId])
+  @@index([teamId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model ConversationNote {
+  id             String       @id @default(cuid())
+  conversationId String
+  authorUserId   String
+  body           String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author         User         @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model InternalComment {
+  id             String       @id @default(cuid())
+  conversationId String
+  authorUserId   String
+  body           String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author         User         @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model ConversationTag {
+  conversationId String
+  labelId        String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  label          Label        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, labelId])
+}
+
+model ConversationEvent {
+  id             String                @id @default(cuid())
+  conversationId String
+  actorUserId    String?
+  type           ConversationEventType
+  metadata       Json?
+  createdAt      DateTime              @default(now())
+  conversation   Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model Chat {
+  id              String          @id @default(cuid())
+  teamId          String
+  sessionId       String
+  providerChatId  String
+  name            String?
+  isGroup         Boolean         @default(false)
+  lastMessageAt   DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  team            Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  session         WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  messages        Message[]
+
+  @@unique([sessionId, providerChatId])
+  @@index([teamId, lastMessageAt])
+}
+
+model Message {
+  id                String           @id @default(cuid())
+  teamId            String
+  sessionId         String
+  chatId            String
+  providerMessageId String?
+  fromJid           String
+  toJid             String
+  direction         MessageDirection
+  type              MessageType
+  status            MessageStatus    @default(PENDING)
+  text              String?
+  payload           Json?
+  error             String?
+  sentAt            DateTime?
+  receivedAt        DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  team              Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  session           WhatsAppSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  chat              Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  attachments       Attachment[]
+
+  @@unique([sessionId, providerMessageId])
+  @@index([teamId, createdAt])
+  @@index([chatId, createdAt])
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  messageId   String
+  storageKey  String
+  fileName    String?
+  mimeType    String
+  sizeBytes   Int?
+  checksum    String?
+  createdAt   DateTime @default(now())
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  teamId      String
+  name        String
+  prefix      String
+  keyHash     String    @unique
+  scopes      String[]
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model WebhookEndpoint {
+  id          String            @id @default(cuid())
+  teamId      String
+  url         String
+  secret      String
+  events      WebhookEvent[]
+  enabled     Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  team        Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+
+  @@index([teamId, enabled])
+}
+
+model WebhookDelivery {
+  id          String                @id @default(cuid())
+  webhookId   String
+  event       WebhookEvent
+  payload     Json
+  status      WebhookDeliveryStatus @default(PENDING)
+  attempts    Int                   @default(0)
+  lastError   String?
+  deliveredAt DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  webhook     WebhookEndpoint       @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, status])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  teamId    String
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  team      Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, userId, readAt, createdAt])
+}
+
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  channel   String
+  enabled   Boolean  @default(true)
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId, channel])
+}
+
+model AnalyticsDailyMetric {
+  id        String   @id @default(cuid())
+  teamId    String
+  day       DateTime
+  metric    String
+  value     Int      @default(0)
+  dimensions Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, day, metric])
+  @@index([teamId, day])
+}
+
+model AiAgent {
+  id          String      @id @default(cuid())
+  teamId      String
+  name        String
+  type        AiAgentType
+  systemPrompt String
+  enabled     Boolean     @default(true)
+  model       String?
+  temperature Float       @default(0.2)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  runs        AiRun[]
+
+  @@unique([teamId, type])
+  @@index([teamId, enabled])
+}
+
+model AiKnowledgeSource {
+  id          String   @id @default(cuid())
+  teamId      String
+  name        String
+  type        String
+  url         String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  documents   AiKnowledgeDocument[]
+
+  @@index([teamId, type])
+}
+
+model AiKnowledgeDocument {
+  id          String           @id @default(cuid())
+  teamId      String
+  sourceId    String?
+  title       String
+  mimeType    String?
+  storageKey  String?
+  url         String?
+  status      AiDocumentStatus @default(PENDING)
+  checksum    String?
+  error       String?
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  team        Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  source      AiKnowledgeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  chunks      AiKnowledgeChunk[]
+
+  @@index([teamId, status])
+}
+
+model AiKnowledgeChunk {
+  id          String   @id @default(cuid())
+  teamId      String
+  documentId  String
+  content     String
+  tokenCount  Int      @default(0)
+  position    Int
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  document    AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, documentId])
+}
+
+model AiMemory {
+  id          String        @id @default(cuid())
+  teamId      String
+  scope       AiMemoryScope
+  userId      String?
+  contactId   String?
+  conversationId String?
+  key         String
+  value       String
+  summary     String?
+  expiresAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  team        Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, scope, key])
+  @@index([teamId, contactId])
+  @@index([teamId, conversationId])
+}
+
+model AiTool {
+  id          String    @id @default(cuid())
+  teamId      String
+  name        String
+  description String
+  kind        AiToolKind
+  schema      Json
+  config      String
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, name])
+  @@index([teamId, enabled])
+}
+
+model AiRun {
+  id          String      @id @default(cuid())
+  teamId      String
+  userId      String?
+  agentId     String?
+  conversationId String?
+  task        String
+  status      AiRunStatus @default(PENDING)
+  input       Json
+  output      Json?
+  error       String?
+  promptTokens Int        @default(0)
+  completionTokens Int    @default(0)
+  costCents   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agent       AiAgent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([teamId, status])
+}
+
+model AiCostEvent {
+  id          String   @id @default(cuid())
+  teamId      String
+  provider    String
+  model       String
+  operation   String
+  promptTokens Int     @default(0)
+  completionTokens Int @default(0)
+  costCents   Int      @default(0)
+  cacheHit    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, createdAt])
+}
+model Setting {
+  id        String   @id @default(cuid())
+  teamId    String
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, key])
+}
+
+model AiSettings {
+  id                      String   @id @default(cuid())
+  teamId                  String   @unique
+  enabled                 Boolean  @default(false)
+  autoReplyEnabled        Boolean  @default(false)
+  confidenceThreshold     Float    @default(0.65)
+  greetingMessage         String?
+  outOfOfficeMessage      String?
+  businessHours           Json?
+  holidayReplies          Json?
+  transferOnLowConfidence Boolean  @default(true)
+  transferOnComplaint     Boolean  @default(true)
+  transferOnRefund        Boolean  @default(true)
+  transferOnSensitive     Boolean  @default(true)
+  transferOnHumanRequest  Boolean  @default(true)
+  customTransferRules     Json?
+  pauseAiOnHumanReply     Boolean  @default(true)
+  pauseAiOnAssignment     Boolean  @default(true)
+  monthlyBudgetCents      Int?
+  systemPromptOverride    String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  team                    Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model AiProviderConfig {
+  id                  String         @id @default(cuid())
+  teamId              String         @unique
+  provider            AiProviderType @default(OPENAI_COMPATIBLE)
+  encryptedApiKey     String?
+  baseUrl             String         @default("https://api.openai.com/v1")
+  model               String?
+  temperature         Float          @default(0.2)
+  maxTokens           Int            @default(1024)
+  topP                Float          @default(1)
+  enableStreaming     Boolean        @default(false)
+  enableMemory        Boolean        @default(true)
+  enableHumanHandover Boolean        @default(true)
+  enableVision        Boolean        @default(false)
+  enableProductSearch Boolean        @default(true)
+  enableImageSending  Boolean        @default(false)
+  lastTestAt          DateTime?
+  lastTestOk          Boolean?
+  lastTestMessage     String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  team                Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model ConversationTransfer {
+  id                String           @id @default(cuid())
+  teamId            String
+  conversationId    String
+  reason            AiTransferReason
+  summary           String
+  confidence        Float?
+  fromAiRunId       String?
+  assignedUserId    String?
+  initiatedByUserId String?
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  team              Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  assignedUser      User?            @relation("TransferAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  initiatedBy       User?            @relation("TransferInitiator", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([conversationId, createdAt])
+}
+
+model AutomationRule {
+  id          String                @id @default(cuid())
+  teamId      String
+  name        String
+  enabled     Boolean               @default(true)
+  priority    Int                   @default(0)
+  trigger     AutomationTriggerType
+  action      AutomationActionType
+  conditions  Json?
+  config      Json?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  team        Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, enabled, priority])
+}
+
+model Product {
+  id          String         @id @default(cuid())
+  teamId      String
+  sku         String?
+  name        String
+  description String?
+  priceCents  Int?
+  currency    String         @default("USD")
+  category    String?
+  metadata    Json?
+  isActive    Boolean        @default(true)
+  viewCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  team        Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  images      ProductImage[]
+
+  @@index([teamId, isActive])
+  @@index([teamId, name])
+}
+
+model ProductImage {
+  id         String   @id @default(cuid())
+  productId  String
+  storageKey String
+  url        String?
+  altText    String?
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum AiTrainingMediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  AUDIO
+}
+
+model AiTrainingMedia {
+  id          String              @id @default(cuid())
+  teamId      String
+  title       String
+  productName String?
+  description String?
+  mediaType   AiTrainingMediaType
+  storageKey  String
+  mimeType    String
+  fileName    String?
+  sizeBytes   Int?
+  tags        String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  team        Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, createdAt])
+  @@index([teamId, productName])
+}
+
+model Booking {
+  id                String        @id @default(cuid())
+  teamId            String
+  conversationId    String?
+  contactId         String?
+  orderNumber       String
+  phoneNumber       String
+  address           String
+  orderType         String
+  totalAmount       Float
+  currency          String        @default("IQD")
+  status            BookingStatus @default(CONFIRMED)
+  usedWhatsappPhone Boolean       @default(false)
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  team              Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  conversation      Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact           Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([teamId, orderNumber])
+  @@index([teamId, createdAt])
+  @@index([conversationId])
+  @@index([contactId])
+}
+
+model Lead {
+  id             String        @id @default(cuid())
+  teamId         String
+  contactId      String?
+  conversationId String?
+  status         LeadStatus    @default(NEW)
+  score          Float?
+  source         String?
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  team           Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contact        Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, status, createdAt])
+  @@index([conversationId])
+}
+
+model CustomerSatisfaction {
+  id             String             @id @default(cuid())
+  teamId         String
+  conversationId String?
+  contactId      String?
+  rating         Int
+  comment        String?
+  source         SatisfactionSource @default(AI_CONVERSATION)
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+  team           Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  conversation   Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact        Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([conversationId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  teamId      String
+  actorUserId String?
+  action      String
+  resource    String
+  resourceId  String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([actorUserId])
+}
+
+enum TikTokConnectionStatus {
+  DISCONNECTED
+  CONNECTING
+  CONNECTED
+  EXPIRED
+  ERROR
+}
+
+enum TikTokEventType {
+  PAGE_VISIT
+  CLICK
+  LANDING_PAGE
+  LEAD
+  CONVERSATION_STARTED
+  CONVERSATION_REPLIED
+  CONVERSATION_CLOSED
+  PURCHASE
+  CUSTOM
+}
+
+enum TikTokLogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+model TikTokAccount {
+  id               String                 @id @default(cuid())
+  teamId           String                 @unique
+  status           TikTokConnectionStatus @default(DISCONNECTED)
+  businessName     String?
+  openId           String?
+  advertiserId     String?
+  businessCenterId String?
+  connectedAt      DateTime?
+  lastSyncAt       DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  team             Team                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  token            TikTokToken?
+  advertisers      TikTokAdvertiser[]
+  businessCenters  TikTokBusinessCenter[]
+  settings         TikTokSettings?
+  events           TikTokEvent[]
+  logs             TikTokLog[]
+  campaigns        TikTokCampaign[]
+
+  @@index([status])
+}
+
+model TikTokToken {
+  id                    String        @id @default(cuid())
+  accountId             String        @unique
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scopes                String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  account               TikTokAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
+
+model TikTokAdvertiser {
+  id           String        @id @default(cuid())
+  teamId       String
+  accountId    String
+  advertiserId String
+  name         String?
+  currency     String?
+  timezone     String?
+  status       String?
+  raw          Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  account      TikTokAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, advertiserId])
+  @@index([teamId])
+}
+
+model TikTokBusinessCenter {
+  id                 String        @id @default(cuid())
+  teamId             String
+  accountId          String
+  businessCenterId   String
+  name               String?
+  currency           String?
+  timezone           String?
+  raw                Json?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  account            TikTokAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, businessCenterId])
+  @@index([teamId])
+}
+
+model TikTokSettings {
+  id                      String        @id @default(cuid())
+  teamId                  String        @unique
+  accountId               String        @unique
+  eventsApiEnabled        Boolean       @default(true)
+  autoSyncEnabled         Boolean       @default(true)
+  syncIntervalMinutes     Int           @default(60)
+  defaultWhatsAppNumber   String?
+  trackingRedirectMessage String?
+  partnerMessagingEnabled Boolean       @default(false)
+  partnerEventsApiEnabled Boolean       @default(true)
+  metadata                Json?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  account                 TikTokAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  team                    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model TikTokEvent {
+  id             String          @id @default(cuid())
+  teamId         String
+  accountId      String?
+  eventType      TikTokEventType
+  campaignId     String?
+  adGroupId      String?
+  adId           String?
+  clickId        String?
+  customerId     String?
+  conversationId String?
+  contactId      String?
+  customName     String?
+  payload        Json?
+  occurredAt     DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  team           Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  account        TikTokAccount?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  campaign       TikTokCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  conversation   Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact        Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, eventType, occurredAt])
+  @@index([campaignId])
+  @@index([conversationId])
+  @@index([clickId])
+}
+
+model TikTokLog {
+  id        String         @id @default(cuid())
+  teamId    String
+  accountId String?
+  level     TikTokLogLevel @default(INFO)
+  action    String
+  message   String?
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  account   TikTokAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([accountId])
+}
+
+model TikTokCampaign {
+  id                 String              @id @default(cuid())
+  teamId             String
+  accountId          String?
+  name               String
+  externalCampaignId String?
+  adGroupId          String?
+  adId               String?
+  active             Boolean             @default(true)
+  whatsappNumber     String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  team               Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  account            TikTokAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  events             TikTokEvent[]
+  clicks             TikTokTrackingClick[]
+
+  @@index([teamId, active])
+  @@index([accountId])
+}
+
+model TikTokTrackingClick {
+  id             String          @id @default(cuid())
+  teamId         String
+  campaignId     String
+  clickToken     String          @unique @default(cuid())
+  ttclid         String?
+  source         String?
+  userAgent      String?
+  ipAddress      String?
+  referrer       String?
+  landingUrl     String?
+  conversationId String?
+  contactId      String?
+  convertedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  team           Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  campaign       TikTokCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  conversation   Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact        Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([campaignId])
+  @@index([clickToken])
+}
+
