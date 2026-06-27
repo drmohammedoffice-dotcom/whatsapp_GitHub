@@ -1,0 +1,14 @@
+# Automatic HTTPS reverse proxy for the production stack.
+# Caddy obtains and renews Let's Encrypt certificates automatically as long as
+# APP_DOMAIN and API_DOMAIN point (via DNS A records) to this server's IP.
+
+{$APP_DOMAIN} {
+	encode gzip zstd
+	reverse_proxy web:3000
+}
+
+{$API_DOMAIN} {
+	encode gzip zstd
+	# WebSocket (Socket.io) upgrades are proxied transparently by Caddy.
+	reverse_proxy api:4000
+}
