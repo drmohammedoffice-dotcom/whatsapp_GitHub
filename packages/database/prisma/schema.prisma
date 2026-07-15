@@ -32,6 +32,10 @@ enum Permission {
   AI_VIEW_COSTS
   TIKTOK_VIEW
   TIKTOK_MANAGE
+  BUSINESS_MANAGE
+  CAMPAIGN_MANAGE
+  WHATSAPP_CLOUD_MANAGE
+  ROUTING_MANAGE
 }
 
 enum WhatsAppSessionStatus {
@@ -59,9 +63,65 @@ enum WhatsAppConnectionLogEvent {
 
 enum ChannelProvider {
   WHATSAPP_BAILEYS
+  WHATSAPP_CLOUD
   META_MESSENGER
   META_INSTAGRAM
   TELEGRAM
+  TELEGRAM_USER
+}
+
+enum CampaignSourceType {
+  TIKTOK
+  FACEBOOK
+  INSTAGRAM
+  GOOGLE
+  LANDING_PAGE
+  SNAPCHAT
+  CUSTOM
+}
+
+enum WhatsAppRoutingStrategy {
+  MANUAL
+  ROUND_ROBIN
+  RANDOM
+  PERCENTAGE
+  COUNTRY
+  CAMPAIGN
+  AI
+}
+
+enum WhatsAppCloudAccountStatus {
+  PENDING
+  CONNECTING
+  CONNECTED
+  DISCONNECTED
+  FAILED
+  EXPIRED
+}
+
+enum WebhookProvider {
+  TIKTOK
+  META
+  WHATSAPP_CLOUD
+  GOOGLE
+  CUSTOM
+}
+
+enum WebhookEventStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  SKIPPED
+}
+
+enum TelegramConnectionStatus {
+  PENDING_CODE
+  PENDING_PASSWORD
+  CONNECTING
+  CONNECTED
+  DISCONNECTED
+  EXPIRED
+  FAILED
 }
 
 enum ChannelStatus {
@@ -69,6 +129,14 @@ enum ChannelStatus {
   CONNECTING
   CONNECTED
   DISCONNECTED
+  FAILED
+  EXPIRED
+}
+
+enum OAuthSessionStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
   FAILED
 }
 
@@ -261,17 +329,25 @@ enum SatisfactionSource {
   HUMAN_CONVERSATION
   SURVEY
 }
+
+enum EmailVerificationType {
+  SIGNUP
+  LOGIN
+}
+
 model User {
   id                  String                   @id @default(cuid())
   email               String                   @unique
   name                String
   passwordHash        String
   emailVerifiedAt     DateTime?
+  suspendedAt           DateTime?
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
   teamMembers         TeamMember[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  emailVerifications  EmailVerification[]
   auditLogs           AuditLog[]
   assignedConversations Conversation[]         @relation("ConversationAssignee")
   authoredNotes       ConversationNote[]
@@ -283,6 +359,14 @@ model User {
   createdWhatsAppSessions WhatsAppSession[] @relation("WhatsAppSessionCreator")
   initiatedTransfers ConversationTransfer[] @relation("TransferInitiator")
   assignedTransfers  ConversationTransfer[] @relation("TransferAssignee")
+  tikTokLoginAccount TikTokLoginAccount?
+  tikTokMarketingConnection TikTokMarketingConnection?
+  tikTokIntegrations TikTokIntegration[]
+  adminProfile AdminUser?
+  ownedSubscriptions Subscription[]
+  platformActivityLogs PlatformActivityLog[]
+  platformNotifications PlatformNotification[]
+  supportTickets SupportTicket[]
 }
 model Team {
   id          String             @id @default(cuid())
@@ -299,6 +383,8 @@ model Team {
   settings    Setting[]
   auditLogs   AuditLog[]
   channels    Channel[]
+  oauthSessions SocialOAuthSession[]
+  telegramConnections TelegramConnection[]
   contacts    Contact[]
   identities  ContactIdentity[]
   labels      Label[]
@@ -317,7 +403,7 @@ model Team {
   aiTools AiTool[]
   aiRuns AiRun[]
   aiCostEvents AiCostEvent[]
-  aiSettings AiSettings?
+  aiSettings AiSettings[]
   aiProviderConfig AiProviderConfig?
   products Product[]
   automationRules AutomationRule[]
@@ -332,6 +418,19 @@ model Team {
   tikTokLogs TikTokLog[]
   tikTokTrackingClicks TikTokTrackingClick[]
   tikTokCampaigns TikTokCampaign[]
+  tikTokIntegrations TikTokIntegration[]
+  tikTokAppCredentials TikTokAppCredentials?
+  businesses      Business[]
+  platformCampaigns Campaign[]
+  trafficSources  TrafficSource[]
+  whatsAppCloudAccounts WhatsAppCloudAccount[]
+  whatsAppRoutingRules WhatsAppRoutingRule[]
+  redirectLogs    RedirectLog[]
+  integrationWebhookEvents IntegrationWebhookEvent[]
+  metaConnections MetaConnection[]
+  subscriptions Subscription[]
+  supportTickets SupportTicket[]
+  tikTokEventSets TikTokEventSet[]
 }
 model TeamMember {
   id          String       @id @default(cuid())
@@ -375,25 +474,125 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+model EmailVerification {
+  id        String                @id @default(cuid())
+  userId    String?               @map("user_id")
+  email     String
+  codeHash  String                @map("code")
+  type      EmailVerificationType
+  expiresAt DateTime              @map("expires_at")
+  used      Boolean               @default(false)
+  attempts  Int                   @default(0)
+  metadata  Json?
+  createdAt DateTime              @default(now()) @map("created_at")
+  user      User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, type])
+  @@index([userId])
+  @@map("email_verifications")
+}
+
 model Channel {
-  id                String          @id @default(cuid())
-  teamId            String
-  provider          ChannelProvider
-  name              String
-  status            ChannelStatus   @default(PENDING)
-  externalId        String?
-  whatsAppSessionId String?         @unique
-  lastSeenAt        DateTime?
-  metadata          Json?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  team              Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  whatsAppSession   WhatsAppSession? @relation(fields: [whatsAppSessionId], references: [id], onDelete: SetNull)
-  identities        ContactIdentity[]
-  conversations     Conversation[]
+  id                     String          @id @default(cuid())
+  teamId                 String
+  businessId             String?
+  provider               ChannelProvider
+  name                   String
+  status                 ChannelStatus   @default(PENDING)
+  externalId             String?
+  aiAgentId              String?
+  whatsAppSessionId      String?         @unique
+  whatsAppCloudAccountId String?         @unique
+  telegramConnectionId   String?         @unique
+  lastSeenAt             DateTime?
+  metadata               Json?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  team                   Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  business               Business?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  aiAgent                AiAgent?        @relation(fields: [aiAgentId], references: [id], onDelete: SetNull)
+  whatsAppSession        WhatsAppSession? @relation(fields: [whatsAppSessionId], references: [id], onDelete: SetNull)
+  whatsAppCloudAccount   WhatsAppCloudAccount? @relation(fields: [whatsAppCloudAccountId], references: [id], onDelete: SetNull)
+  telegramConnection     TelegramConnection? @relation(fields: [telegramConnectionId], references: [id], onDelete: SetNull)
+  metaConnection         MetaConnection?
+  identities             ContactIdentity[]
+  conversations          Conversation[]
+  token                  ChannelToken?
 
   @@unique([teamId, provider, externalId])
   @@index([teamId, status])
+  @@index([teamId, businessId])
+  @@index([aiAgentId])
+}
+
+model ChannelToken {
+  id                    String    @id @default(cuid())
+  channelId             String    @unique
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scopes                String?
+  lastRefreshedAt       DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  channel               Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model SocialOAuthSession {
+  id                String             @id @default(cuid())
+  teamId            String
+  userId            String
+  provider          String
+  status            OAuthSessionStatus @default(PENDING)
+  encryptedPayload  String
+  expiresAt         DateTime
+  completedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  team              Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, provider, status])
+  @@index([expiresAt])
+}
+
+model TelegramConnection {
+  id                String                  @id @default(cuid())
+  teamId            String
+  connectedByUserId String
+  phoneNumber       String
+  telegramUserId    String?
+  firstName         String?
+  lastName          String?
+  username          String?
+  profilePhotoUrl   String?
+  encryptedSession  String?
+  status            TelegramConnectionStatus @default(PENDING_CODE)
+  connectedAt       DateTime?
+  lastSyncAt        DateTime?
+  lastSeenAt        DateTime?
+  failureReason     String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  team              Team                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  channel           Channel?
+
+  @@unique([teamId, phoneNumber])
+  @@index([teamId, status])
+}
+
+model TelegramAuthPending {
+  id                   String   @id @default(cuid())
+  teamId               String
+  userId               String
+  phoneNumber          String
+  encryptedTempSession String
+  phoneCodeHash        String
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+
+  @@index([teamId, userId])
+  @@index([expiresAt])
 }
 
 model WhatsAppSession {
@@ -422,6 +621,7 @@ model WhatsAppSession {
   messages           Message[]
   connectionLogs     WhatsAppConnectionLog[]
   whatsAppContacts   WhatsAppContact[]
+  campaigns          Campaign[]
 
   @@index([teamId, status])
   @@index([teamId, createdByUserId])
@@ -895,8 +1095,11 @@ model AiAgent {
   updatedAt   DateTime    @updatedAt
   team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
   runs        AiRun[]
+  channels    Channel[]
+  whatsAppCloudAccounts WhatsAppCloudAccount[]
+  campaigns   Campaign[]
 
-  @@unique([teamId, type])
+  @@index([teamId, type])
   @@index([teamId, enabled])
 }
 
@@ -1054,9 +1257,10 @@ model Setting {
 }
 
 model AiSettings {
-  id                      String   @id @default(cuid())
-  teamId                  String   @unique
-  enabled                 Boolean  @default(false)
+  id                      String             @id @default(cuid())
+  teamId                  String
+  platform                AiTrainingPlatform @default(WHATSAPP)
+  enabled                 Boolean            @default(false)
   autoReplyEnabled        Boolean  @default(false)
   confidenceThreshold     Float    @default(0.65)
   greetingMessage         String?
@@ -1074,8 +1278,10 @@ model AiSettings {
   monthlyBudgetCents      Int?
   systemPromptOverride    String?
   createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  team                    Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  updatedAt               DateTime           @updatedAt
+  team                    Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, platform])
 }
 
 model AiProviderConfig {
@@ -1181,6 +1387,15 @@ enum BookingStatus {
   COMPLETED
 }
 
+enum AiTrainingPlatform {
+  WHATSAPP
+  TELEGRAM
+  MESSENGER
+  INSTAGRAM
+  TIKTOK
+  META
+}
+
 enum AiTrainingMediaType {
   IMAGE
   VIDEO
@@ -1191,6 +1406,7 @@ enum AiTrainingMediaType {
 model AiTrainingMedia {
   id          String              @id @default(cuid())
   teamId      String
+  platform    AiTrainingPlatform  @default(WHATSAPP)
   title       String
   productName String?
   description String?
@@ -1200,12 +1416,15 @@ model AiTrainingMedia {
   fileName    String?
   sizeBytes   Int?
   tags        String?
+  /// When true, AI may send this AUDIO as a WhatsApp voice note (PTT) instead of text.
+  isVoiceNote Boolean             @default(false)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   team        Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  @@index([teamId, createdAt])
-  @@index([teamId, productName])
+  @@index([teamId, platform, createdAt])
+  @@index([teamId, platform, productName])
+  @@index([teamId, platform, isVoiceNote])
 }
 
 model Booking {
@@ -1388,6 +1607,106 @@ model TikTokBusinessCenter {
   @@index([teamId])
 }
 
+model TikTokLoginAccount {
+  id                    String                  @id @default(cuid())
+  userId                String                  @unique @map("user_id")
+  teamId                String?                 @map("team_id")
+  openId                String                  @unique @map("open_id")
+  displayName           String?                 @map("display_name")
+  avatar                String?
+  encryptedAccessToken  String                  @map("access_token")
+  encryptedRefreshToken String?                 @map("refresh_token")
+  expiresAt             DateTime                @map("expires_at")
+  hasBusinessAccess     Boolean                 @default(false) @map("has_business_access")
+  businessCenterId      String?                 @map("business_center_id")
+  businessCenterName    String?                 @map("business_center_name")
+  lastBusinessSyncAt    DateTime?               @map("last_business_sync_at")
+  businessSyncMessage   String?                 @map("business_sync_message")
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  advertisers           TikTokLoginAdvertiser[]
+
+  @@index([openId])
+  @@index([teamId])
+  @@map("tiktok_accounts")
+}
+
+model TikTokLoginAdvertiser {
+  id           String             @id @default(cuid())
+  userId       String             @map("user_id")
+  advertiserId String             @map("advertiser_id")
+  name         String?
+  currency     String?
+  timezone     String?
+  status       String?
+  raw          Json?
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  loginAccount TikTokLoginAccount @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, advertiserId])
+  @@index([userId])
+  @@map("tiktok_login_advertisers")
+}
+
+/** TikTok Marketing API OAuth — separate from Login Kit (tiktok_accounts). */
+model TikTokMarketingConnection {
+  id                             String                    @id @default(cuid())
+  userId                         String                    @unique @map("user_id")
+  teamId                         String?                   @map("team_id")
+  tiktokOpenId                   String?                   @map("tiktok_open_id")
+  encryptedMarketingAccessToken  String                    @map("marketing_access_token")
+  encryptedMarketingRefreshToken String?                   @map("marketing_refresh_token")
+  marketingExpiresAt             DateTime                  @map("marketing_expires_at")
+  marketingRefreshExpiresAt      DateTime?                 @map("marketing_refresh_expires_at")
+  connectedAt                    DateTime                  @default(now()) @map("connected_at")
+  hasBusinessAccess              Boolean                   @default(false) @map("has_business_access")
+  businessCenterId               String?                   @map("business_center_id")
+  businessCenterName             String?                   @map("business_center_name")
+  lastBusinessSyncAt             DateTime?                 @map("last_business_sync_at")
+  businessSyncMessage            String?                   @map("business_sync_message")
+  createdAt                      DateTime                  @default(now()) @map("created_at")
+  updatedAt                      DateTime                  @updatedAt @map("updated_at")
+  user                           User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  advertisers                    TikTokMarketingAdvertiser[]
+
+  @@index([teamId])
+  @@map("tiktok_marketing_connections")
+}
+
+model TikTokMarketingAdvertiser {
+  id           String                  @id @default(cuid())
+  userId       String                  @map("user_id")
+  advertiserId String                  @map("advertiser_id")
+  name         String?
+  currency     String?
+  timezone     String?
+  status       String?
+  raw          Json?
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+  connection   TikTokMarketingConnection @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, advertiserId])
+  @@index([userId])
+  @@map("tiktok_marketing_advertisers")
+}
+
+model TikTokAppCredentials {
+  id                    String   @id @default(cuid())
+  teamId                String   @unique
+  encryptedClientKey    String
+  encryptedClientSecret String
+  redirectUri           String?
+  clientKeyHint         String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  team                  Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
 model TikTokSettings {
   id                      String        @id @default(cuid())
   teamId                  String        @unique
@@ -1454,6 +1773,7 @@ model TikTokCampaign {
   id                 String              @id @default(cuid())
   teamId             String
   accountId          String?
+  platformCampaignId String?             @unique
   name               String
   externalCampaignId String?
   adGroupId          String?
@@ -1464,6 +1784,7 @@ model TikTokCampaign {
   updatedAt          DateTime            @updatedAt
   team               Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
   account            TikTokAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  platformCampaign   Campaign?           @relation(fields: [platformCampaignId], references: [id], onDelete: SetNull)
   events             TikTokEvent[]
   clicks             TikTokTrackingClick[]
 
@@ -1494,5 +1815,720 @@ model TikTokTrackingClick {
   @@index([teamId, createdAt])
   @@index([campaignId])
   @@index([clickToken])
+}
+
+enum TikTokOptimizationEvent {
+  PageView
+  ViewContent
+  Lead
+  CompleteRegistration
+  Contact
+  SubmitForm
+  AddToCart
+  InitiateCheckout
+  Purchase
+  CompletePayment
+  Custom
+}
+
+model TikTokIntegration {
+  id                       String                  @id @default(cuid())
+  userId                   String                  @map("user_id")
+  teamId                   String                  @map("team_id")
+  name                     String?
+  advertiserId             String?                 @map("advertiser_id")
+  advertiserName           String?                 @map("advertiser_name")
+  pixelId                  String?                 @map("pixel_id")
+  pixelCode                String?                 @map("pixel_code")
+  pixelName                String?                 @map("pixel_name")
+  pixelStatus              String                  @default("pending") @map("pixel_status")
+  pixelStatusMessage       String?                 @map("pixel_status_message")
+  lastPixelStatusCheckAt   DateTime?               @map("last_pixel_status_check_at")
+  activatedAt              DateTime?               @map("activated_at")
+  /// Manual TikTok Events API access token (AES encrypted). Never return to frontend.
+  encryptedEventsApiAccessToken String?            @map("encrypted_events_api_access_token")
+  eventsApiTokenHint            String?            @map("events_api_token_hint")
+  eventsApiConnected            Boolean            @default(false) @map("events_api_connected")
+  eventsApiStatus               String             @default("disconnected") @map("events_api_status")
+  eventsApiStatusMessage        String?            @map("events_api_status_message")
+  lastEventsApiVerificationAt   DateTime?          @map("last_events_api_verification_at")
+  lastEventSentAt               DateTime?          @map("last_event_sent_at")
+  lastEventName                 String?            @map("last_event_name")
+  lastApiHttpStatus             Int?               @map("last_api_http_status")
+  lastApiError                  String?            @map("last_api_error")
+  whatsappNumber           String?                 @map("whatsapp_number")
+  redirectSlug             String                  @unique @map("redirect_slug")
+  defaultOptimizationEvent TikTokOptimizationEvent @default(Contact) @map("default_optimization_event")
+  customEventName          String?                 @map("custom_event_name")
+  redirectMessage          String?                 @map("redirect_message")
+  wizardStep               Int                     @default(1) @map("wizard_step")
+  wizardCompleted          Boolean                 @default(false) @map("wizard_completed")
+  billingSuspended         Boolean                 @default(false) @map("billing_suspended")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+  user                     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team                     Team                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  eventConfigurations      TikTokEventConfiguration[]
+  clicks                   TikTokIntegrationClick[]
+  leads                    TikTokIntegrationLead[]
+  conversions              TikTokIntegrationConversion[]
+  apiLogs                  TikTokIntegrationApiLog[]
+
+  @@index([userId, teamId])
+  @@index([teamId])
+  @@map("tiktok_integrations")
+}
+
+model TikTokEventConfiguration {
+  id            String                  @id @default(cuid())
+  integrationId String                  @map("integration_id")
+  eventName     TikTokOptimizationEvent @map("event_name")
+  enabled       Boolean                 @default(false)
+  createdAt     DateTime                @default(now()) @map("created_at")
+  integration   TikTokIntegration       @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, eventName])
+  @@map("tiktok_event_configurations")
+}
+
+model TikTokIntegrationClick {
+  id                    String               @id @default(cuid())
+  integrationId         String               @map("integration_id")
+  ttclid                String?
+  campaignId            String?              @map("campaign_id")
+  adgroupId             String?              @map("adgroup_id")
+  adId                  String?              @map("ad_id")
+  advertiserId          String?              @map("advertiser_id")
+  ipAddress             String?              @map("ip_address")
+  userAgent             String?              @map("user_agent")
+  pageViewSent          Boolean              @default(false) @map("page_view_sent")
+  optimizationEventSent Boolean              @default(false) @map("optimization_event_sent")
+  eventsPayload         Json?                @map("events_payload")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  integration           TikTokIntegration    @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  lead                  TikTokIntegrationLead?
+
+  @@index([integrationId, createdAt])
+  @@index([campaignId])
+  @@map("tiktok_integration_clicks")
+}
+
+model TikTokIntegrationLead {
+  id                String               @id @default(cuid())
+  integrationId     String               @map("integration_id")
+  clickId           String               @unique @map("click_id")
+  conversationId    String?              @unique @map("conversation_id")
+  contactId         String?              @map("contact_id")
+  customerPhone     String?              @map("customer_phone")
+  convertedAt       DateTime?            @map("converted_at")
+  conversionEventId String?              @unique @map("conversion_event_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  integration       TikTokIntegration    @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  click             TikTokIntegrationClick @relation(fields: [clickId], references: [id], onDelete: Cascade)
+  conversions       TikTokIntegrationConversion[]
+
+  @@index([integrationId, createdAt])
+  @@index([integrationId, convertedAt])
+  @@map("tiktok_integration_leads")
+}
+
+model TikTokIntegrationConversion {
+  id              String               @id @default(cuid())
+  integrationId   String               @map("integration_id")
+  leadId          String?              @map("lead_id")
+  clickId         String?              @map("click_id")
+  conversationId  String?              @map("conversation_id")
+  contactId       String?              @map("contact_id")
+  whatsappPhone   String?              @map("whatsapp_phone")
+  eventId         String               @unique @map("event_id")
+  eventName       String               @map("event_name")
+  ttclid          String?
+  externalId      String?              @map("external_id")
+  pageUrl         String?              @map("page_url")
+  orderId         String?              @map("order_id")
+  valueAmount     Float?               @map("value_amount")
+  currency        String?              @map("currency")
+  firstMessageAt  DateTime?            @map("first_message_at")
+  contactSent     Boolean              @default(false) @map("contact_sent")
+  tiktokStatus    String               @default("pending") @map("tiktok_status")
+  tiktokResponse  Json?                @map("tiktok_response")
+  tiktokError     String?              @map("tiktok_error")
+  retryCount      Int                  @default(0) @map("retry_count")
+  nextRetryAt     DateTime?            @map("next_retry_at")
+  sentAt          DateTime?            @map("sent_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  integration     TikTokIntegration    @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  lead            TikTokIntegrationLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  apiLogs         TikTokIntegrationApiLog[]
+
+  @@unique([integrationId, eventName, conversationId])
+  @@unique([integrationId, eventName, orderId])
+  @@index([integrationId, whatsappPhone, sentAt])
+  @@index([integrationId, eventName, sentAt])
+  @@index([tiktokStatus, nextRetryAt])
+  @@map("tiktok_integration_conversions")
+}
+
+model TikTokIntegrationApiLog {
+  id              String   @id @default(cuid())
+  integrationId   String?  @map("integration_id")
+  conversionId    String?  @map("conversion_id")
+  eventName       String   @map("event_name")
+  eventId         String?  @map("event_id")
+  attempt         Int      @default(1)
+  httpStatus      Int?     @map("http_status")
+  success         Boolean  @default(false)
+  processingMs    Int?     @map("processing_ms")
+  requestPayload  Json?    @map("request_payload")
+  responseBody    Json?    @map("response_body")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+  integration     TikTokIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  conversion      TikTokIntegrationConversion? @relation(fields: [conversionId], references: [id], onDelete: SetNull)
+
+  @@index([integrationId, createdAt])
+  @@index([conversionId, attempt])
+  @@map("tiktok_integration_api_logs")
+}
+
+// ─── Platform SaaS layer (Team = tenant) ─────────────────────────────────────
+
+model Business {
+  id        String   @id @default(cuid())
+  teamId    String
+  name      String
+  slug      String
+  industry  String?
+  timezone  String?  @default("UTC")
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+  channels  Channel[]
+  whatsAppCloudAccounts WhatsAppCloudAccount[]
+  metaConnections MetaConnection[]
+
+  @@unique([teamId, slug])
+  @@index([teamId])
+}
+
+model TrafficSource {
+  id         String             @id @default(cuid())
+  teamId     String
+  type       CampaignSourceType
+  name       String
+  externalId String?
+  metadata   Json?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  team       Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  campaigns  Campaign[]
+
+  @@index([teamId, type])
+}
+
+model Campaign {
+  id                     String            @id @default(cuid())
+  teamId                 String
+  businessId             String?
+  trafficSourceId        String?
+  routingRuleId          String?
+  aiAgentId              String?
+  name                   String
+  slug                   String
+  active                 Boolean           @default(true)
+  whatsAppCloudAccountId String?
+  whatsAppSessionId      String?
+  redirectMessage        String?
+  utmDefaults            Json?
+  metadata               Json?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  team                   Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  business               Business?         @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  trafficSource          TrafficSource?    @relation(fields: [trafficSourceId], references: [id], onDelete: SetNull)
+  routingRule            WhatsAppRoutingRule? @relation(fields: [routingRuleId], references: [id], onDelete: SetNull)
+  aiAgent                AiAgent?          @relation(fields: [aiAgentId], references: [id], onDelete: SetNull)
+  whatsAppCloudAccount   WhatsAppCloudAccount? @relation(fields: [whatsAppCloudAccountId], references: [id], onDelete: SetNull)
+  whatsAppSession        WhatsAppSession?  @relation(fields: [whatsAppSessionId], references: [id], onDelete: SetNull)
+  redirectLogs           RedirectLog[]
+  tikTokCampaign         TikTokCampaign?
+
+  @@unique([teamId, slug])
+  @@index([teamId, active])
+  @@index([businessId])
+}
+
+model WhatsAppCloudAccount {
+  id                   String                     @id @default(cuid())
+  teamId               String
+  businessId           String?
+  aiAgentId            String?
+  name                 String
+  phoneNumber          String
+  phoneNumberId        String
+  wabaId               String
+  encryptedAccessToken String
+  encryptedVerifyToken String?
+  status               WhatsAppCloudAccountStatus @default(PENDING)
+  defaultInboxLabel    String?
+  connectedAt          DateTime?
+  lastSyncAt           DateTime?
+  lastSeenAt           DateTime?
+  failureReason        String?
+  metadata             Json?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  team                 Team                       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  business             Business?                  @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  aiAgent              AiAgent?                   @relation(fields: [aiAgentId], references: [id], onDelete: SetNull)
+  channel              Channel?
+  campaigns            Campaign[]
+  routingPoolMembers   WhatsAppRoutingPoolMember[]
+  redirectLogs         RedirectLog[]
+
+  @@unique([teamId, phoneNumberId])
+  @@index([teamId, status])
+  @@index([businessId])
+  @@index([aiAgentId])
+}
+
+model WhatsAppRoutingRule {
+  id          String                  @id @default(cuid())
+  teamId      String
+  name        String
+  strategy    WhatsAppRoutingStrategy @default(MANUAL)
+  config      Json?
+  active      Boolean                 @default(true)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  team        Team                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  campaigns   Campaign[]
+  poolMembers WhatsAppRoutingPoolMember[]
+
+  @@index([teamId, active])
+}
+
+model WhatsAppRoutingPoolMember {
+  id            String               @id @default(cuid())
+  routingRuleId String
+  accountId     String
+  weight        Int                  @default(1)
+  countryCodes  String[]             @default([])
+  sortOrder     Int                  @default(0)
+  createdAt     DateTime             @default(now())
+  routingRule   WhatsAppRoutingRule  @relation(fields: [routingRuleId], references: [id], onDelete: Cascade)
+  account       WhatsAppCloudAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([routingRuleId, accountId])
+  @@index([routingRuleId])
+}
+
+model RedirectLog {
+  id                  String                @id @default(cuid())
+  teamId              String
+  campaignId          String
+  clickToken          String                @unique @default(cuid())
+  ipAddress           String?
+  userAgent           String?
+  device              String?
+  referrer            String?
+  utmSource           String?
+  utmMedium           String?
+  utmCampaign         String?
+  utmTerm             String?
+  utmContent          String?
+  resolvedAccountId   String?
+  redirectedTo        String?
+  metadata            Json?
+  createdAt           DateTime              @default(now())
+  team                Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  campaign            Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  resolvedAccount     WhatsAppCloudAccount? @relation(fields: [resolvedAccountId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt])
+  @@index([campaignId])
+}
+
+model IntegrationWebhookEvent {
+  id          String             @id @default(cuid())
+  teamId      String?
+  provider    WebhookProvider
+  eventType   String
+  externalId  String?
+  payload     Json
+  status      WebhookEventStatus @default(PENDING)
+  error       String?
+  processedAt DateTime?
+  createdAt   DateTime           @default(now())
+  team        Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, provider, createdAt])
+  @@index([status, createdAt])
+  @@index([externalId])
+  @@map("IntegrationWebhookEvent")
+}
+
+model MetaConnection {
+  id                       String    @id @default(cuid())
+  teamId                   String
+  businessId               String?
+  channelId                String?   @unique
+  pageId                   String?
+  instagramId              String?
+  pageName                 String?
+  instagramHandle          String?
+  profilePictureUrl        String?
+  connectionSource         String?   @default("oauth")
+  encryptedUserAccessToken String?   @map("user_access_token")
+  encryptedPageAccessToken String?   @map("page_access_token")
+  userAccessTokenExpiresAt DateTime? @map("user_access_token_expires_at")
+  metadata                 Json?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  team                     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  business                 Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  channel                  Channel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@unique([teamId, pageId])
+  @@index([teamId])
+  @@index([pageId])
+  @@index([instagramId])
+}
+
+enum AdminNotificationChannel {
+  EMAIL
+  IN_APP
+  BROADCAST
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  SUPPORT_AGENT
+  BILLING_MANAGER
+  DEVELOPER
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PlatformActivityCategory {
+  AUTH
+  SUBSCRIPTION
+  USER
+  INTEGRATION
+  ADMIN
+  SYSTEM
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+  PENDING
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportTicketStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+
+model AdminUser {
+  id             String          @id @default(cuid())
+  userId         String          @unique @map("user_id")
+  role           AdminRole       @default(SUPPORT_AGENT)
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auditLogs      PlatformAuditLog[]
+  assignedTickets SupportTicket[] @relation("TicketAssignee")
+  ticketMessages TicketMessage[]
+
+  @@map("admin_users")
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  name          String
+  description   String?
+  priceCents    Int            @map("price_cents")
+  yearlyPriceCents Int?          @map("yearly_price_cents")
+  currency      String         @default("USD")
+  interval      BillingInterval  @default(MONTHLY)
+  trialDays     Int            @default(14) @map("trial_days")
+  features      Json?
+  isActive      Boolean        @default(true) @map("is_active")
+  sortOrder     Int            @default(0) @map("sort_order")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  teamId             String             @unique @map("team_id")
+  planId             String             @map("plan_id")
+  ownerUserId        String?            @map("owner_user_id")
+  status             SubscriptionStatus @default(TRIAL)
+  trialEndsAt        DateTime?          @map("trial_ends_at")
+  currentPeriodStart DateTime?          @map("current_period_start")
+  currentPeriodEnd   DateTime?          @map("current_period_end")
+  expiredAt          DateTime?          @map("expired_at")
+  gracePurgedAt      DateTime?          @map("grace_purged_at")
+  cancelledAt        DateTime?          @map("cancelled_at")
+  pausedAt           DateTime?          @map("paused_at")
+  mrrCents           Int                @default(0) @map("mrr_cents")
+  billingCycle       BillingInterval    @default(MONTHLY) @map("billing_cycle")
+  metadata           Json?
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  team               Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  plan               SubscriptionPlan   @relation(fields: [planId], references: [id])
+  owner              User?              @relation(fields: [ownerUserId], references: [id])
+  invoices           Invoice[]
+  payments           Payment[]
+
+  @@index([planId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  subscriptionId String        @map("subscription_id")
+  teamId         String        @map("team_id")
+  amountCents    Int           @map("amount_cents")
+  currency       String        @default("USD")
+  status         PaymentStatus @default(PENDING)
+  provider       String?
+  providerRef    String?       @map("provider_ref")
+  description    String?
+  metadata       Json?
+  paidAt         DateTime?     @map("paid_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([teamId, createdAt])
+  @@map("payments")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  subscriptionId String        @map("subscription_id")
+  teamId         String        @map("team_id")
+  number         String        @unique
+  amountCents    Int           @map("amount_cents")
+  currency       String        @default("USD")
+  status         InvoiceStatus @default(DRAFT)
+  dueAt          DateTime?     @map("due_at")
+  paidAt         DateTime?     @map("paid_at")
+  lineItems      Json?         @map("line_items")
+  metadata       Json?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, createdAt])
+  @@map("invoices")
+}
+
+model PlatformAuditLog {
+  id          String     @id @default(cuid())
+  adminUserId String?    @map("admin_user_id")
+  action      String
+  resource    String
+  resourceId  String?    @map("resource_id")
+  metadata    Json?
+  ipAddress   String?    @map("ip_address")
+  userAgent   String?    @map("user_agent")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id])
+
+  @@index([adminUserId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model PlatformActivityLog {
+  id         String                   @id @default(cuid())
+  userId     String?                  @map("user_id")
+  teamId     String?                  @map("team_id")
+  category   PlatformActivityCategory
+  action     String
+  resource   String?
+  resourceId String?                  @map("resource_id")
+  metadata   Json?
+  ipAddress  String?                  @map("ip_address")
+  userAgent  String?                  @map("user_agent")
+  createdAt  DateTime                 @default(now()) @map("created_at")
+  user       User?                    @relation(fields: [userId], references: [id])
+
+  @@index([category, createdAt])
+  @@index([teamId, createdAt])
+  @@index([userId, createdAt])
+  @@map("activity_logs")
+}
+
+model PlatformNotification {
+  id        String                   @id @default(cuid())
+  userId    String?                  @map("user_id")
+  title     String
+  body      String
+  channel   AdminNotificationChannel
+  sentAt    DateTime?                @map("sent_at")
+  readAt    DateTime?                @map("read_at")
+  metadata  Json?
+  createdAt DateTime                 @default(now()) @map("created_at")
+  user      User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("admin_notifications")
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([category])
+  @@map("system_settings")
+}
+
+model LandingOffer {
+  id            String    @id @default(cuid())
+  title         String
+  titleAr       String?   @map("title_ar")
+  description   String?
+  descriptionAr String?   @map("description_ar")
+  badgeText     String?   @map("badge_text")
+  badgeTextAr   String?   @map("badge_text_ar")
+  ctaLabel      String?   @map("cta_label")
+  ctaLabelAr    String?   @map("cta_label_ar")
+  ctaUrl        String?   @map("cta_url")
+  sortOrder     Int       @default(0) @map("sort_order")
+  isActive      Boolean   @default(true) @map("is_active")
+  startsAt      DateTime? @map("starts_at")
+  endsAt        DateTime? @map("ends_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([isActive, sortOrder])
+  @@map("landing_offers")
+}
+
+model SupportTicket {
+  id         String                @id @default(cuid())
+  teamId     String?               @map("team_id")
+  userId     String?               @map("user_id")
+  assigneeId String?               @map("assignee_id")
+  subject    String
+  status     SupportTicketStatus   @default(OPEN)
+  priority   SupportTicketPriority @default(MEDIUM)
+  closedAt   DateTime?             @map("closed_at")
+  createdAt  DateTime              @default(now()) @map("created_at")
+  updatedAt  DateTime              @updatedAt @map("updated_at")
+  team       Team?                 @relation(fields: [teamId], references: [id])
+  user       User?                 @relation(fields: [userId], references: [id])
+  assignee   AdminUser?            @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  messages   TicketMessage[]
+
+  @@index([status, createdAt])
+  @@index([teamId])
+  @@index([userId])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id         String        @id @default(cuid())
+  ticketId   String        @map("ticket_id")
+  authorId   String?       @map("author_id")
+  body       String
+  isInternal Boolean       @default(false) @map("is_internal")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author     AdminUser?    @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+model TikTokEventSet {
+  id             String   @id @default(cuid())
+  workspaceId    String   @map("workspace_id")
+  advertiserId   String   @map("advertiser_id")
+  whatsappNumber String   @map("whatsapp_number")
+  eventSetId     String?  @map("event_set_id")
+  eventSetName   String?  @map("event_set_name")
+  status         String   @default("PENDING")
+  message        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  team           Team     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, advertiserId, whatsappNumber])
+  @@index([workspaceId])
+  @@map("tiktok_event_sets")
+}
+
+model TikTokMarketingCampaign {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  teamId       String?  @map("team_id")
+  advertiserId String   @map("advertiser_id")
+  campaignId   String   @map("campaign_id")
+  name         String?
+  status       String?
+  budget       Float?
+  objective    String?
+  spend        Float    @default(0)
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  cpc          Float    @default(0)
+  cpm          Float    @default(0)
+  conversions  Int      @default(0)
+  raw          Json?
+  syncedAt     DateTime @default(now()) @map("synced_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([advertiserId])
+  @@index([teamId])
+  @@map("tiktok_campaigns")
 }
 
