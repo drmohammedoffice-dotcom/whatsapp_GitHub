@@ -7,6 +7,7 @@ import { BillingAccessService } from './billing-access.service';
 import { PlanEntitlementsService } from './plan-entitlements.service';
 import { TikTokLifecycleEventsService } from '../tiktok-integration/tiktok-lifecycle-events.service';
 import { WaylService, type WaylWebhookPayload } from './wayl.service';
+import { BillingEmailService } from './billing-email.service';
 import { ConfigService } from '@nestjs/config';
 
 const PLAN_TIER: Record<string, string> = {
@@ -30,6 +31,7 @@ export class BillingService {
     private readonly moduleRef: ModuleRef,
     private readonly wayl: WaylService,
     private readonly config: ConfigService,
+    private readonly email: BillingEmailService,
   ) {}
 
   async listPlans() {
@@ -288,6 +290,9 @@ export class BillingService {
 
     this.emitPurchase(teamId, payment.id, payment.amountCents, payment.currency);
 
+    // Send invoice email to the team owner
+    await this.sendInvoiceEmail(payment.teamId, payment.id, payment.subscriptionId, now, periodEnd);
+
     return this.getStatus(teamId);
   }
 
@@ -450,6 +455,62 @@ export class BillingService {
 
     this.emitPurchase(payment.teamId, payment.id, payment.amountCents, payment.currency);
 
+    // Send invoice email to the team owner
+    await this.sendInvoiceEmail(payment.teamId, payment.id, payment.subscriptionId, now, periodEnd);
+
     return { received: true, matched: true, completed: true };
+  }
+
+  /**
+   * Send a payment invoice email to the team owner after a successful payment.
+   */
+  private async sendInvoiceEmail(teamId: string, paymentId: string, subscriptionId: string, paidAt: Date, periodEnd: Date) {
+    try {
+      const team = await this.prisma.team.findUnique({
+        where: { id: teamId },
+        include: {
+          members: {
+            include: { user: true },
+            where: { role: 'OWNER' },
+            take: 1,
+          },
+          subscriptions: {
+            where: { id: subscriptionId },
+            include: { plan: true },
+            take: 1,
+          },
+        },
+      });
+
+      const owner = team?.members[0]?.user;
+      const subscription = team?.subscriptions[0];
+      if (!owner || !subscription) {
+        this.logger.warn(`Invoice email skipped: no owner or subscription for team=${teamId}`);
+        return;
+      }
+
+      const invoice = await this.prisma.invoice.findFirst({
+        where: { subscriptionId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      await this.email.sendInvoiceEmail({
+        to: owner.email,
+        customerName: owner.name,
+        invoiceNumber: invoice?.number ?? `INV-${Date.now()}`,
+        planName: subscription.plan.name,
+        billingCycle: subscription.billingCycle,
+        amountCents: subscription.mrrCents,
+        currency: subscription.plan.currency,
+        paidAt,
+        periodStart: subscription.currentPeriodStart ?? paidAt,
+        periodEnd,
+        paymentMethod: 'Wayl',
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Invoice email failed for team=${teamId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 }

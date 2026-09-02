@@ -10,6 +10,7 @@ import { SubscriptionGracePurgeService } from './subscription-grace-purge.servic
 import { SubscriptionActivationService } from './subscription-activation.service';
 import { SubscriptionGuard } from './subscription.guard';
 import { WaylService } from './wayl.service';
+import { BillingEmailService } from './billing-email.service';
 
 @Module({
   imports: [AuthModule],
@@ -23,6 +24,7 @@ import { WaylService } from './wayl.service';
     SubscriptionActivationService,
     SubscriptionGuard,
     WaylService,
+    BillingEmailService,
   ],
   exports: [
     BillingService,
@@ -31,6 +33,7 @@ import { WaylService } from './wayl.service';
     SubscriptionActivationService,
     SubscriptionGuard,
     WaylService,
+    BillingEmailService,
   ],
 })
 export class BillingModule {}
