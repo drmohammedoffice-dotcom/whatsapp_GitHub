@@ -1,26 +1,36 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { TikTokIntegrationModule } from '../tiktok-integration/tiktok-integration.module';
 import { BillingController } from './billing.controller';
+import { BillingWebhooksController } from './billing-webhooks.controller';
 import { BillingService } from './billing.service';
 import { BillingAccessService } from './billing-access.service';
 import { PlanEntitlementsService } from './plan-entitlements.service';
 import { SubscriptionExpiryService } from './subscription-expiry.service';
 import { SubscriptionGracePurgeService } from './subscription-grace-purge.service';
+import { SubscriptionActivationService } from './subscription-activation.service';
 import { SubscriptionGuard } from './subscription.guard';
+import { WaylService } from './wayl.service';
 
 @Module({
-  imports: [AuthModule, forwardRef(() => TikTokIntegrationModule)],
-  controllers: [BillingController],
+  imports: [AuthModule],
+  controllers: [BillingController, BillingWebhooksController],
   providers: [
     BillingService,
     BillingAccessService,
     PlanEntitlementsService,
     SubscriptionExpiryService,
     SubscriptionGracePurgeService,
+    SubscriptionActivationService,
     SubscriptionGuard,
+    WaylService,
   ],
-  exports: [BillingService, BillingAccessService, PlanEntitlementsService, SubscriptionGuard],
+  exports: [
+    BillingService,
+    BillingAccessService,
+    PlanEntitlementsService,
+    SubscriptionActivationService,
+    SubscriptionGuard,
+    WaylService,
+  ],
 })
 export class BillingModule {}
-
