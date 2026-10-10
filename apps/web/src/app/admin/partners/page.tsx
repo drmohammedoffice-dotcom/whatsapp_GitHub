@@ -104,6 +104,24 @@ export default function AdminPartnersPage() {
   }, [search]);
 
   const requests = partners.filter((p) => p.status === 'PENDING');
+  const openPayouts = payouts.filter((row) => row.status === 'SUBMITTED' || row.status === 'APPROVED');
+  const historyPayouts = payouts.filter((row) => row.status === 'PAID' || row.status === 'REJECTED' || row.status === 'CANCELLED');
+
+  function formatPayoutWhen(row: AdminPayoutRow) {
+    const raw = row.paidAt || row.createdAt;
+    try {
+      return new Date(raw).toLocaleString('en-GB', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    } catch {
+      return raw;
+    }
+  }
 
   async function onApprove(id: string) {
     const result = await approveAdminPartner(id);
@@ -137,6 +155,7 @@ export default function AdminPartnersPage() {
           <TabsTrigger value="requests">{t('partners.tabRequests')}</TabsTrigger>
           <TabsTrigger value="partners">{t('partners.tabPartners')}</TabsTrigger>
           <TabsTrigger value="payouts">{t('partners.tabPayouts')}</TabsTrigger>
+          <TabsTrigger value="payout-history">{t('partners.tabPayoutHistory')}</TabsTrigger>
           <TabsTrigger value="wallet">{t('partners.tabWallet')}</TabsTrigger>
           <TabsTrigger value="rules">{t('partners.tabRules')}</TabsTrigger>
         </TabsList>
@@ -344,14 +363,14 @@ export default function AdminPartnersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payouts.length === 0 ? (
+              {openPayouts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                     {t('partners.emptyPayouts')}
                   </TableCell>
                 </TableRow>
               ) : (
-                payouts.map((row) => (
+                openPayouts.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>
                       <Link className="font-medium text-primary hover:underline" href={`/admin/partners/${row.partner?.id}`}>
@@ -359,10 +378,61 @@ export default function AdminPartnersPage() {
                       </Link>
                       <div className="text-xs text-muted-foreground">{row.partner?.email}</div>
                     </TableCell>
-                    <TableCell>{formatIqd(row.amountCents)}</TableCell>
-                    <TableCell className="font-mono text-sm">{row.accountNumber}</TableCell>
+                    <TableCell dir="ltr">{formatIqd(row.amountCents)}</TableCell>
+                    <TableCell className="font-mono text-sm" dir="ltr">{row.accountNumber}</TableCell>
                     <TableCell>
                       <Badge variant={statusBadge(row.status)}>{row.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline" onClick={() => setOpenPayoutId(row.id)}>تفاصيل الطلب</Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          {openPayoutId && (
+            <PayoutReview id={openPayoutId} onClose={() => setOpenPayoutId('')} onSaved={() => void load()} />
+          )}
+        </TabsContent>
+
+        <TabsContent value="payout-history" className="mt-4 rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('partners.name')}</TableHead>
+                <TableHead>{t('partners.withdrawAmount')}</TableHead>
+                <TableHead>{t('partners.superQi')}</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>{t('partners.payoutDate')}</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {historyPayouts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    {t('partners.payoutHistoryEmpty')}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                historyPayouts.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <Link className="font-medium text-primary hover:underline" href={`/admin/partners/${row.partner?.id}`}>
+                        {row.partner?.name}
+                      </Link>
+                      <div className="text-xs text-muted-foreground">{row.partner?.email}</div>
+                    </TableCell>
+                    <TableCell dir="ltr">{formatIqd(row.amountCents)}</TableCell>
+                    <TableCell className="font-mono text-sm" dir="ltr">{row.accountNumber}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusBadge(row.status)}>
+                        {row.status === 'PAID' ? t('partners.payoutPaid') : row.status === 'REJECTED' ? t('partners.payoutRejected') : row.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm" dir="ltr">
+                      {formatPayoutWhen(row)}
                     </TableCell>
                     <TableCell>
                       <Button size="sm" variant="outline" onClick={() => setOpenPayoutId(row.id)}>تفاصيل الطلب</Button>

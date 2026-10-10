@@ -21,6 +21,7 @@ export type SuccessPayout = {
   status: string;
   adminNote: string | null;
   createdAt: string;
+  paidAt?: string | null;
   hasReceiptImage: boolean;
 };
 

@@ -27,7 +27,14 @@ import {
 } from '@/lib/success-partner';
 
 function money(value: number) {
-  return `${Number(value || 0).toLocaleString('ar-IQ')} د.ع`;
+  return `${Number(value || 0).toLocaleString('en-US')} IQD`;
+}
+
+function toEnglishDigits(value: string) {
+  return value
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[^\d.]/g, '');
 }
 
 function payoutStatus(status: string) {
@@ -535,7 +542,16 @@ function Dashboard({
           </div>
           <div className="flex flex-wrap gap-2">
             <ContactButton defaultEmail={data.partner.email} />
-            <Button type="button" onClick={() => setWithdrawOpen(true)}>طلب سحب المبلغ</Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const available = Math.floor(data.stats.availablePayoutCents || 0);
+                setAmount(String(available >= 10000 ? available : 10000));
+                setWithdrawOpen(true);
+              }}
+            >
+              طلب سحب المبلغ
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -604,8 +620,11 @@ function Dashboard({
             ) : data.payouts.filter((row) => row.status !== 'AWAITING_EMAIL').map((row) => (
               <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
                 <div>
-                  <p className="font-medium">{money(row.amountCents)} · يصلك {money(row.netCents)}</p>
-                  <p className="text-muted-foreground">{row.method === 'MASTERCARD' ? 'ماستركارد' : 'زين كاش'} · {row.accountNumber}</p>
+                  <p className="font-medium" dir="ltr">{money(row.amountCents)} · net {money(row.netCents)}</p>
+                  <p className="text-muted-foreground">{row.method === 'MASTERCARD' ? 'ماستركارد' : 'زين كاش'} · <span dir="ltr">{row.accountNumber}</span></p>
+                  <p className="text-xs text-muted-foreground" dir="ltr">
+                    {new Date(row.paidAt || row.createdAt).toLocaleString('en-GB', { hour12: false })}
+                  </p>
                   {row.adminNote && <p className="text-muted-foreground">ملاحظة: {row.adminNote}</p>}
                 </div>
                 <div className="flex items-center gap-2">
@@ -633,10 +652,38 @@ function Dashboard({
             ) : (
               <>
                 <h2 className="text-lg font-semibold">طلب سحب</h2>
-                <p className="text-sm text-muted-foreground">المتاح {money(data.stats.availablePayoutCents)}. الأدنى 10,000 د.ع، وتُخصم 500 د.ع رسوم تحويل.</p>
-                <Label>المبلغ</Label>
-                <Input dir="ltr" type="number" min={10000} value={amount} onChange={(event) => setAmount(event.target.value)} />
-                {requested >= 10000 && <p className="text-sm">سيصلك {money(net)} بعد خصم 500 د.ع</p>}
+                <p className="text-sm text-muted-foreground">
+                  المتاح <span dir="ltr" className="font-mono">{money(data.stats.availablePayoutCents)}</span>. الأدنى{' '}
+                  <span dir="ltr" className="font-mono">10,000 IQD</span>، وتُخصم{' '}
+                  <span dir="ltr" className="font-mono">500 IQD</span> رسوم تحويل.
+                </p>
+                <div className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Label>المبلغ</Label>
+                    <Input
+                      dir="ltr"
+                      inputMode="numeric"
+                      lang="en"
+                      className="font-mono"
+                      value={amount}
+                      onChange={(event) => setAmount(toEnglishDigits(event.target.value))}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={data.stats.availablePayoutCents < 10000}
+                    onClick={() => setAmount(String(Math.floor(data.stats.availablePayoutCents)))}
+                  >
+                    تحديد المبلغ كامل
+                  </Button>
+                </div>
+                {requested >= 10000 && (
+                  <p className="text-sm">
+                    سيصلك <span dir="ltr" className="font-mono">{money(net)}</span> بعد خصم{' '}
+                    <span dir="ltr" className="font-mono">500 IQD</span>
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" className={`rounded-xl border p-3 text-sm ${method === 'ZAIN_CASH' ? 'border-violet-600 bg-violet-50' : ''}`} onClick={() => setMethod('ZAIN_CASH')}>
                     <ZainMark />

@@ -509,14 +509,19 @@ export class SalesPartnersService {
       _sum: { amountCents: true },
       _count: true,
     });
+    const paidPayouts = await this.prisma.salesPayoutRequest.aggregate({
+      where: { status: SalesPayoutStatus.PAID },
+      _sum: { amountCents: true },
+      _count: true,
+    });
     const wallet = {
       pendingCents: 0,
       approvedCents: 0,
-      paidCents: 0,
+      paidCents: paidPayouts._sum.amountCents ?? 0,
       rejectedCents: 0,
       pendingCount: 0,
       approvedCount: 0,
-      paidCount: 0,
+      paidCount: paidPayouts._count ?? 0,
     };
     for (const g of groups) {
       const sum = g._sum.amountCents ?? 0;
@@ -524,16 +529,14 @@ export class SalesPartnersService {
         wallet.pendingCents = sum;
         wallet.pendingCount = g._count;
       }
-      if (g.status === SalesCommissionStatus.APPROVED) {
-        wallet.approvedCents = sum;
-        wallet.approvedCount = g._count;
-      }
-      if (g.status === SalesCommissionStatus.PAID) {
-        wallet.paidCents = sum;
-        wallet.paidCount = g._count;
+      if (g.status === SalesCommissionStatus.APPROVED || g.status === SalesCommissionStatus.PAID) {
+        // Ready = earned (approved+paid commissions) minus already paid-out payouts.
+        wallet.approvedCents += sum;
+        if (g.status === SalesCommissionStatus.APPROVED) wallet.approvedCount += g._count;
       }
       if (g.status === SalesCommissionStatus.REJECTED) wallet.rejectedCents = sum;
     }
+    wallet.approvedCents = Math.max(0, wallet.approvedCents - wallet.paidCents);
     return wallet;
   }
 
@@ -674,10 +677,17 @@ export class SalesPartnersService {
     const daily = inRange(commissions, startOfDay);
     const monthly = inRange(commissions, startOfMonth);
     const valid = commissions.filter((c) => c.status !== SalesCommissionStatus.REJECTED);
-    const readyCents = sumComm(commissions, SalesCommissionStatus.APPROVED);
-    const reserved = await this.reservedPayoutCents(partnerId);
-    const availablePayoutCents = Math.max(0, readyCents - reserved);
     const payouts = await this.listPartnerPayouts(partnerId);
+    // Wallet is driven by payout requests so partial withdrawals leave the remainder available.
+    const earnedCents = commissions
+      .filter((c) => c.status === SalesCommissionStatus.APPROVED || c.status === SalesCommissionStatus.PAID)
+      .reduce((n, c) => n + c.amountCents, 0);
+    const paidCents = payouts
+      .filter((p) => p.status === SalesPayoutStatus.PAID)
+      .reduce((n, p) => n + p.amountCents, 0);
+    const reserved = await this.reservedPayoutCents(partnerId);
+    const readyCents = Math.max(0, earnedCents - paidCents);
+    const availablePayoutCents = Math.max(0, readyCents - reserved);
 
     return {
       partner: this.publicPartner(partner),
@@ -688,7 +698,7 @@ export class SalesPartnersService {
         salesCents: sumSale(valid),
         pendingCents: sumComm(commissions, SalesCommissionStatus.PENDING),
         readyCents,
-        paidCents: sumComm(commissions, SalesCommissionStatus.PAID),
+        paidCents,
         availablePayoutCents,
         daily: {
           customers: referrals.filter((r) => r.createdAt >= startOfDay).length,
@@ -928,10 +938,31 @@ export class SalesPartnersService {
     });
     const partner = await this.prisma.salesPartner.findUnique({ where: { id: row.partnerId } });
     if (partner) {
+      let attachment: { filename: string; content: Buffer; contentType: string } | undefined;
+      if (receiptImageKey) {
+        try {
+          const { readFile } = await import('fs/promises');
+          const { basename, extname } = await import('path');
+          const path = this.storage.resolvePath(receiptImageKey);
+          const content = await readFile(path);
+          const ext = extname(receiptImageKey).toLowerCase();
+          const contentType =
+            ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+          attachment = {
+            filename: basename(receiptImageKey) || `transfer${ext || '.jpg'}`,
+            content,
+            contentType,
+          };
+        } catch {
+          /* email without attachment is still useful */
+        }
+      }
       await this.mail.sendPayoutPaid({
         to: partner.email,
         name: partner.name,
         amountLabel: `${row.amountCents.toLocaleString('en-US')} IQD`,
+        note: note?.trim() || row.adminNote,
+        attachment,
       });
     }
     return this.mapPayout(updated);
@@ -945,6 +976,8 @@ export class SalesPartnersService {
     let remaining = amountCents;
     for (const row of rows) {
       if (remaining <= 0) break;
+      // Never mark a larger commission as fully paid for a smaller withdrawal.
+      if (row.amountCents > remaining) break;
       await this.prisma.salesCommission.update({
         where: { id: row.id },
         data: { status: SalesCommissionStatus.PAID, paidAt: new Date() },

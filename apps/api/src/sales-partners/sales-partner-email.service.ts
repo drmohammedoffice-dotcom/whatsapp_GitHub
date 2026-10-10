@@ -34,7 +34,16 @@ export class SalesPartnerEmailService {
     return this.send(params.to, 'تأكيد طلب سحب أرباح ChatLoora', html, params.code);
   }
 
-  async sendPayoutPaid(params: { to: string; name: string; amountLabel: string }) {
+  async sendPayoutPaid(params: {
+    to: string;
+    name: string;
+    amountLabel: string;
+    note?: string | null;
+    attachment?: { filename: string; content: Buffer; contentType: string };
+  }) {
+    const noteHtml = params.note
+      ? `<p style="background:#f5f3ff;padding:12px;border-radius:10px;">${this.escape(params.note)}</p>`
+      : '';
     const html = `
 <!DOCTYPE html>
 <html><body style="font-family:sans-serif;background:#f4f4f8;padding:24px;">
@@ -42,10 +51,11 @@ export class SalesPartnerEmailService {
     <h1 style="color:#7c3aed;">ChatLoora</h1>
     <p>مرحباً ${this.escape(params.name)}،</p>
     <p>تم دفع طلب سحب الأرباح بقيمة <strong>${this.escape(params.amountLabel)}</strong>.</p>
-    <p>يمكنك مراجعة صورة فاتورة الدفع من لوحة الشريك.</p>
+    ${noteHtml}
+    <p>${params.attachment ? 'صورة التحويل مرفقة مع هذه الرسالة.' : 'يمكنك مراجعة صورة فاتورة الدفع من لوحة الشريك.'}</p>
   </div>
 </body></html>`;
-    return this.send(params.to, 'تم دفع أرباحك — ChatLoora', html);
+    return this.send(params.to, 'تم دفع أرباحك — ChatLoora', html, undefined, params.attachment);
   }
 
   async sendJoinCode(params: { to: string; name: string; code: string }) {
@@ -68,7 +78,13 @@ export class SalesPartnerEmailService {
     return this.send(params.to, 'رمز تأكيد كن شريكنا بالنجاح', html, params.code);
   }
 
-  private async send(to: string, subject: string, html: string, fallbackCode?: string) {
+  private async send(
+    to: string,
+    subject: string,
+    html: string,
+    fallbackCode?: string,
+    attachment?: { filename: string; content: Buffer; contentType: string },
+  ) {
     if (!this.resend) {
       this.logger.warn(`RESEND_API_KEY not set — email ${subject} to ${to}${fallbackCode ? ` code=${fallbackCode}` : ''}`);
       return { id: 'dev-mode' };
@@ -81,6 +97,15 @@ export class SalesPartnerEmailService {
       text: fallbackCode
         ? `رمز تأكيد سحب الأرباح: ${fallbackCode}`
         : subject,
+      attachments: attachment
+        ? [
+            {
+              filename: attachment.filename,
+              content: attachment.content,
+              contentType: attachment.contentType,
+            },
+          ]
+        : undefined,
     });
     if (result.error) {
       this.logger.error(`Resend error for ${to}: ${result.error.message}`);
