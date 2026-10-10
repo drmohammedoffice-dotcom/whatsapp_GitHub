@@ -5,7 +5,8 @@ import { AuditModule } from '../audit/audit.module';
 import { SecurityModule } from '../security/security.module';
 import { QUEUES } from '../queues/queues.constants';
 import { TikTokApiClient } from './tiktok-api.client';
-import { TikTokController, TikTokTrackingController } from './tiktok.controller';
+import { TikTokAppCredentialsService } from './tiktok-app-credentials.service';
+import { TikTokController, TikTokTrackingAliasController, TikTokTrackingController } from './tiktok.controller';
 import { TikTokEventsService } from './tiktok-events.service';
 import { TikTokLogService } from './tiktok-log.service';
 import { TikTokOAuthService } from './tiktok-oauth.service';
@@ -17,9 +18,10 @@ import { TikTokTrackingService } from './tiktok-tracking.service';
 
 @Module({
   imports: [AuthModule, AuditModule, SecurityModule, BullModule.registerQueue({ name: QUEUES.TIKTOK_SYNC })],
-  controllers: [TikTokController, TikTokTrackingController],
+  controllers: [TikTokController, TikTokTrackingController, TikTokTrackingAliasController],
   providers: [
     TikTokApiClient,
+    TikTokAppCredentialsService,
     TikTokLogService,
     TikTokTokenService,
     TikTokOAuthService,
@@ -29,6 +31,6 @@ import { TikTokTrackingService } from './tiktok-tracking.service';
     TikTokService,
     TikTokSyncProcessor,
   ],
-  exports: [TikTokEventsService, TikTokService],
+  exports: [TikTokEventsService, TikTokService, TikTokOAuthService, TikTokAppCredentialsService],
 })
 export class TikTokModule {}

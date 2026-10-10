@@ -34,16 +34,24 @@ export function PixelEditDialog({ integration, open, onOpenChange, onSaved }: Pr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [destinationType, setDestinationType] = useState<'WHATSAPP_NUMBER' | 'EXTERNAL_URL'>('WHATSAPP_NUMBER');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [externalRedirectUrl, setExternalRedirectUrl] = useState('');
   const [redirectMessage, setRedirectMessage] = useState('');
   const [optimizationEvent, setOptimizationEvent] = useState<TikTokOptimizationEvent>('Lead');
   const [customEventName, setCustomEventName] = useState('');
-  const [enabledEvents, setEnabledEvents] = useState<Set<TikTokOptimizationEvent>>(new Set(['Lead']));
+  const [enabledEvents, setEnabledEvents] = useState<Set<TikTokOptimizationEvent>>(new Set(['Lead', 'Contact']));
 
   useEffect(() => {
     if (!integration || !open) return;
     setName(integration.name ?? integration.pixelName ?? '');
+    const raw = integration.destinationType;
+    const dest = raw === 'WHATSAPP_NUMBER' || raw === 'EXTERNAL_URL' || raw === 'INSTANT_FORM' || raw === 'STORE'
+      ? raw
+      : 'EXTERNAL_URL';
+    setDestinationType(dest === 'INSTANT_FORM' || dest === 'STORE' ? 'EXTERNAL_URL' : dest);
     setWhatsappNumber(integration.whatsappNumber ?? '');
+    setExternalRedirectUrl(integration.externalRedirectUrl ?? '');
     setRedirectMessage(integration.redirectMessage ?? '');
     setOptimizationEvent(integration.defaultOptimizationEvent);
     setCustomEventName(integration.customEventName ?? '');
@@ -72,7 +80,9 @@ export function PixelEditDialog({ integration, open, onOpenChange, onSaved }: Pr
     try {
       await updateTikTokIntegration(integration.id, {
         name: name.trim() || undefined,
-        whatsappNumber,
+        destinationType,
+        whatsappNumber: destinationType === 'WHATSAPP_NUMBER' ? whatsappNumber : undefined,
+        externalRedirectUrl: destinationType === 'EXTERNAL_URL' ? externalRedirectUrl.trim() : undefined,
         defaultOptimizationEvent: optimizationEvent,
         customEventName: optimizationEvent === 'Custom' ? customEventName : undefined,
         enabledEvents: Array.from(enabledEvents),
@@ -89,23 +99,61 @@ export function PixelEditDialog({ integration, open, onOpenChange, onSaved }: Pr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[min(90dvh,880px)] w-[min(100vw-1.25rem,42rem)] max-w-2xl flex-col overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="px-5 pt-5 sm:px-6">
           <DialogTitle>{t('tiktokIntegration.editPixel')}</DialogTitle>
           <DialogDescription>{t('tiktokIntegration.editPixelDesc')}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-2 sm:px-6">
+          {integration && (
+            <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              نوع البكسل:{' '}
+              <span className="font-medium text-foreground">
+                {integration.destinationType === 'STORE'
+                  ? 'متجر إلكتروني'
+                  : integration.destinationType === 'INSTANT_FORM'
+                    ? 'استمارة فورية'
+                    : integration.destinationType === 'WHATSAPP_NUMBER'
+                      ? 'واتساب'
+                      : 'رابط خارجي'}
+              </span>
+              {integration.destinationType === 'STORE' || integration.destinationType === 'INSTANT_FORM'
+                ? ' — التحويل يُرسل تلقائياً عند أول طلب'
+                : null}
+            </p>
+          )}
           <div className="space-y-2">
             <Label>{t('tiktokIntegration.pixelDisplayName')}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>{t('tiktokIntegration.whatsappNumber')}</Label>
+            <Label>{t('tiktokIntegration.redirectDestination')}</Label>
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={destinationType}
+              onChange={(e) => setDestinationType(e.target.value as 'WHATSAPP_NUMBER' | 'EXTERNAL_URL')}
+            >
+              <option value="WHATSAPP_NUMBER">{t('tiktokIntegration.destinationPhone')}</option>
+              <option value="EXTERNAL_URL">{t('tiktokIntegration.destinationExternal')}</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label>
+              {destinationType === 'WHATSAPP_NUMBER'
+                ? t('tiktokIntegration.whatsappNumber')
+                : t('tiktokIntegration.externalRedirectUrl')}
+            </Label>
             <Input
-              inputMode="tel"
-              value={whatsappNumber}
-              onChange={(e) => setWhatsappNumber(e.target.value)}
+              inputMode={destinationType === 'WHATSAPP_NUMBER' ? 'tel' : 'url'}
+              placeholder={destinationType === 'EXTERNAL_URL' ? 'https://chat.whatsapp.com/...' : undefined}
+              value={destinationType === 'WHATSAPP_NUMBER' ? whatsappNumber : externalRedirectUrl}
+              onChange={(e) =>
+                destinationType === 'WHATSAPP_NUMBER'
+                  ? setWhatsappNumber(e.target.value)
+                  : setExternalRedirectUrl(e.target.value)
+              }
+              dir={destinationType === 'EXTERNAL_URL' ? 'ltr' : undefined}
             />
           </div>
           <div className="space-y-2">
@@ -160,11 +208,19 @@ export function PixelEditDialog({ integration, open, onOpenChange, onSaved }: Pr
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t px-5 py-4 sm:px-6">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void save()} disabled={busy || whatsappNumber.length < 8}>
+          <Button
+            onClick={() => void save()}
+            disabled={
+              busy ||
+              (destinationType === 'WHATSAPP_NUMBER'
+                ? whatsappNumber.replace(/\D/g, '').length < 8
+                : !/^https?:\/\/\S+$/i.test(externalRedirectUrl.trim()))
+            }
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common.save')}
           </Button>
         </DialogFooter>

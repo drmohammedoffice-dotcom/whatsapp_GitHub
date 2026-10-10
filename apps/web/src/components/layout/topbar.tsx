@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, ChevronRight, LogOut, Menu, Moon, Sun } from 'lucide-react';
+import { Bell, ChevronRight, LogOut, Menu } from 'lucide-react';
 import { getNavItem } from '@/components/layout/nav-config';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { LanguageToggle } from '@/components/shared/language-toggle';
-import { useTheme } from '@/components/providers/theme-provider';
+import { SubscriptionDaysBadge } from '@/components/billing/subscription-days-badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,27 +39,26 @@ async function logout() {
 }
 
 export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
-  const { theme, toggleTheme } = useTheme();
   const { t, dir } = useTranslation();
   const pathname = usePathname();
   const current = getNavItem(pathname);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur-md lg:px-6">
+    <header className="z-40 flex h-14 shrink-0 items-center gap-2 border-b border-violet-100/80 bg-white/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-6">
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" className="lg:hidden">
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side={dir === 'rtl' ? 'right' : 'left'} className="w-[280px] p-0">
+        <SheetContent side={dir === 'rtl' ? 'right' : 'left'} className="flex h-[100dvh] w-[min(100vw-1.5rem,20rem)] flex-col overflow-hidden p-0">
           <Sidebar collapsed={false} onToggle={onToggleSidebar} />
         </SheetContent>
       </Sheet>
 
       <div className="min-w-0 flex-1">
         <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link href="/inbox/whatsapp" className="hidden hover:text-foreground sm:inline">
+          <Link href="/tiktok/ads/create" className="hidden hover:text-foreground sm:inline">
             {t('common.workspace')}
           </Link>
           <ChevronRight className={cn('hidden h-3.5 w-3.5 sm:inline', dir === 'rtl' && 'rotate-180')} />
@@ -73,6 +72,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       </div>
 
       <div className="flex items-center gap-1">
+        <SubscriptionDaysBadge className="hidden sm:inline-flex" />
         <LanguageToggle />
 
         <Button variant="ghost" size="icon" asChild>
@@ -82,10 +82,6 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
               <span className="absolute -end-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary" />
             </span>
           </Link>
-        </Button>
-
-        <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={t('common.toggleTheme')}>
-          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
         <DropdownMenu>
@@ -99,6 +95,9 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>{t('common.myAccount')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/account">{t('nav.account')}</Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/settings">{t('nav.settings')}</Link>
             </DropdownMenuItem>

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { SalesPartnersModule } from '../sales-partners/sales-partners.module';
+import { OfficialWhatsAppModule } from '../official-whatsapp/official-whatsapp.module';
 import { BillingController } from './billing.controller';
 import { BillingWebhooksController } from './billing-webhooks.controller';
 import { BillingService } from './billing.service';
@@ -9,11 +11,13 @@ import { SubscriptionExpiryService } from './subscription-expiry.service';
 import { SubscriptionGracePurgeService } from './subscription-grace-purge.service';
 import { SubscriptionActivationService } from './subscription-activation.service';
 import { SubscriptionGuard } from './subscription.guard';
+import { SubscriptionRenewalService } from './subscription-renewal.service';
 import { WaylService } from './wayl.service';
 import { BillingEmailService } from './billing-email.service';
+import { FreeTrialService } from './free-trial.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, SalesPartnersModule, OfficialWhatsAppModule],
   controllers: [BillingController, BillingWebhooksController],
   providers: [
     BillingService,
@@ -22,9 +26,11 @@ import { BillingEmailService } from './billing-email.service';
     SubscriptionExpiryService,
     SubscriptionGracePurgeService,
     SubscriptionActivationService,
+    SubscriptionRenewalService,
     SubscriptionGuard,
     WaylService,
     BillingEmailService,
+    FreeTrialService,
   ],
   exports: [
     BillingService,
@@ -34,6 +40,7 @@ import { BillingEmailService } from './billing-email.service';
     SubscriptionGuard,
     WaylService,
     BillingEmailService,
+    FreeTrialService,
   ],
 })
 export class BillingModule {}

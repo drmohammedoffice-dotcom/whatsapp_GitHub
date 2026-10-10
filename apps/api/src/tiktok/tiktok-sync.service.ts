@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { TikTokConnectionStatus } from '@watsapp/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { TikTokApiClient } from './tiktok-api.client';
+import { TikTokAppCredentialsService } from './tiktok-app-credentials.service';
 import { TikTokLogService } from './tiktok-log.service';
 import { TikTokTokenService } from './tiktok-token.service';
 
@@ -10,6 +11,7 @@ export class TikTokSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly api: TikTokApiClient,
+    private readonly appCredentials: TikTokAppCredentialsService,
     private readonly tokens: TikTokTokenService,
     private readonly logs: TikTokLogService,
   ) {}
@@ -21,7 +23,10 @@ export class TikTokSyncService {
     const accessToken = await this.tokens.getAccessToken(teamId);
     if (!accessToken) return null;
 
-    const advertisers = await this.api.getAdvertisers(accessToken);
+    const creds = await this.appCredentials.resolve(teamId);
+    if (!creds) return null;
+
+    const advertisers = await this.api.getAdvertisers(creds, accessToken);
     const advertiserIds = advertisers.map((a) => a.advertiser_id);
     const details = advertiserIds.length ? await this.api.getAdvertiserInfo(accessToken, advertiserIds) : [];
 

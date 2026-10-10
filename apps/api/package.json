@@ -10,7 +10,9 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --passWithNoTests",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:tiktok-conversion": "jest --coverage --testPathPatterns=tiktok-integration/__tests__",
+    "test:coverage": "jest --coverage --testPathPatterns=tiktok-integration"
   },
   "dependencies": {
     "@nestjs/bullmq": "latest",
@@ -20,6 +22,7 @@
     "@nestjs/jwt": "latest",
     "@nestjs/platform-express": "latest",
     "@nestjs/platform-socket.io": "latest",
+    "@nestjs/schedule": "^6.1.3",
     "@nestjs/swagger": "latest",
     "@nestjs/throttler": "latest",
     "@nestjs/websockets": "latest",
@@ -29,6 +32,7 @@
     "@whiskeysockets/baileys": "latest",
     "axios": "latest",
     "bcryptjs": "latest",
+    "big-integer": "^1.6.52",
     "bullmq": "latest",
     "cheerio": "^1.2.0",
     "class-transformer": "latest",
@@ -42,8 +46,10 @@
     "pdfkit": "^0.19.1",
     "qrcode": "latest",
     "reflect-metadata": "latest",
+    "resend": "^6.17.2",
     "rxjs": "latest",
     "socket.io": "latest",
+    "telegram": "^2.26.22",
     "tesseract.js": "^7.0.0",
     "uuid": "latest",
     "xlsx": "^0.18.5",

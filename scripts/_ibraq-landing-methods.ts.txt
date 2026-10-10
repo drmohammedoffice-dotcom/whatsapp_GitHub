@@ -1,0 +1,291 @@
+  async getPublicLanding(key: string) {
+    const landingKey = String(key || '').trim() || FLASH_LANDING_KEY;
+    if (!isSupportedLandingKey(landingKey)) throw new NotFoundException('Landing not found');
+    const product = await this.findLandingProduct(landingKey);
+    const settings = await this.prisma.storeSettings.findUnique({ where: { teamId: product.teamId } });
+    if (!settings || !settings.isPublished) throw new NotFoundException('Store not found');
+    const meta = parseLandingMeta(product.metadata);
+    const promoEndsAt = rollPromoEndsAt(new Date(), meta.promoEndsAt);
+    const defaultSale =
+      landingKey === IBRAQ_MUSK_LANDING_KEY ? IBRAQ_PACK_PRICE_1 : (meta.salePrice ?? landingSalePrice(product));
+    if (!meta.promoEndsAt || new Date(meta.promoEndsAt).getTime() !== promoEndsAt.getTime()) {
+      await this.prisma.product.update({
+        where: { id: product.id },
+        data: {
+          metadata: {
+            ...(typeof product.metadata === 'object' && product.metadata && !Array.isArray(product.metadata)
+              ? (product.metadata as object)
+              : {}),
+            landingKey,
+            promoEndsAt: promoEndsAt.toISOString(),
+            compareAtPrice:
+              meta.compareAtPrice
+              ?? (landingKey === IBRAQ_MUSK_LANDING_KEY ? IBRAQ_PACK_PRICE_1 * 2 : null),
+            storageGb: meta.storageGb || (landingKey === IBRAQ_MUSK_LANDING_KEY ? '12×20ml' : '32 GB'),
+            freeDelivery: landingKey === IBRAQ_MUSK_LANDING_KEY ? false : true,
+            salePrice: defaultSale,
+            testimonials: meta.testimonials || [],
+            metaPixelId: meta.metaPixelId || null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+    await this.prisma.product.update({ where: { id: product.id }, data: { viewCount: { increment: 1 } } }).catch(() => undefined);
+    const price =
+      landingKey === IBRAQ_MUSK_LANDING_KEY ? IBRAQ_PACK_PRICE_1 : landingSalePrice(product);
+    const originalPrice =
+      landingKey === IBRAQ_MUSK_LANDING_KEY
+        ? IBRAQ_PACK_PRICE_1 * 2
+        : meta.compareAtPrice && meta.compareAtPrice > price
+          ? meta.compareAtPrice
+          : null;
+    const publishedTestimonials = (meta.testimonials || []).filter((t) => t.published);
+    const pixel = await this.resolveTeamPixel(settings);
+    const deliveryFeeOne = resolveDeliveryFee(settings, null);
+    return {
+      key: landingKey,
+      storeSlug: settings.slug,
+      brandName: settings.brandName,
+      currency: product.currency || settings.currency || 'IQD',
+      product: {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price,
+        originalPrice,
+        discount: originalPrice ? originalPrice - price : 0,
+        storageGb: meta.storageGb || (landingKey === IBRAQ_MUSK_LANDING_KEY ? '12×20ml' : '32 GB'),
+        deliveryFee: landingKey === IBRAQ_MUSK_LANDING_KEY ? deliveryFeeOne : 0,
+        inStock: isProductInStock(product),
+        media: product.images.map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          url: `${this.apiBase()}/api/v1/store/public/${encodeURIComponent(settings.slug)}/media/${m.id}`,
+        })),
+      },
+      packs:
+        landingKey === IBRAQ_MUSK_LANDING_KEY
+          ? {
+              one: resolveIbraqPackPricing(1, deliveryFeeOne),
+              two: resolveIbraqPackPricing(2, deliveryFeeOne),
+            }
+          : null,
+      governorates: [...IQ_GOVERNORATES],
+      promoEndsAt: promoEndsAt.toISOString(),
+      testimonials: publishedTestimonials,
+      metaPixelId: meta.metaPixelId,
+      tiktokPixelCode: pixel?.pixelCode ?? null,
+      tiktokPixelConfigured: Boolean(pixel?.pixelCode),
+      theme: resolveStoreTheme(settings.themeKey, settings.themeColors),
+      whatsappPhone: settings.giftWhatsappPhone || '9647864314333',
+      copy: meta.landingCopy || null,
+    };
+  }
+
+  async checkoutLanding(key: string, dto: LandingCheckoutDto) {
+    const landingKey = String(key || '').trim() || FLASH_LANDING_KEY;
+    if (!isSupportedLandingKey(landingKey)) throw new NotFoundException('Landing not found');
+    const product = await this.findLandingProduct(landingKey);
+    const settings = await this.prisma.storeSettings.findUnique({ where: { teamId: product.teamId } });
+    if (!settings || !settings.isPublished) throw new NotFoundException('Store not found');
+    const phone = normalizeIraqiMobile(dto.phone);
+    if (!phone) throw new BadRequestException('أدخل رقم هاتف عراقي صالح، مثل 07701234567');
+    const address = validateOrderAddress(dto.address);
+    if (!address) throw new BadRequestException('أدخل عنواناً واضحاً للتوصيل (8 أحرف على الأقل).');
+    const customerName = sanitizeCustomerName(dto.name);
+    const province = String(dto.province || '').trim().slice(0, 80);
+    if (landingKey === IBRAQ_MUSK_LANDING_KEY && !province) {
+      throw new BadRequestException('اختر المحافظة');
+    }
+    const packQty = landingKey === IBRAQ_MUSK_LANDING_KEY
+      ? (Number(dto.packQty) === 2 ? 2 : 1)
+      : 1;
+    if (!isProductInStock(product) || product.quantity < packQty) {
+      throw new BadRequestException('نفدت كمية هذا المنتج حالياً.');
+    }
+
+    let subtotal: number;
+    let delivery: number;
+    let discount: number;
+    let total: number;
+    let unitPrice: number;
+    let originalPrice: number;
+    let freeShipping = false;
+
+    if (landingKey === IBRAQ_MUSK_LANDING_KEY) {
+      const deliveryOne = resolveDeliveryFee(settings, province);
+      const pricing = resolveIbraqPackPricing(packQty, deliveryOne);
+      unitPrice = pricing.unitPrice;
+      subtotal = pricing.subtotal;
+      delivery = pricing.shippingCost;
+      total = pricing.total;
+      discount = pricing.savings;
+      freeShipping = pricing.freeShipping;
+      originalPrice = packQty === 2 ? IBRAQ_PACK_PRICE_1 * 2 : IBRAQ_PACK_PRICE_1;
+    } else {
+      const meta = parseLandingMeta(product.metadata);
+      const price = landingSalePrice(product);
+      if (price <= 0) throw new BadRequestException('تعذر إتمام الطلب. حدّث الصفحة وحاول مرة أخرى.');
+      unitPrice = price;
+      subtotal = price;
+      delivery = 0;
+      originalPrice = meta.compareAtPrice && meta.compareAtPrice > price ? meta.compareAtPrice : price;
+      discount = Math.max(0, originalPrice - price);
+      total = price;
+      freeShipping = true;
+    }
+
+    const idempotency = String(dto.idempotencyKey || '').trim().slice(0, 80);
+    if (idempotency) {
+      const existing = await this.prisma.booking.findFirst({
+        where: {
+          teamId: product.teamId,
+          phoneNumber: phone,
+          createdAt: { gte: new Date(Date.now() - 120_000) },
+          notes: { contains: `idem=${idempotency}` },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (existing && Number(existing.totalAmount) === total) {
+        return {
+          ok: true,
+          orderNumber: existing.orderNumber,
+          orderId: existing.id,
+          productName: product.name,
+          packQty,
+          price: unitPrice,
+          subtotal,
+          originalPrice,
+          delivery,
+          shippingCost: delivery,
+          discount,
+          total,
+          currency: existing.currency,
+          freeShipping,
+          duplicate: true,
+        };
+      }
+    }
+
+    const ttclid = String(dto.ttclid || '').trim().slice(0, 200) || null;
+    const booking = await this.bookings.createFromStore(product.teamId, {
+      phoneNumber: phone,
+      address: province ? `${province} - ${address}` : address,
+      orderType: product.name,
+      totalAmount: total,
+      currency: product.currency || settings.currency || 'IQD',
+      notes: [
+        `landing=${landingKey}`,
+        'source=landing_page',
+        `packQty=${packQty}`,
+        customerName ? `اسم:${customerName}` : null,
+        province ? `محافظة:${province}` : null,
+        ttclid ? `ttclid=${ttclid}` : null,
+        dto.utmSource ? `utm_source=${String(dto.utmSource).slice(0, 80)}` : null,
+        dto.utmMedium ? `utm_medium=${String(dto.utmMedium).slice(0, 80)}` : null,
+        dto.utmCampaign ? `utm_campaign=${String(dto.utmCampaign).slice(0, 80)}` : null,
+        idempotency ? `idem=${idempotency}` : null,
+        'status=pending',
+      ]
+        .filter(Boolean)
+        .join(' | '),
+      items: {
+        source: 'landing_page',
+        landingKey,
+        customerName,
+        province: province || null,
+        packQty,
+        ttclid,
+        utmSource: dto.utmSource || null,
+        utmMedium: dto.utmMedium || null,
+        utmCampaign: dto.utmCampaign || null,
+        utmContent: dto.utmContent || null,
+        utmTerm: dto.utmTerm || null,
+        lines: [
+          {
+            productId: product.id,
+            name: product.name,
+            quantity: packQty,
+            unitPrice,
+            originalPrice,
+            mediaId: product.images[0]?.id ?? null,
+          },
+        ],
+        subtotal,
+        delivery,
+        shippingCost: delivery,
+        discount,
+        total,
+        freeShipping,
+        currency: product.currency || 'IQD',
+      },
+    });
+    try {
+      await this.applySale(
+        product.teamId,
+        [{ productId: product.id, quantity: packQty, name: product.name }],
+        booking.id,
+      );
+    } catch (error) {
+      await this.prisma.booking.delete({ where: { id: booking.id } }).catch(() => undefined);
+      throw error;
+    }
+
+    const pixel = await this.resolveTeamPixel(settings);
+    if (pixel?.integrationId && this.tiktokTracking) {
+      const pageUrl = `${this.webBase()}/store/${landingKey}`;
+      void this.tiktokTracking
+        .trackEcommerceOrderConversion({
+          integrationId: pixel.integrationId,
+          orderId: booking.id,
+          orderNumber: booking.orderNumber,
+          ttclid,
+          phone,
+          value: total,
+          currency: product.currency || settings.currency || 'IQD',
+          pageUrl,
+          ip: dto.ip,
+          userAgent: dto.userAgent,
+          kind: 'LANDING_LEAD',
+          eventId: dto.eventId || undefined,
+        })
+        .catch(() => undefined);
+    }
+
+    return {
+      ok: true,
+      orderNumber: booking.orderNumber,
+      orderId: booking.id,
+      productName: product.name,
+      packQty,
+      price: unitPrice,
+      subtotal,
+      originalPrice,
+      delivery,
+      shippingCost: delivery,
+      discount,
+      total,
+      freeShipping,
+      currency: product.currency || settings.currency || 'IQD',
+    };
+  }
+
+  private webBase() {
+    return (this.config.get<string>('WEB_PUBLIC_URL') || 'http://localhost:3000').replace(/\/$/, '');
+  }
+
+  private async findLandingProduct(key: string) {
+    const landingKey = String(key || '').trim() || FLASH_LANDING_KEY;
+    if (!isSupportedLandingKey(landingKey)) throw new NotFoundException('Landing not found');
+    const sku = landingSkuForKey(landingKey);
+    const product = await this.prisma.product.findFirst({
+      where: {
+        isActive: true,
+        OR: [{ sku }, { metadata: { path: ['landingKey'], equals: landingKey } }],
+      },
+      include: { images: { orderBy: { position: 'asc' } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+    return product;
+  }

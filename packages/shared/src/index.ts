@@ -32,6 +32,7 @@ export const SOCKET_EVENTS = {
   AI_TRANSFERRED: 'ai.transferred',
   AI_PAUSED: 'ai.paused',
   AI_REACTIVATED: 'ai.reactivated',
+  TIKTOK_INTEGRATION_UPDATED: 'tiktok.integration.updated',
 } as const;
 
 export const WEBHOOK_EVENTS = {

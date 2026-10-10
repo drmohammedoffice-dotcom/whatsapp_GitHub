@@ -1,12 +1,12 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@watsapp/database';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { CurrentPrincipal } from '../../common/current-principal.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { AuthenticatedPrincipal } from '../../common/principal';
-import { TelegramConnectDto, TelegramDisconnectDto } from './dto/telegram.dto';
+import { TelegramConnectDto, TelegramDisconnectDto, TelegramValidateDto } from './dto/telegram.dto';
 import { TelegramService } from './telegram.service';
 
 @ApiTags('Telegram')
@@ -16,10 +16,28 @@ import { TelegramService } from './telegram.service';
 export class TelegramController {
   constructor(private readonly telegram: TelegramService) {}
 
+  @Post('validate')
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  @ApiOperation({ summary: 'Validate a Telegram bot token before connecting' })
+  validate(@Body() dto: TelegramValidateDto) {
+    return this.telegram.validateBotToken(dto.botToken);
+  }
+
   @Post('connect')
   @RequirePermissions(Permission.SETTINGS_MANAGE)
+  @ApiOperation({ summary: 'Connect Telegram bot and auto-configure webhook' })
   connect(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: TelegramConnectDto) {
     return this.telegram.connect(principal.teamId, dto);
+  }
+
+  @Get(':channelId/webhook-status')
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  @ApiOperation({ summary: 'Verify Telegram webhook is active' })
+  webhookStatus(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('channelId') channelId: string,
+  ) {
+    return this.telegram.verifyWebhook(principal.teamId, channelId);
   }
 
   @Post('disconnect')

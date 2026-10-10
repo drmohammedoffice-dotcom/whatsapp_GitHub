@@ -160,6 +160,8 @@ Operational endpoints:
 
 Every API response includes `x-request-id`; clients can pass their own `x-request-id` to correlate logs, traces, and support tickets.
 
+Creative Studio (Phase 3): see `docs/CREATIVE_STUDIO.md`. UI: `/ai/creative`.
+
 Scaling guidance:
 
 - Scale `api` horizontally for HTTP/WebSocket traffic.

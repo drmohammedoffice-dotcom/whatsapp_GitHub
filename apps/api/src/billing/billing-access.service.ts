@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+
+import { ModuleRef } from '@nestjs/core';
 
 import { SubscriptionStatus } from '@watsapp/database';
 
@@ -7,6 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { PlanLimits, PlanSlug } from './plan-limits';
 
 import { PlanEntitlementsService } from './plan-entitlements.service';
+
+import { FreeTrialService } from './free-trial.service';
 
 
 
@@ -27,6 +31,8 @@ export type SubscriptionAccess = {
   isInGracePeriod: boolean;
 
   graceHoursRemaining: number | null;
+
+  graceDaysRemaining: number | null;
 
   gracePurged: boolean;
 
@@ -50,11 +56,15 @@ export type SubscriptionAccess = {
 
 export class BillingAccessService {
 
+  private readonly logger = new Logger(BillingAccessService.name);
+
   constructor(
 
     private readonly prisma: PrismaService,
 
     private readonly entitlements: PlanEntitlementsService,
+
+    private readonly moduleRef: ModuleRef,
 
   ) {}
 
@@ -83,6 +93,8 @@ export class BillingAccessService {
     if (status !== SubscriptionStatus.ACTIVE && status !== SubscriptionStatus.TRIAL) return false;
 
     if (!periodEnd) return status === SubscriptionStatus.ACTIVE;
+
+    if (status === SubscriptionStatus.TRIAL) return periodEnd.getTime() > now.getTime();
 
     const days = BillingAccessService.daysRemaining(periodEnd, now);
 
@@ -124,6 +136,8 @@ export class BillingAccessService {
 
         graceHoursRemaining: null,
 
+        graceDaysRemaining: null,
+
         gracePurged: false,
 
         daysRemaining: null,
@@ -148,13 +162,19 @@ export class BillingAccessService {
 
     const daysRemaining = BillingAccessService.daysRemaining(periodEnd);
 
+    const trialEndedNow =
+
+      subscription.status === SubscriptionStatus.TRIAL && !!periodEnd && periodEnd.getTime() <= Date.now();
+
     const isExpired =
 
       subscription.status === SubscriptionStatus.EXPIRED ||
 
       subscription.status === SubscriptionStatus.CANCELLED ||
 
-      (daysRemaining !== null && daysRemaining < 0);
+      trialEndedNow ||
+
+      (subscription.status !== SubscriptionStatus.TRIAL && daysRemaining !== null && daysRemaining < 0);
 
     const isActive = BillingAccessService.hasAccess(subscription.status, periodEnd);
 
@@ -192,11 +212,25 @@ export class BillingAccessService {
 
         : null,
 
+      graceDaysRemaining: isInGracePeriod
+
+        ? this.entitlements.graceDaysRemaining(subscription.expiredAt)
+
+        : null,
+
       gracePurged: !!subscription.gracePurgedAt,
 
       daysRemaining,
 
-      showExpiryWarning: isActive && daysRemaining !== null && daysRemaining <= 3,
+      showExpiryWarning:
+
+        isActive &&
+
+        (subscription.status === SubscriptionStatus.TRIAL
+
+          ? !!periodEnd && periodEnd.getTime() - Date.now() <= 24 * 60 * 60 * 1000
+
+          : daysRemaining !== null && daysRemaining <= 3),
 
       currentPeriodEnd: periodEnd,
 
@@ -238,6 +272,8 @@ export class BillingAccessService {
 
     });
 
+    await this.withTrial((trial) => trial.pauseTeamCampaigns(teamId));
+
   }
 
 
@@ -251,6 +287,24 @@ export class BillingAccessService {
       data: { billingSuspended: false },
 
     });
+
+    await this.withTrial((trial) => trial.resumePausedCampaigns(teamId));
+
+  }
+
+  private async withTrial(run: (trial: FreeTrialService) => Promise<void>) {
+
+    try {
+
+      const trial = this.moduleRef.get(FreeTrialService, { strict: false });
+
+      if (trial) await run(trial);
+
+    } catch (err) {
+
+      this.logger.warn(`Trial campaign sync skipped: ${err instanceof Error ? err.message : String(err)}`);
+
+    }
 
   }
 

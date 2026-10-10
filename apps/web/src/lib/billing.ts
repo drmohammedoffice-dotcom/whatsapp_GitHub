@@ -15,12 +15,27 @@ export type BillingPlan = {
   slug: string;
   tier: string;
   name: string;
+  nameAr?: string;
+  nameEn?: string;
   description: string | null;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
   monthlyPriceCents: number;
   yearlyPriceCents: number;
   currency: string;
   features: string[];
+  featuresAr?: string[];
   popular: boolean;
+  comparison?: Array<{
+    key: string;
+    category: string;
+    nameAr: string;
+    nameEn: string;
+    valueType: string;
+    enabled: boolean;
+    limit: number | null;
+  }>;
+  limits?: PlanLimits;
 };
 
 export type SubscriptionState = {
@@ -32,8 +47,23 @@ export type SubscriptionState = {
   limits: PlanLimits | null;
   trackingPhoneCount: number;
   canAddTrackingPhone: boolean;
+  whatsappInboxCount?: number;
+  canAddWhatsappNumber?: boolean;
+  tiktokPixelCount?: number;
+  canAddTiktokPixel?: boolean;
+  teamMemberCount?: number;
+  canAddTeamMember?: boolean;
+  overLimit?: {
+    trackingPhones: boolean;
+    whatsappNumbers: boolean;
+    tiktokPixels: boolean;
+    teamMembers: boolean;
+  };
   billingCycle: BillingCycle | null;
+  autoRenew: boolean;
   trialExpired: boolean;
+  isFreeTrial: boolean;
+  freeTrialEnded: boolean;
   isActive: boolean;
   isExpired: boolean;
   isInGracePeriod: boolean;
@@ -75,8 +105,11 @@ export type PaymentDetails = {
 
 export const WHATSAPP_SALES_NUMBER = '9647864314333';
 
-export function formatPrice(cents: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 0 }).format(cents / 100);
+export function formatPrice(amount: number, currency = 'USD') {
+  if ((currency || '').toUpperCase() === 'IQD') {
+    return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(amount)} IQD`;
+  }
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 0 }).format(amount / 100);
 }
 
 export function planButtonKey(slug: string) {

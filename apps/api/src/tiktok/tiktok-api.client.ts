@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { TIKTOK_API_BASE } from './tiktok.constants';
+import type { TikTokResolvedCredentials } from './tiktok-app-credentials.service';
 
 export type TikTokTokenResponse = {
   access_token: string;
@@ -24,12 +24,8 @@ export type TikTokAdvertiserInfo = {
 export class TikTokApiClient {
   private readonly logger = new Logger(TikTokApiClient.name);
   private readonly http: AxiosInstance;
-  private readonly appId: string;
-  private readonly appSecret: string;
 
-  constructor(config: ConfigService) {
-    this.appId = config.get<string>('TIKTOK_CLIENT_KEY', '');
-    this.appSecret = config.get<string>('TIKTOK_CLIENT_SECRET', '');
+  constructor() {
     this.http = axios.create({
       baseURL: TIKTOK_API_BASE,
       timeout: 30_000,
@@ -37,42 +33,23 @@ export class TikTokApiClient {
     });
   }
 
-  isConfigured(): boolean {
-    return Boolean(this.appId && this.appSecret);
+  isConfigured(creds: TikTokResolvedCredentials | null | undefined): boolean {
+    return Boolean(creds?.clientKey && creds?.clientSecret);
   }
 
-  buildAuthUrl(state: string, redirectUri: string): string {
-    const params = new URLSearchParams({
-      app_id: this.appId,
-      state,
-      redirect_uri: redirectUri,
-    });
-    return `https://business-api.tiktok.com/portal/auth?${params.toString()}`;
-  }
-
-  async exchangeAuthCode(authCode: string): Promise<TikTokTokenResponse> {
-    const { data } = await this.http.post('/oauth2/access_token/', {
-      app_id: this.appId,
-      secret: this.appSecret,
-      auth_code: authCode,
-    });
-    this.assertOk(data, 'exchangeAuthCode');
-    return data.data as TikTokTokenResponse;
-  }
-
-  async refreshAccessToken(refreshToken: string): Promise<TikTokTokenResponse> {
+  async refreshAccessToken(creds: TikTokResolvedCredentials, refreshToken: string): Promise<TikTokTokenResponse> {
     const { data } = await this.http.post('/oauth2/refresh_token/', {
-      app_id: this.appId,
-      secret: this.appSecret,
+      app_id: creds.clientKey,
+      secret: creds.clientSecret,
       refresh_token: refreshToken,
     });
     this.assertOk(data, 'refreshAccessToken');
     return data.data as TikTokTokenResponse;
   }
 
-  async getAdvertisers(accessToken: string): Promise<TikTokAdvertiserInfo[]> {
+  async getAdvertisers(creds: TikTokResolvedCredentials, accessToken: string): Promise<TikTokAdvertiserInfo[]> {
     const { data } = await this.http.get('/oauth2/advertiser/get/', {
-      params: { app_id: this.appId, secret: this.appSecret },
+      params: { app_id: creds.clientKey, secret: creds.clientSecret },
       headers: { 'Access-Token': accessToken },
     });
     this.assertOk(data, 'getAdvertisers');
@@ -114,10 +91,6 @@ export class TikTokApiClient {
     return (data.data?.list ?? []) as Array<Record<string, unknown>>;
   }
 
-  /**
-   * TikTok Events API (server-side). Requires pixel_code / event_source_id from TikTok Ads Manager.
-   * Official docs: https://business-api.tiktok.com/portal/docs?id=1771100865818625
-   */
   async sendEvent(
     accessToken: string,
     pixelCode: string,

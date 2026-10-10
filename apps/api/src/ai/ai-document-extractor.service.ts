@@ -5,6 +5,7 @@ import { createHash } from 'crypto';
 import mammoth from 'mammoth';
 import pdfParseModule from 'pdf-parse';
 import * as XLSX from 'xlsx';
+import { createWorker } from 'tesseract.js';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
 
 @Injectable()
@@ -36,6 +37,17 @@ export class AiDocumentExtractorService {
       return workbook.SheetNames.map((name) => XLSX.utils.sheet_to_csv(workbook.Sheets[name])).join('\n');
     }
     if (mimeType.startsWith('text/') || fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.csv')) return buffer.toString('utf8');
+    if (mimeType.startsWith('image/')) {
+      const worker = await createWorker('eng+ara');
+      try {
+        const result = await worker.recognize(buffer);
+        const text = result.data.text.trim();
+        if (!text) throw new BadRequestException('No readable text found in image');
+        return text;
+      } finally {
+        await worker.terminate();
+      }
+    }
     throw new BadRequestException(`Unsupported document type: ${mimeType}`);
   }
 }

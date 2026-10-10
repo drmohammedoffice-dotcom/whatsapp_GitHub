@@ -12,19 +12,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   fetchTikTokContactDebug,
   type TikTokContactDebugRow,
+  type TikTokContactDiagnosticRow,
 } from '@/lib/tiktok-integration';
 import { parseApiError } from '@/lib/utils';
 
-function statusVariant(status: string, contactSent: boolean): 'default' | 'secondary' | 'destructive' | 'outline' {
+function statusVariant(status: string | null | undefined, contactSent: boolean): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (contactSent || status === 'sent') return 'default';
-  if (status === 'failed') return 'destructive';
+  if (status === 'failed' || status === 'skip') return 'destructive';
   if (status === 'pending') return 'secondary';
   return 'outline';
 }
 
-export default function TikTokContactDebugPage() {
+export default function TikTokConversionDebugPage() {
   const { t, locale } = useTranslation();
   const [rows, setRows] = useState<TikTokContactDebugRow[]>([]);
+  const [diagnostics, setDiagnostics] = useState<TikTokContactDiagnosticRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +34,9 @@ export default function TikTokContactDebugPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchTikTokContactDebug(undefined, 150);
+      const data = await fetchTikTokContactDebug(undefined, 200);
       setRows(data.rows);
+      setDiagnostics(data.diagnostics ?? []);
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -45,7 +48,7 @@ export default function TikTokContactDebugPage() {
     void load();
   }, [load]);
 
-  const dateFmt = (value: string | null) => {
+  const dateFmt = (value: string | null | undefined) => {
     if (!value) return '—';
     try {
       return new Date(value).toLocaleString(locale === 'ar' ? 'ar' : 'en');
@@ -70,16 +73,72 @@ export default function TikTokContactDebugPage() {
 
       {error ? <AlertBanner variant="error" message={error} className="mb-4" /> : null}
 
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">{t('tiktokIntegration.debug.pipelineTitle')}</CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {loading && diagnostics.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : diagnostics.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('tiktokIntegration.debug.empty')}</p>
+          ) : (
+            <table className="w-full min-w-[1100px] text-start text-sm">
+              <thead>
+                <tr className="border-b text-muted-foreground">
+                  <th className="px-2 py-2 font-medium">{t('tiktokIntegration.debug.time')}</th>
+                  <th className="px-2 py-2 font-medium">{t('tiktokIntegration.debug.workspace')}</th>
+                  <th className="px-2 py-2 font-medium">{t('tiktokIntegration.debug.phone')}</th>
+                  <th className="px-2 py-2 font-medium">{t('tiktokIntegration.debug.conversation')}</th>
+                  <th className="px-2 py-2 font-medium">Pixel</th>
+                  <th className="px-2 py-2 font-medium">ttclid</th>
+                  <th className="px-2 py-2 font-medium">{t('tiktokIntegration.debug.newConversation')}</th>
+                  <th className="px-2 py-2 font-medium">{t('tiktokIntegration.debug.outcome')}</th>
+                  <th className="px-2 py-2 font-medium">{t('tiktokIntegration.debug.reason')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diagnostics.map((row) => (
+                  <tr key={row.id} className="border-b align-top last:border-0">
+                    <td className="whitespace-nowrap px-2 py-3 text-xs">{dateFmt(row.createdAt)}</td>
+                    <td className="px-2 py-3 text-xs">{row.integrationName || row.teamId}</td>
+                    <td className="px-2 py-3 font-mono text-xs">{row.whatsappPhone || '—'}</td>
+                    <td className="max-w-[120px] truncate px-2 py-3 font-mono text-xs" title={row.conversationId ?? ''}>
+                      {row.conversationId || '—'}
+                    </td>
+                    <td className="px-2 py-3 font-mono text-xs">{row.pixelCode || '—'}</td>
+                    <td className="max-w-[120px] truncate px-2 py-3 font-mono text-xs" title={row.ttclid ?? ''}>
+                      {row.ttclid || '—'}
+                    </td>
+                    <td className="px-2 py-3">
+                      {row.isNewConversation == null
+                        ? '—'
+                        : row.isNewConversation
+                          ? t('tiktokIntegration.debug.yes')
+                          : t('tiktokIntegration.debug.no')}
+                    </td>
+                    <td className="px-2 py-3">
+                      <Badge variant={statusVariant(row.outcome, row.contactSent)}>{row.outcome}</Badge>
+                    </td>
+                    <td className="px-2 py-3 text-xs text-muted-foreground">
+                      {row.reason || row.errorMessage || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t('tiktokIntegration.debug.tableTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          {loading && rows.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-          ) : rows.length === 0 ? (
+          {rows.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">{t('tiktokIntegration.debug.empty')}</p>
           ) : (
             <table className="w-full min-w-[960px] text-start text-sm">
@@ -114,23 +173,9 @@ export default function TikTokContactDebugPage() {
                       <Badge variant={statusVariant(row.tiktokStatus, row.contactSent)}>
                         {row.tiktokStatus}
                       </Badge>
-                      {row.retryCount > 0 ? (
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {t('tiktokIntegration.debug.retries')}: {row.retryCount}
-                        </span>
-                      ) : null}
                     </td>
-                    <td className="max-w-[280px] px-2 py-3">
-                      {row.tiktokError ? (
-                        <p className="text-xs text-destructive">{row.tiktokError}</p>
-                      ) : null}
-                      {row.tiktokResponse ? (
-                        <pre className="max-h-28 overflow-auto rounded bg-muted/60 p-2 text-[10px] leading-relaxed">
-                          {JSON.stringify(row.tiktokResponse, null, 2)}
-                        </pre>
-                      ) : !row.tiktokError ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : null}
+                    <td className="max-w-[220px] truncate px-2 py-3 text-xs text-muted-foreground">
+                      {row.tiktokError || (row.tiktokResponse ? JSON.stringify(row.tiktokResponse).slice(0, 80) : '—')}
                     </td>
                   </tr>
                 ))}

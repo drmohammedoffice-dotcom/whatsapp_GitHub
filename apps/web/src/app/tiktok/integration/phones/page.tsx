@@ -2,10 +2,10 @@
 
 import { SOCKET_EVENTS } from '@watsapp/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Loader2, Phone, Plus, QrCode, Trash2, Wifi, WifiOff } from 'lucide-react';
 import { TikTokIntegrationShell } from '@/components/tiktok/tiktok-integration-shell';
 import { useSubscriptionOptional } from '@/components/providers/subscription-provider';
-import { buildWhatsAppUpgradeUrl } from '@/lib/billing';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
 import { PageHeader } from '@/components/shared/page-header';
@@ -16,9 +16,12 @@ import {
   connectTikTokTrackingPhone,
   deleteTikTokTrackingPhone,
   disconnectTikTokTrackingPhone,
+  fetchTikTokIntegrations,
   fetchTikTokTrackingPhoneQr,
   fetchTikTokTrackingPhoneStatus,
   fetchTikTokTrackingPhones,
+  linkTikTokTrackingPhone,
+  type TikTokIntegrationView,
   type TikTokTrackingPhone,
   type TikTokTrackingPhoneStatus,
 } from '@/lib/tiktok-integration';
@@ -38,16 +41,23 @@ function statusVariant(status: string) {
   return 'secondary' as const;
 }
 
+function pixelLabel(pixel: TikTokIntegrationView) {
+  return pixel.pixelName || pixel.name || pixel.pixelCode || pixel.id.slice(0, 8);
+}
+
 export default function TikTokTrackingPhonesPage() {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const subscription = useSubscriptionOptional();
   const status = subscription?.status;
   const [phones, setPhones] = useState<TikTokTrackingPhone[]>([]);
+  const [pixels, setPixels] = useState<TikTokIntegrationView[]>([]);
+  const [selectedPixelId, setSelectedPixelId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState<TikTokTrackingPhoneStatus | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -55,7 +65,16 @@ export default function TikTokTrackingPhonesPage() {
     setLoading(true);
     setError(null);
     try {
-      setPhones(await fetchTikTokTrackingPhones());
+      const [phoneRows, pixelRes] = await Promise.all([
+        fetchTikTokTrackingPhones(),
+        fetchTikTokIntegrations().catch(() => ({ integrations: [] as TikTokIntegrationView[] })),
+      ]);
+      setPhones(phoneRows);
+      setPixels(pixelRes.integrations ?? []);
+      setSelectedPixelId((prev) => {
+        if (prev && pixelRes.integrations.some((p) => p.id === prev)) return prev;
+        return pixelRes.integrations[0]?.id ?? '';
+      });
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -163,10 +182,14 @@ export default function TikTokTrackingPhonesPage() {
 
   async function handleAddPhone() {
     if (status && !status.canAddTrackingPhone) return;
+    if (!selectedPixelId) {
+      setError(t('tiktokIntegration.trackingPhones.selectPixelFirst'));
+      return;
+    }
     setConnecting(true);
     setError(null);
     try {
-      const status = await connectTikTokTrackingPhone();
+      const status = await connectTikTokTrackingPhone({ integrationId: selectedPixelId });
       setActiveSession(status);
       sessionIdRef.current = status.sessionId;
       startPolling(status.sessionId);
@@ -174,6 +197,20 @@ export default function TikTokTrackingPhonesPage() {
       setError(parseApiError(err));
     } finally {
       setConnecting(false);
+    }
+  }
+
+  async function handleLink(channelId: string, integrationId: string) {
+    if (!integrationId) return;
+    setLinkingId(channelId);
+    setError(null);
+    try {
+      await linkTikTokTrackingPhone(channelId, integrationId);
+      await load();
+    } catch (err) {
+      setError(parseApiError(err));
+    } finally {
+      setLinkingId(null);
     }
   }
 
@@ -217,7 +254,7 @@ export default function TikTokTrackingPhonesPage() {
         title={t('tiktokIntegration.trackingPhones.title')}
         description={t('tiktokIntegration.trackingPhones.desc')}
         actions={
-          <Button onClick={() => void handleAddPhone()} disabled={connecting || atPhoneLimit}>
+          <Button onClick={() => void handleAddPhone()} disabled={connecting || atPhoneLimit || !selectedPixelId}>
             {connecting ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <Plus className="me-2 h-4 w-4" />}
             {t('tiktokIntegration.trackingPhones.add')}
           </Button>
@@ -227,6 +264,29 @@ export default function TikTokTrackingPhonesPage() {
       <AlertBanner variant="info" className="mt-4">
         {t('tiktokIntegration.trackingPhones.hint')}
       </AlertBanner>
+
+      <Card className="mt-4 border-0 shadow-card">
+        <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center">
+          <label className="text-sm font-medium whitespace-nowrap">
+            {t('tiktokIntegration.trackingPhones.linkToPixel')}
+          </label>
+          <select
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            value={selectedPixelId}
+            onChange={(e) => setSelectedPixelId(e.target.value)}
+          >
+            {pixels.length === 0 ? (
+              <option value="">{t('tiktokIntegration.trackingPhones.noPixels')}</option>
+            ) : (
+              pixels.map((pixel) => (
+                <option key={pixel.id} value={pixel.id}>
+                  {pixelLabel(pixel)}
+                </option>
+              ))
+            )}
+          </select>
+        </CardContent>
+      </Card>
 
       {status?.limits && (
         <AlertBanner variant="info" className="mt-4">
@@ -238,14 +298,12 @@ export default function TikTokTrackingPhonesPage() {
         <AlertBanner variant="warning" className="mt-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span>{t('billing.upgradeTrackingBody')}</span>
-            <a
-              href={buildWhatsAppUpgradeUrl(locale, 'tracking_phone')}
-              target="_blank"
-              rel="noreferrer"
+            <Link
+              href="/pricing?upgrade=1"
               className="font-medium text-primary underline-offset-4 hover:underline"
             >
               {t('billing.upgradeViaWhatsApp')}
-            </a>
+            </Link>
           </div>
         </AlertBanner>
       )}
@@ -261,6 +319,7 @@ export default function TikTokTrackingPhonesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4 pb-8">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qr} alt="WhatsApp QR" className="h-64 w-64 rounded-lg border bg-white p-2" />
             <p className="max-w-md text-center text-sm text-muted-foreground">
               {t('tiktokIntegration.trackingPhones.scanHint')}
@@ -294,7 +353,11 @@ export default function TikTokTrackingPhonesPage() {
                       <CardTitle className="text-base">
                         {phoneLabel(phone, t('tiktokIntegration.trackingPhones.pending'))}
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground">{t('tiktokIntegration.trackingPhones.trackingOnly')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {phone.pixelName
+                          ? `${t('tiktokIntegration.trackingPhones.linkedPixel')}: ${phone.pixelName}`
+                          : t('tiktokIntegration.trackingPhones.trackingOnly')}
+                      </p>
                     </div>
                   </div>
                   <Badge variant={statusVariant(phone.status)}>
@@ -311,38 +374,58 @@ export default function TikTokTrackingPhonesPage() {
                     )}
                   </Badge>
                 </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  {phone.sessionId && phone.status !== 'CONNECTED' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        sessionIdRef.current = phone.sessionId!;
-                        void refreshSession(phone.sessionId!).then((s) => {
-                          if (s.status !== 'CONNECTED') startPolling(phone.sessionId!);
-                        });
-                      }}
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="h-9 flex-1 rounded-md border bg-background px-2 text-xs"
+                      value={phone.integrationId ?? ''}
+                      disabled={linkingId === phone.channelId || pixels.length === 0}
+                      onChange={(e) => void handleLink(phone.channelId, e.target.value)}
                     >
-                      <QrCode className="me-2 h-4 w-4" />
-                      {t('tiktokIntegration.trackingPhones.showQr')}
-                    </Button>
-                  )}
-                  {phone.sessionId && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => void handleDisconnect(phone.sessionId!)}>
-                        {t('tiktokIntegration.trackingPhones.disconnect')}
-                      </Button>
+                      <option value="">{t('tiktokIntegration.trackingPhones.selectPixel')}</option>
+                      {pixels.map((pixel) => (
+                        <option key={pixel.id} value={pixel.id}>
+                          {pixelLabel(pixel)}
+                        </option>
+                      ))}
+                    </select>
+                    {linkingId === phone.channelId ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {phone.sessionId && phone.status !== 'CONNECTED' && (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => void handleDelete(phone.sessionId!)}
+                        onClick={() => {
+                          sessionIdRef.current = phone.sessionId!;
+                          void refreshSession(phone.sessionId!).then((s) => {
+                            if (s.status !== 'CONNECTED') startPolling(phone.sessionId!);
+                          });
+                        }}
                       >
-                        <Trash2 className="me-2 h-4 w-4" />
-                        {t('common.delete')}
+                        <QrCode className="me-2 h-4 w-4" />
+                        {t('tiktokIntegration.trackingPhones.showQr')}
                       </Button>
-                    </>
-                  )}
+                    )}
+                    {phone.sessionId && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => void handleDisconnect(phone.sessionId!)}>
+                          {t('tiktokIntegration.trackingPhones.disconnect')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => void handleDelete(phone.sessionId!)}
+                        >
+                          <Trash2 className="me-2 h-4 w-4" />
+                          {t('common.delete')}
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))

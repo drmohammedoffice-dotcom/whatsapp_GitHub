@@ -21,6 +21,8 @@ export type TikTokTrackingPhone = {
   status: string;
   connectedAt: string | null;
   integrationId: string | null;
+  pixelName?: string | null;
+  pixelCode?: string | null;
 };
 
 export type TikTokTrackingPhoneStatus = {
@@ -50,7 +52,13 @@ export type TikTokIntegrationView = {
   pixelStatusMessage: string | null;
   manualSetupRequired: boolean;
   whatsappNumber: string | null;
+  destinationType: 'WHATSAPP_NUMBER' | 'EXTERNAL_URL' | 'INSTANT_FORM' | 'STORE';
+  externalRedirectUrl: string | null;
   whatsappConnected?: boolean;
+  linkedFormId?: string | null;
+  linkedFormName?: string | null;
+  linkedFormUrl?: string | null;
+  linkedFormStatus?: string | null;
   redirectSlug: string;
   trackingUrl: string;
   eventBuilderUrl?: string | null;
@@ -88,6 +96,8 @@ export type TikTokIntegrationStats = {
   leadEvents?: number;
   purchaseEvents?: number;
   registrationEvents?: number;
+  formOrders?: number;
+  orderEvents?: number;
   lastEventSent?: string | null;
   lastEventName?: string | null;
   lastApiResponse?: unknown;
@@ -127,13 +137,21 @@ async function integrationApi<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
+  const raw = await response.text();
+  let body: unknown = {};
+  if (raw.trim()) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      body = { message: raw.slice(0, 300) };
+    }
+  }
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
     const message =
       (body as { message?: string | string[] }).message ?? `Request failed (${response.status})`;
     throw new Error(Array.isArray(message) ? message.join(' · ') : String(message));
   }
-  return response.json() as Promise<T>;
+  return (body || {}) as T;
 }
 
 export function fetchTikTokIntegrations() {
@@ -155,7 +173,10 @@ export function fetchTikTokIntegrationWizard(integrationId?: string, createNew =
 export function startTikTokIntegrationOAuth(integrationId?: string) {
   return integrationApi<{ authUrl: string }>('/oauth/start', {
     method: 'POST',
-    body: JSON.stringify({ integrationId }),
+    body: JSON.stringify({
+      integrationId,
+      returnOrigin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    }),
   });
 }
 
@@ -200,11 +221,24 @@ export function refreshTikTokPixelStatus(integrationId: string) {
   });
 }
 
+export function resyncTikTokEcommerceEvents(integrationId: string) {
+  return integrationApi<TikTokIntegrationView & { resync?: { resent?: number; events?: string[]; kind?: string | null } }>(
+    `/integrations/${integrationId}/resync-ecommerce-events`,
+    {
+      method: 'POST',
+      body: '{}',
+    },
+  );
+}
+
 export function updateTikTokIntegration(
   integrationId: string,
   input: {
     name?: string;
     whatsappNumber?: string;
+    destinationType?: 'WHATSAPP_NUMBER' | 'EXTERNAL_URL' | 'INSTANT_FORM' | 'STORE';
+    externalRedirectUrl?: string;
+    instantFormId?: string;
     defaultOptimizationEvent?: TikTokOptimizationEvent;
     customEventName?: string;
     enabledEvents?: TikTokOptimizationEvent[];
@@ -223,10 +257,22 @@ export function deleteTikTokIntegration(integrationId: string) {
   });
 }
 
-export function saveTikTokIntegrationWhatsapp(whatsappNumber: string, integrationId?: string) {
-  return integrationApi<TikTokIntegrationView>('/wizard/whatsapp', {
+export function saveTikTokIntegrationWhatsapp(
+  input: {
+    destinationType: 'WHATSAPP_NUMBER' | 'EXTERNAL_URL' | 'INSTANT_FORM' | 'STORE';
+    whatsappNumber?: string;
+    externalRedirectUrl?: string;
+    instantFormId?: string;
+  },
+  integrationId?: string,
+) {
+  return integrationApi<TikTokIntegrationView & {
+    linkedFormId?: string;
+    linkedFormUrl?: string;
+    linkedFormName?: string;
+  }>('/wizard/whatsapp', {
     method: 'POST',
-    body: JSON.stringify({ whatsappNumber, integrationId }),
+    body: JSON.stringify({ ...input, integrationId }),
   });
 }
 
@@ -272,36 +318,67 @@ export const OPTIMIZATION_EVENT_OPTIONS: TikTokOptimizationEvent[] = [
 
 export const tiktokIntegrationNavItems = [
   { href: '/tiktok/integration', labelKey: 'tiktokIntegration.nav.dashboard' },
+  { href: '/tiktok/integration/forms', labelKey: 'tiktokIntegration.nav.forms' },
+  { href: '/tiktok/integration/forms/orders', labelKey: 'tiktokIntegration.nav.orders' },
+  { href: '/ai/store', labelKey: 'tiktokIntegration.nav.store' },
   { href: '/tiktok/integration/phones', labelKey: 'tiktokIntegration.nav.trackingPhones' },
-  { href: '/tiktok/integration/debug', labelKey: 'tiktokIntegration.nav.debug' },
-  { href: '/tiktok/integration/wizard', labelKey: 'tiktokIntegration.nav.wizard' },
 ] as const;
 
 export type TikTokContactDebugRow = {
   id: string;
   integrationId: string;
   integrationName: string;
-  whatsappPhone: string;
+  whatsappPhone: string | null;
   ttclid: string | null;
-  eventId: string;
-  eventName: string;
-  firstMessageAt: string;
+  eventId?: string;
+  eventName?: string;
+  firstMessageAt?: string | null;
   contactSent: boolean;
-  tiktokStatus: string;
+  tiktokStatus: string | null;
   tiktokResponse: unknown;
-  tiktokError: string | null;
-  retryCount: number;
-  nextRetryAt: string | null;
-  sentAt: string | null;
+  tiktokError?: string | null;
+  retryCount?: number;
+  nextRetryAt?: string | null;
+  sentAt?: string | null;
   createdAt: string;
-  pageUrl: string | null;
-  conversationId: string;
+  pageUrl?: string | null;
+  conversationId: string | null;
+  messageId?: string | null;
+  pixelCode?: string | null;
+  pixelId?: string | null;
+  isNewConversation?: boolean | null;
+  outcome?: string;
+  reason?: string | null;
+};
+
+export type TikTokContactDiagnosticRow = {
+  id: string;
+  teamId: string;
+  integrationId: string | null;
+  integrationName: string | null;
+  channelId: string | null;
+  conversationId: string | null;
+  messageId: string | null;
+  whatsappPhone: string | null;
+  businessPhone: string | null;
+  pixelCode: string | null;
+  ttclid: string | null;
+  isNewConversation: boolean | null;
+  outcome: string;
+  reason: string | null;
+  tiktokStatus: string | null;
+  tiktokResponse: unknown;
+  errorMessage: string | null;
+  createdAt: string;
+  contactSent: boolean;
 };
 
 export function fetchTikTokContactDebug(integrationId?: string, limit = 100) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (integrationId) params.set('integrationId', integrationId);
-  return integrationApi<{ rows: TikTokContactDebugRow[] }>(`/debug/contacts?${params}`);
+  return integrationApi<{ rows: TikTokContactDebugRow[]; diagnostics: TikTokContactDiagnosticRow[] }>(
+    `/debug/contacts?${params}`,
+  );
 }
 
 export function saveTikTokEventsApiCredentials(
@@ -355,6 +432,13 @@ export function connectTikTokTrackingPhone(input?: { displayName?: string; integ
   return integrationApi<TikTokTrackingPhoneStatus>('/tracking-phones/connect', {
     method: 'POST',
     body: JSON.stringify(input ?? {}),
+  });
+}
+
+export function linkTikTokTrackingPhone(channelId: string, integrationId: string) {
+  return integrationApi<TikTokTrackingPhone>('/tracking-phones/link', {
+    method: 'POST',
+    body: JSON.stringify({ channelId, integrationId }),
   });
 }
 

@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
-import { Copy, Loader2, RefreshCw, Share2, Unplug } from 'lucide-react';
+import { Copy, Loader2, RefreshCw, Share2, Target, Unplug } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/layout/app-shell';
 import { useTranslation } from '@/components/providers/locale-provider';
@@ -15,10 +16,22 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api, getTeamId, parseApiError } from '@/lib/utils';
+import { api, API_URL, getAccessToken, getTeamId, parseApiError } from '@/lib/utils';
+
+type TikTokAppCredentials = {
+  configured: boolean;
+  source: 'team' | 'env' | null;
+  clientKey: string | null;
+  clientKeyHint: string | null;
+  redirectUri: string | null;
+  hasClientSecret: boolean;
+  envConfigured: boolean;
+  teamConfigured: boolean;
+};
 
 type TikTokStatus = {
   configured: boolean;
+  appCredentials?: TikTokAppCredentials;
   connected: boolean;
   status: string;
   businessName: string | null;
@@ -108,17 +121,38 @@ function TikTokPageInner() {
 
   useEffect(() => {
     load().catch(console.error);
-    if (searchParams.get('connected') === '1') setNotice(t('tiktok.connectSuccess'));
+    if (searchParams.get('connected') === '1' || searchParams.get('connected') === 'true') {
+      setNotice(t('tiktok.connectSuccess'));
+    }
+    const callbackError = searchParams.get('error');
+    if (callbackError) setError(decodeURIComponent(callbackError));
   }, [searchParams, t]);
 
   async function connect() {
     setBusy(true);
     setError(null);
     try {
-      const { authUrl } = await api<{ authUrl: string }>('/tiktok/connect', { method: 'POST', body: '{}' });
+      const token = getAccessToken();
+      if (!token) throw new Error('Not authenticated');
+      const response = await fetch(`${API_URL}/api/auth/tiktok-business/login`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          returnOrigin: window.location.origin,
+          returnTo: '/tiktok',
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error((body as { message?: string }).message ?? 'Failed to start TikTok authorization');
+      }
+      const { authUrl } = (await response.json()) as { authUrl: string };
       window.location.href = authUrl;
     } catch (err) {
-      setError(parseApiError(err));
+      setError(err instanceof Error ? err.message : parseApiError(err));
       setBusy(false);
     }
   }
@@ -207,6 +241,27 @@ function TikTokPageInner() {
   return (
     <AppShell>
       <PageHeader title={t('tiktok.title')} description={t('tiktok.description')} />
+
+      <div className="mt-6">
+        <Card className="border-primary/30 border-0 bg-primary/5 shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-primary">
+              <Target className="h-5 w-5" />
+              {t('nav.tiktokPixelWizard')}
+            </CardTitle>
+            <CardDescription>{t('nav.tiktokPixelWizardDesc')}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href="/tiktok/integration/wizard">{t('tiktokIntegration.openWizard')}</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/tiktok/integration">{t('tiktokIntegration.nav.dashboard')}</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       {notice && <AlertBanner className="mt-4" variant="success">{notice}</AlertBanner>}
       {error && <AlertBanner className="mt-4" variant="error">{error}</AlertBanner>}
 
@@ -219,7 +274,7 @@ function TikTokPageInner() {
           <TabsTrigger value="logs">{t('tiktok.tabLogs')}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="connection">
+        <TabsContent value="connection" className="space-y-4">
           <Card className="border-0 shadow-card">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div>
@@ -244,12 +299,11 @@ function TikTokPageInner() {
               {status && !status.configured && (
                 <AlertBanner variant="warning">
                   <span className="font-medium">{t('tiktok.notConfigured')}</span>
-                  <span className="mt-1 block text-sm">{t('tiktok.notConfiguredHint')}</span>
                 </AlertBanner>
               )}
               <div className="flex flex-wrap gap-2 pt-2">
                 {!status?.connected ? (
-                  <Button onClick={connect} disabled={busy || !status?.configured}><Share2 className="me-2 h-4 w-4" />{t('tiktok.connect')}</Button>
+                  <Button onClick={connect} disabled={busy}><Share2 className="me-2 h-4 w-4" />{t('tiktok.connect')}</Button>
                 ) : (
                   <>
                     <Button variant="outline" onClick={sync} disabled={busy}><RefreshCw className="me-2 h-4 w-4" />{t('tiktok.sync')}</Button>

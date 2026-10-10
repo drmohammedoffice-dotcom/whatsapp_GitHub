@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
+import { OtpVerificationModal } from '@/components/auth/otp-verification-modal';
+import { PasswordInput } from '@/components/auth/password-input';
 import { AuthLayout } from '@/components/layout/auth-layout';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
@@ -10,6 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AuthResponse, isOtpChallenge, OtpChallenge } from '@/lib/auth';
+import { fetchSubscriptionStatus } from '@/lib/billing';
+import { setAuthCookie, setSubscriptionCookie } from '@/lib/subscription-cookie';
+import { getPostAuthRedirect } from '@/lib/subscription-routes';
+import { getStoredReferral, saveReferral } from '@/lib/referral';
 import { api, checkApiHealth, parseApiError, setSession } from '@/lib/utils';
 
 export default function RegisterPage() {
@@ -18,10 +25,34 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
+  const [storedRef, setStoredRef] = useState('');
 
   useEffect(() => {
-    checkApiHealth().then(setApiOnline);
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('ref') ?? params.get('referral');
+    if (fromUrl) saveReferral(fromUrl, params.get('ref') ? 'CODE' : 'CODE');
+    const stored = getStoredReferral();
+    if (stored?.code) setStoredRef(stored.code);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = () => {
+      checkApiHealth().then((ok) => {
+        if (!cancelled) setApiOnline(ok);
+      });
+    };
+    check();
+    const timer = window.setInterval(check, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -33,6 +64,10 @@ export default function RegisterPage() {
     const name = String(form.get('name') ?? '').trim();
     const teamName = String(form.get('teamName') ?? '').trim();
     const pwd = String(form.get('password') ?? '');
+    const confirm = String(form.get('confirmPassword') ?? '');
+
+    const referralCode = String(form.get('referralCode') ?? '').trim() || getStoredReferral()?.code;
+    const referralSource = getStoredReferral()?.source ?? 'CODE';
 
     if (!name || !teamName || !email) {
       setError(t('auth.fillAllFields'));
@@ -42,15 +77,31 @@ export default function RegisterPage() {
       setError(t('auth.passwordMin'));
       return;
     }
+    if (pwd !== confirm) {
+      setError(t('auth.passwordMismatch'));
+      return;
+    }
 
     setLoading(true);
     try {
-      const tokens = await api<{ accessToken: string; refreshToken: string; teamId: string }>('/auth/register', {
+      const result = await api<AuthResponse>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, name, teamName, password: pwd }),
+        body: JSON.stringify({
+          email,
+          name,
+          teamName,
+          password: pwd,
+          phone: String(form.get('phone') ?? '').trim() || undefined,
+          referralCode: referralCode || undefined,
+          referralSource: referralCode ? referralSource : undefined,
+        }),
       });
-      setSession(tokens);
-      router.replace('/inbox/whatsapp');
+      if (isOtpChallenge(result)) {
+        setChallenge(result);
+        setOtpOpen(true);
+      } else {
+        await handleVerified(result);
+      }
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -58,7 +109,23 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleVerified(tokens: { accessToken?: string; refreshToken?: string; teamId?: string }) {
+    if (!tokens.accessToken || !tokens.refreshToken || !tokens.teamId) return;
+    setSession({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, teamId: tokens.teamId }, { clearImpersonation: true });
+    setAuthCookie();
+    setOtpOpen(false);
+    try {
+      const status = await fetchSubscriptionStatus();
+      setSubscriptionCookie(status.isActive);
+      router.replace(getPostAuthRedirect(status.isActive));
+    } catch {
+      setSubscriptionCookie(true);
+      router.replace('/tiktok/ads/create');
+    }
+  }
+
   const passwordOk = password.length >= 12;
+  const confirmOk = confirmPassword.length > 0 && password === confirmPassword;
 
   return (
     <AuthLayout title={t('auth.registerTitle')} subtitle={t('auth.registerSubtitle')}>
@@ -83,10 +150,9 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">{t('auth.password')}</Label>
-              <Input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 placeholder={t('auth.passwordHint')}
                 minLength={12}
                 required
@@ -98,11 +164,46 @@ export default function RegisterPage() {
                 {password.length}/12 {t('auth.passwordChars')} {passwordOk ? '✓' : t('auth.passwordCharsRequired')}
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
+              <PasswordInput
+                id="confirmPassword"
+                name="confirmPassword"
+                placeholder={t('auth.confirmPasswordHint')}
+                minLength={12}
+                required
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+              {confirmPassword.length > 0 && (
+                <p className={`text-xs ${confirmOk ? 'text-emerald-600' : 'text-destructive'}`}>
+                  {confirmOk ? t('auth.passwordMatch') : t('auth.passwordMismatch')}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">{t('auth.phoneOptional')}</Label>
+              <Input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="9647…" className="dir-ltr text-start" />
+              <p className="text-xs text-muted-foreground">{t('auth.phoneHint')}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="referralCode">{t('auth.referralCode')}</Label>
+              <Input
+                id="referralCode"
+                name="referralCode"
+                value={storedRef}
+                onChange={(e) => setStoredRef(e.target.value.toUpperCase())}
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">{t('auth.referralCodeHint')}</p>
+            </div>
 
             {error && <AlertBanner message={error} onDismiss={() => setError(null)} />}
 
-            <Button className="w-full" disabled={loading || apiOnline === false}>
-              {loading ? t('auth.registering') : t('auth.registerBtn')}
+            <Button className="w-full" disabled={loading}>
+              {loading ? t('auth.sendingOtp') : t('auth.registerBtn')}
             </Button>
           </form>
 
@@ -114,6 +215,14 @@ export default function RegisterPage() {
           </p>
         </CardContent>
       </Card>
+
+      <OtpVerificationModal
+        open={otpOpen}
+        challenge={challenge}
+        verifyPath="register/verify"
+        onVerified={handleVerified}
+        onClose={() => setOtpOpen(false)}
+      />
     </AuthLayout>
   );
 }

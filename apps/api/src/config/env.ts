@@ -57,6 +57,7 @@ export const envSchema = z.object({
   AI_TRANSCRIPTION_BASE_URL: z.string().url().optional(),
   AI_TRANSCRIPTION_MODEL: z.string().default('whisper-large-v3-turbo'),
   AI_TRANSCRIPTION_CHAT_MODEL: z.string().default('google/gemini-2.5-flash'),
+  AI_VISION_MODEL: z.string().optional(),
   AI_TTS_MODEL: z.string().default('tts-1'),
   AI_MONTHLY_BUDGET_CENTS: z.coerce.number().int().nonnegative().default(10000),
   AI_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(60),
@@ -90,6 +91,13 @@ export const envSchema = z.object({
   META_WA_DISPLAY_PHONE: z.string().optional(),
   /** WhatsApp Embedded Signup configuration_id from Meta Developer Console */
   META_WA_EMBEDDED_CONFIG_ID: z.string().optional(),
+  /** Official Chatloora WhatsApp sender (Admin OTP / subscription notices). Never used for customer inbox. */
+  CHATLOORA_WHATSAPP_WABA_ID: z.string().optional(),
+  CHATLOORA_WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  CHATLOORA_WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  CHATLOORA_WHATSAPP_OTP_TEMPLATE: z.string().optional(),
+  CHATLOORA_WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE: z.string().optional(),
+  CHATLOORA_WHATSAPP_SUBSCRIPTION_EXPIRED_TEMPLATE: z.string().optional(),
   /** Instagram API with Instagram Login (chatloora-IG app) */
   INSTAGRAM_API_APP_ID: z.string().optional(),
   INSTAGRAM_API_APP_SECRET: z.string().optional(),
@@ -102,21 +110,30 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v !== 'false' && v !== '0'),
+  ENABLE_SWAGGER: z.enum(['true', 'false']).optional(),
   /** Wayl payment gateway integration */
   WAYL_API_KEY: z.string().min(1).default('not-configured'),
   WAYL_API_BASE_URL: z.string().url().default('https://api.thewayl.com'),
   WAYL_WEBHOOK_SECRET: z.string().min(10).default('wayl-webhook-secret'),
   WAYL_ENV: z.enum(['live', 'test']).default('test'),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_API_BASE_URL: z.string().url().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_API_BASE_URL: z.string().url().optional(),
+  CREATIVE_OPENAI_TEXT_MODEL: z.string().optional(),
+  CREATIVE_OPENAI_IMAGE_MODEL: z.string().optional(),
+  CREATIVE_GEMINI_IMAGE_MODEL: z.string().optional(),
+  CREATIVE_GEMINI_VIDEO_MODEL: z.string().optional(),
+  GEMINI_API_BASE_URL: z.string().url().optional(),
+  VOICE_AI_ENABLED: z.string().optional(),
+  VOICE_AI_PROVIDER: z.string().optional(),
+  VOICE_AI_MODEL: z.string().optional(),
+  VOICE_HANDOFF_NUMBER: z.string().optional(),
+  VOICE_TWILIO_SKIP_SIGNATURE: z.string().optional(),
 });
-</｜DSML｜>
-<task_progress>
-- [x] استكشاف بنية المشروع
-- [x] فهم نظام الدفع الحالي (إن وجد)
-- [x] البحث عن توثيق API الخاص بـ wayl.io
-- [ ] إضافة متغيرات البيئة لـ Wayl
-- [ ] إنشاء WaylService للتعامل مع API
-- [ ] تعديل BillingService لاستخدام Wayl
-- [ ] إضافة Webhook Controller
-- [ ] تعديل صفحة الدفع في الويب
-- [ ] اختبار التكامل
-</task_progress>
+
+export type Env = z.infer<typeof envSchema>;
+

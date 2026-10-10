@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
-  PlugZap,
 } from 'lucide-react';
 import { TikTokIntegrationShell } from '@/components/tiktok/tiktok-integration-shell';
 import { PixelEditDialog } from '@/components/tiktok/pixel-edit-dialog';
@@ -24,31 +23,21 @@ import { PageHeader } from '@/components/shared/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   deleteTikTokIntegration,
   fetchTikTokIntegrationDashboard,
-  saveTikTokEventsApiCredentials,
-  testTikTokEventsApiConnection,
+  resyncTikTokEcommerceEvents,
+  updateTikTokIntegration,
   type TikTokIntegrationDashboard,
   type TikTokIntegrationDashboardItem,
   type TikTokIntegrationView,
 } from '@/lib/tiktok-integration';
+import { listInstantForms } from '@/lib/instant-forms/api';
 import { createSocket } from '@/lib/socket';
 import { parseApiError } from '@/lib/utils';
 import { runTikTokSetupAutomation } from '@/lib/tiktok-pixel-setup';
 
 const DASHBOARD_POLL_MS = 5000;
-
-function formatTs(value?: string | null, neverLabel = 'Never') {
-  if (!value) return neverLabel;
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
-}
 
 function PixelCard({
   item,
@@ -63,21 +52,16 @@ function PixelCard({
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
-  const [copiedBuilder, setCopiedBuilder] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activating, setActivating] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [activateError, setActivateError] = useState<string | null>(null);
   const [activateSuccess, setActivateSuccess] = useState(false);
-  const [pixelCode, setPixelCode] = useState(item.integration.pixelCode ?? '');
-  const [accessToken, setAccessToken] = useState('');
-  const [eventsBusy, setEventsBusy] = useState(false);
-  const [eventsMsg, setEventsMsg] = useState<string | null>(null);
-  const [eventsErr, setEventsErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPixelCode(item.integration.pixelCode ?? '');
-  }, [item.integration.pixelCode, item.integration.id]);
+  const [formOptions, setFormOptions] = useState<Array<{ id: string; name: string; status: string }>>([]);
+  const [selectedFormId, setSelectedFormId] = useState(item.integration.linkedFormId || '');
+  const [linkingForm, setLinkingForm] = useState(false);
+  const [linkFormError, setLinkFormError] = useState<string | null>(null);
+  const [linkFormSuccess, setLinkFormSuccess] = useState<string | null>(null);
 
   async function copyUrl() {
     await navigator.clipboard.writeText(item.integration.trackingUrl);
@@ -85,12 +69,50 @@ function PixelCard({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function copyBuilderUrl() {
-    const url = item.integration.eventBuilderUrl;
-    if (!url) return;
-    await navigator.clipboard.writeText(url);
-    setCopiedBuilder(true);
-    setTimeout(() => setCopiedBuilder(false), 2000);
+  const isEcommercePixel =
+    item.integration.destinationType === 'STORE'
+    || item.integration.destinationType === 'INSTANT_FORM'
+    || Boolean(item.integration.externalRedirectUrl?.includes('/s/'))
+    || Boolean(item.integration.externalRedirectUrl?.includes('/f/'));
+
+  const isInstantFormPixel =
+    item.integration.destinationType === 'INSTANT_FORM'
+    || Boolean(item.integration.externalRedirectUrl?.includes('/f/'));
+
+  useEffect(() => {
+    if (!isInstantFormPixel) return;
+    setSelectedFormId(item.integration.linkedFormId || '');
+    void listInstantForms()
+      .then((rows) =>
+        setFormOptions(
+          rows
+            .filter((f) => f.status !== 'ARCHIVED')
+            .map((f) => ({ id: f.id, name: f.name, status: f.status })),
+        ),
+      )
+      .catch(() => setFormOptions([]));
+  }, [isInstantFormPixel, item.integration.linkedFormId, item.integration.id]);
+
+  async function handleLinkForm() {
+    if (!selectedFormId) {
+      setLinkFormError('اختر استمارة فورية لربطها برابط التتبع');
+      return;
+    }
+    setLinkingForm(true);
+    setLinkFormError(null);
+    setLinkFormSuccess(null);
+    try {
+      await updateTikTokIntegration(item.integration.id, {
+        destinationType: 'INSTANT_FORM',
+        instantFormId: selectedFormId,
+      });
+      setLinkFormSuccess('تم ربط الاستمارة برابط التتبع ونشرها إن كانت مسودة');
+      onDelete();
+    } catch (err) {
+      setLinkFormError(parseApiError(err));
+    } finally {
+      setLinkingForm(false);
+    }
   }
 
   async function handleActivate() {
@@ -98,8 +120,18 @@ function PixelCard({
     setActivateError(null);
     setActivateSuccess(false);
     try {
-      const result = await runTikTokSetupAutomation(item.integration);
-      setActivateSuccess(result.activated);
+      if (isEcommercePixel) {
+        const result = await resyncTikTokEcommerceEvents(item.integration.id);
+        if ((result as { ok?: boolean }).ok === false) {
+          throw new Error(
+            String((result as { message?: string }).message || 'تعذرت مزامنة الأحداث مع تيك توك'),
+          );
+        }
+        setActivateSuccess(true);
+      } else {
+        const result = await runTikTokSetupAutomation(item.integration);
+        setActivateSuccess(result.activated);
+      }
       onDelete();
     } catch (err) {
       setActivateError(parseApiError(err));
@@ -111,7 +143,8 @@ function PixelCard({
   const needsActivation =
     item.integration.wizardCompleted &&
     item.integration.pixelId &&
-    ['waiting_for_activity', 'pending', 'unknown'].includes(item.integration.pixelStatus);
+    (isEcommercePixel
+      || ['waiting_for_activity', 'pending', 'unknown'].includes(item.integration.pixelStatus));
 
   async function handleDelete() {
     if (!window.confirm(t('tiktokIntegration.deletePixelConfirm'))) return;
@@ -127,46 +160,6 @@ function PixelCard({
     }
   }
 
-  async function handleSaveEventsApi() {
-    setEventsBusy(true);
-    setEventsErr(null);
-    setEventsMsg(null);
-    try {
-      const result = await saveTikTokEventsApiCredentials(item.integration.id, {
-        pixelCode: pixelCode.trim(),
-        accessToken: accessToken.trim(),
-        pixelId: item.integration.pixelId ?? undefined,
-        pixelName: item.integration.pixelName ?? undefined,
-      });
-      setEventsMsg(result.message || t('tiktokIntegration.eventsApi.connectedSuccess'));
-      setAccessToken('');
-      onDelete();
-    } catch (err) {
-      setEventsErr(parseApiError(err));
-    } finally {
-      setEventsBusy(false);
-    }
-  }
-
-  async function handleTestConnection() {
-    setEventsBusy(true);
-    setEventsErr(null);
-    setEventsMsg(null);
-    try {
-      const result = await testTikTokEventsApiConnection(item.integration.id);
-      if (result.ok) {
-        setEventsMsg(result.message || t('tiktokIntegration.eventsApi.connectedSuccess'));
-      } else {
-        setEventsErr(result.message);
-      }
-      onDelete();
-    } catch (err) {
-      setEventsErr(parseApiError(err));
-    } finally {
-      setEventsBusy(false);
-    }
-  }
-
   const displayName =
     item.integration.name ||
     item.integration.pixelName ||
@@ -177,10 +170,10 @@ function PixelCard({
     item.integration.eventsApiConnected || item.integration.eventsApiStatus === 'connected';
 
   return (
-    <Card className="border-0 shadow-card">
+    <Card className="min-w-0 overflow-hidden border-0 shadow-card">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-        <div>
-          <CardTitle className="text-base">{displayName}</CardTitle>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <CardTitle className="truncate text-base">{displayName}</CardTitle>
           {item.integration.advertiserName && (
             <p className="mt-1 text-xs text-muted-foreground">{item.integration.advertiserName}</p>
           )}
@@ -214,7 +207,7 @@ function PixelCard({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="min-w-0 space-y-4 overflow-hidden">
         {!item.integration.wizardCompleted && (
           <AlertBanner variant="warning">
             {t('tiktokIntegration.notConfigured')}{' '}
@@ -231,155 +224,45 @@ function PixelCard({
           <AlertBanner variant="warning">{t('tiktokIntegration.manualSetupRequired')}</AlertBanner>
         )}
 
+        {item.integration.whatsappNumber && item.integration.whatsappConnected === false ? (
+          <AlertBanner variant="warning" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {t('tiktokIntegration.whatsappNotConnected').replace(
+                '{phone}',
+                item.integration.whatsappNumber,
+              )}
+            </span>
+            <Link href="/tiktok/integration/phones">
+              <Button size="sm" variant="outline">
+                {t('tiktokIntegration.connectWhatsapp')}
+              </Button>
+            </Link>
+          </AlertBanner>
+        ) : null}
+
         {needsActivation && (
           <AlertBanner variant="info" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>{t('tiktokIntegration.pixelActivationHint')}</span>
+            <span>
+              {isEcommercePixel
+                ? 'أحداث المتجر/الاستمارة لم تظهر بعد كهدف تحسين في تيك توك؟ اضغط لمزامنة CompletePayment/Lead الآن.'
+                : t('tiktokIntegration.pixelActivationHint')}
+            </span>
             <Button size="sm" onClick={() => void handleActivate()} disabled={activating}>
               {activating ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
-              {t('tiktokIntegration.activatePixel')}
+              {isEcommercePixel ? 'مزامنة أحداث تيك توك' : t('tiktokIntegration.activatePixel')}
             </Button>
           </AlertBanner>
         )}
 
         {activateSuccess && (
-          <AlertBanner variant="success">{t('tiktokIntegration.autoSetupSuccess')}</AlertBanner>
+          <AlertBanner variant="success">
+            {isEcommercePixel
+              ? 'تمت مزامنة الأحداث مع تيك توك. افتح Events Manager وحدّث الصفحة خلال دقائق لرؤية CompletePayment/Lead.'
+              : t('tiktokIntegration.autoSetupSuccess')}
+          </AlertBanner>
         )}
 
-        <div className="space-y-3 rounded-lg border p-4">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">{t('tiktokIntegration.eventsApi.title')}</p>
-            <Badge variant={eventsConnected ? 'success' : 'secondary'}>
-              {item.integration.eventsApiStatusMessage ||
-                (eventsConnected
-                  ? t('tiktokIntegration.eventsApi.connected')
-                  : t('tiktokIntegration.eventsApi.disconnected'))}
-            </Badge>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.pixelCode')}</p>
-              <p className="font-mono text-sm">{item.integration.pixelCode ?? item.integration.pixelId ?? '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t('tiktokIntegration.pixelName')}</p>
-              <p className="text-sm">{item.integration.pixelName ?? '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.creationDate')}</p>
-              <p className="text-sm">
-                {formatTs(item.integration.createdAt, t('tiktokIntegration.eventsApi.never'))}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.lastVerification')}</p>
-              <p className="text-sm">
-                {formatTs(
-                  item.integration.lastEventsApiVerificationAt,
-                  t('tiktokIntegration.eventsApi.never'),
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.lastEventSent')}</p>
-              <p className="text-sm">
-                {item.integration.lastEventName
-                  ? `${item.integration.lastEventName} · ${formatTs(item.integration.lastEventSentAt, t('tiktokIntegration.eventsApi.never'))}`
-                  : formatTs(
-                      item.stats.lastEventSent ?? item.integration.lastEventSentAt,
-                      t('tiktokIntegration.eventsApi.never'),
-                    )}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.lastError')}</p>
-              <p className="text-sm text-destructive">
-                {item.integration.lastApiError || item.stats.lastError || '—'}
-              </p>
-            </div>
-            {item.stats.lastApiResponse ? (
-              <div className="md:col-span-2">
-                <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.lastApiResponse')}</p>
-                <pre className="mt-1 max-h-28 overflow-auto rounded bg-muted px-2 py-1 text-[11px]">
-                  {typeof item.stats.lastApiResponse === 'string'
-                    ? item.stats.lastApiResponse
-                    : JSON.stringify(item.stats.lastApiResponse, null, 2)}
-                </pre>
-              </div>
-            ) : item.integration.lastApiHttpStatus != null ? (
-              <div>
-                <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.lastApiResponse')}</p>
-                <p className="text-sm">HTTP {item.integration.lastApiHttpStatus}</p>
-              </div>
-            ) : null}
-            {item.integration.hasEventsApiToken && item.integration.eventsApiTokenHint ? (
-              <div className="md:col-span-2">
-                <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventsApi.tokenHint')}</p>
-                <p className="font-mono text-sm">{item.integration.eventsApiTokenHint}</p>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor={`pixel-${item.integration.id}`}>
-                {t('tiktokIntegration.eventsApi.pixelCode')}
-              </Label>
-              <Input
-                id={`pixel-${item.integration.id}`}
-                value={pixelCode}
-                onChange={(e) => setPixelCode(e.target.value)}
-                placeholder="XXXXXXXXXXXXXXXXX"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={`token-${item.integration.id}`}>
-                {t('tiktokIntegration.eventsApi.accessToken')}
-              </Label>
-              <Input
-                id={`token-${item.integration.id}`}
-                type="password"
-                autoComplete="off"
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                placeholder={t('tiktokIntegration.eventsApi.accessTokenPlaceholder')}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              onClick={() => void handleSaveEventsApi()}
-              disabled={eventsBusy || !pixelCode.trim() || accessToken.trim().length < 20}
-            >
-              {eventsBusy ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
-              {t('tiktokIntegration.eventsApi.save')}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void handleTestConnection()}
-              disabled={eventsBusy || !item.integration.hasEventsApiToken}
-            >
-              {eventsBusy ? (
-                <Loader2 className="me-2 h-4 w-4 animate-spin" />
-              ) : (
-                <PlugZap className="me-2 h-4 w-4" />
-              )}
-              {eventsBusy
-                ? t('tiktokIntegration.eventsApi.testing')
-                : t('tiktokIntegration.eventsApi.testConnection')}
-            </Button>
-          </div>
-          {eventsMsg && <AlertBanner variant="success">{eventsMsg}</AlertBanner>}
-          {eventsErr && <AlertBanner variant="error">{eventsErr}</AlertBanner>}
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="text-xs text-muted-foreground">{t('tiktokIntegration.pixelId')}</p>
-            <p className="font-mono text-sm">{item.integration.pixelId ?? '—'}</p>
-          </div>
+        <div className="grid min-w-0 gap-4 md:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">{t('tiktokIntegration.pixelStatus')}</p>
             <p className="text-sm font-medium">
@@ -405,43 +288,75 @@ function PixelCard({
               </p>
             </div>
           )}
-          <div className="md:col-span-2">
+          <div className="min-w-0 md:col-span-2">
             <p className="text-xs text-muted-foreground">{t('tiktokIntegration.trackingUrl')}</p>
-            <div className="mt-1 flex gap-2">
-              <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-xs">
+            <div className="mt-1 flex min-w-0 items-start gap-2">
+              <code
+                dir="ltr"
+                className="min-w-0 flex-1 overflow-hidden break-all rounded bg-muted px-2 py-1.5 text-[11px] leading-relaxed sm:text-xs"
+              >
                 {item.integration.trackingUrl}
               </code>
-              <Button variant="outline" size="icon" onClick={() => void copyUrl()}>
+              <Button variant="outline" size="icon" className="shrink-0" onClick={() => void copyUrl()}>
                 {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
               </Button>
-              <Button variant="outline" size="icon" asChild>
+              <Button variant="outline" size="icon" className="shrink-0" asChild>
                 <a href={item.integration.trackingUrl} target="_blank" rel="noreferrer">
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{t('tiktokIntegration.trackingUrlHint')}</p>
+            <p className="mt-1 break-words text-xs leading-relaxed text-muted-foreground">{t('tiktokIntegration.trackingUrlHint')}</p>
           </div>
-          {item.integration.eventBuilderUrl ? (
-            <div className="md:col-span-2">
-              <p className="text-xs text-muted-foreground">{t('tiktokIntegration.eventBuilderUrl')}</p>
-              <div className="mt-1 flex gap-2">
-                <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-xs">
-                  {item.integration.eventBuilderUrl}
-                </code>
-                <Button variant="outline" size="icon" onClick={() => void copyBuilderUrl()}>
-                  {copiedBuilder ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                </Button>
-                <Button variant="outline" size="icon" asChild>
-                  <a href={item.integration.eventBuilderUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </Button>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">{t('tiktokIntegration.eventBuilderUrlHint')}</p>
-            </div>
-          ) : null}
         </div>
+
+        {isInstantFormPixel ? (
+          <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/60 p-4">
+            <div>
+              <p className="text-sm font-medium text-teal-950">الاستمارة الفورية المرتبطة</p>
+              <p className="mt-1 text-xs text-teal-900/80">
+                {item.integration.linkedFormName
+                  ? `الحالية: ${item.integration.linkedFormName}${item.integration.linkedFormStatus === 'DRAFT' ? ' (مسودة)' : ''}`
+                  : 'لم يتم ربط استمارة صحيحة بعد — اختر الاستمارة التي أنشأتها ليعمل رابط التتبع.'}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                className="h-10 flex-1 rounded-xl border bg-background px-3 text-sm outline-none focus:border-teal-400"
+                value={selectedFormId}
+                onChange={(e) => setSelectedFormId(e.target.value)}
+              >
+                <option value="">اختر استمارة فورية…</option>
+                {formOptions.map((form) => (
+                  <option key={form.id} value={form.id}>
+                    {form.name}
+                    {form.status === 'DRAFT' ? ' (مسودة)' : ''}
+                  </option>
+                ))}
+              </select>
+              <Button size="sm" disabled={linkingForm || !selectedFormId} onClick={() => void handleLinkForm()}>
+                {linkingForm ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
+                ربط برابط التتبع
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/tiktok/integration/forms/new">إنشاء استمارة</Link>
+              </Button>
+            </div>
+            {item.integration.linkedFormUrl ? (
+              <a
+                href={item.integration.linkedFormUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-medium text-teal-800 underline"
+              >
+                فتح الاستمارة المرتبطة
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : null}
+            {linkFormError ? <p className="text-sm text-destructive">{linkFormError}</p> : null}
+            {linkFormSuccess ? <p className="text-sm text-teal-800">{linkFormSuccess}</p> : null}
+          </div>
+        ) : null}
 
         {item.integration.wizardCompleted && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -481,6 +396,12 @@ function PixelCard({
               <p className="text-xs text-muted-foreground">{t('tiktokIntegration.stats.registrationEvents')}</p>
               <p className="text-lg font-bold">{item.stats.registrationEvents ?? 0}</p>
             </div>
+            {isInstantFormPixel ? (
+              <div className="rounded-lg border border-teal-200 bg-teal-50/50 p-3">
+                <p className="text-xs text-teal-800">طلبات الاستمارة المرتبطة</p>
+                <p className="text-lg font-bold text-teal-950">{item.stats.formOrders ?? 0}</p>
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -584,7 +505,11 @@ export default function TikTokIntegrationDashboardPage() {
   }, [load, scheduleRefresh]);
 
   const disclaimer = locale === 'ar' ? data?.disclaimer.ar : data?.disclaimer.en;
-  const items = data?.integrations ?? [];
+  const items = [...(data?.integrations ?? [])].sort((a, b) => {
+    const aTs = a.integration.createdAt ? Date.parse(a.integration.createdAt) : 0;
+    const bTs = b.integration.createdAt ? Date.parse(b.integration.createdAt) : 0;
+    return bTs - aTs;
+  });
 
   return (
     <TikTokIntegrationShell>
@@ -592,7 +517,7 @@ export default function TikTokIntegrationDashboardPage() {
         title={t('tiktokIntegration.nav.dashboard')}
         description={t('tiktokIntegration.dashboardDesc')}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {refreshing ? (
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

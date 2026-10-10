@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
+import { OtpVerificationModal } from '@/components/auth/otp-verification-modal';
+import { PasswordInput } from '@/components/auth/password-input';
 import { AuthLayout } from '@/components/layout/auth-layout';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
@@ -10,6 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AuthResponse, isOtpChallenge, OtpChallenge } from '@/lib/auth';
+import { fetchSubscriptionStatus } from '@/lib/billing';
+import { setAuthCookie, setSubscriptionCookie } from '@/lib/subscription-cookie';
+import { getPostAuthRedirect } from '@/lib/subscription-routes';
 import { api, checkApiHealth, ensureValidSession, getRememberedEmail, parseApiError, setRememberedEmail, setSession } from '@/lib/utils';
 
 export default function LoginPage() {
@@ -18,16 +24,37 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
-
   const [remember, setRemember] = useState(true);
   const [savedEmail, setSavedEmail] = useState('');
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
+  const [pendingEmail, setPendingEmail] = useState('');
 
   useEffect(() => {
-    checkApiHealth().then(setApiOnline);
+    let cancelled = false;
+    const check = () => {
+      checkApiHealth().then((ok) => {
+        if (!cancelled) setApiOnline(ok);
+      });
+    };
+    check();
+    const timer = window.setInterval(check, 15_000);
     setSavedEmail(getRememberedEmail() ?? '');
-    ensureValidSession().then((valid) => {
-      if (valid) router.replace('/inbox/whatsapp');
+    ensureValidSession().then(async (valid) => {
+      if (!valid) return;
+      setAuthCookie();
+      try {
+        const status = await fetchSubscriptionStatus();
+        setSubscriptionCookie(status.isActive);
+        router.replace(getPostAuthRedirect(status.isActive));
+      } catch {
+        router.replace('/tiktok/ads/create');
+      }
     });
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [router]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -35,22 +62,44 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     const form = new FormData(event.currentTarget);
+    const email = String(form.get('email') ?? '').trim();
+    setPendingEmail(email);
     try {
-      const tokens = await api<{ accessToken: string; refreshToken: string; teamId: string }>('/auth/login', {
+      const result = await api<AuthResponse>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
+        body: JSON.stringify({ email, password: form.get('password') }),
       });
-      setSession(tokens);
-      const email = String(form.get('email') ?? '').trim();
-      if (remember) setRememberedEmail(email);
-      else setRememberedEmail(null);
-      router.replace('/inbox/whatsapp');
+      if (isOtpChallenge(result)) {
+        setChallenge(result);
+        setOtpOpen(true);
+      } else {
+        await handleVerified(result);
+      }
     } catch (err) {
       setError(parseApiError(err));
     } finally {
       setLoading(false);
     }
   }
+
+  async function handleVerified(tokens: { accessToken?: string; refreshToken?: string; teamId?: string }) {
+    if (!tokens.accessToken || !tokens.refreshToken || !tokens.teamId) return;
+    setSession({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, teamId: tokens.teamId }, { clearImpersonation: true });
+    setAuthCookie();
+    setOtpOpen(false);
+    if (remember) setRememberedEmail(pendingEmail);
+    else setRememberedEmail(null);
+    try {
+      const status = await fetchSubscriptionStatus();
+      setSubscriptionCookie(status.isActive);
+      router.replace(getPostAuthRedirect(status.isActive));
+    } catch {
+      setSubscriptionCookie(true);
+      router.replace('/tiktok/ads/create');
+    }
+  }
+
+  const verifyPath = challenge?.reason === 'email_not_verified' ? 'register/verify' : 'login/verify';
 
   return (
     <AuthLayout title={t('auth.loginTitle')} subtitle={t('auth.loginSubtitle')}>
@@ -72,7 +121,7 @@ export default function LoginPage() {
                   {t('auth.forgotPassword')}
                 </Link>
               </div>
-              <Input id="password" name="password" type="password" placeholder="••••••••" required autoComplete="current-password" />
+              <PasswordInput id="password" name="password" placeholder="••••••••" required autoComplete="current-password" />
             </div>
 
             <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
@@ -87,7 +136,7 @@ export default function LoginPage() {
 
             {error && <AlertBanner message={error} onDismiss={() => setError(null)} />}
 
-            <Button className="w-full" disabled={loading || apiOnline === false}>
+            <Button className="w-full" disabled={loading}>
               {loading ? t('auth.loggingIn') : t('auth.loginBtn')}
             </Button>
           </form>
@@ -100,6 +149,14 @@ export default function LoginPage() {
           </p>
         </CardContent>
       </Card>
+
+      <OtpVerificationModal
+        open={otpOpen}
+        challenge={challenge}
+        verifyPath={verifyPath}
+        onVerified={handleVerified}
+        onClose={() => setOtpOpen(false)}
+      />
     </AuthLayout>
   );
 }

@@ -71,6 +71,36 @@ export class BillingEmailService {
     }
   }
 
+  async sendRenewalEmail(params: {
+    to: string;
+    customerName: string;
+    planName: string;
+    amountLabel: string;
+    payUrl: string;
+    periodEnd: Date;
+  }) {
+    if (!this.resend) {
+      this.logger.warn(`RESEND_API_KEY not set — renewal email for ${params.to} not sent`);
+      return { id: 'dev-mode' };
+    }
+    const dateFmt = params.periodEnd.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    try {
+      const result = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: params.to,
+        subject: `تجديد اشتراك ChatLoora — ${params.planName}`,
+        html: `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
+<p>سيتم تجديد باقة <strong>${this.escapeHtml(params.planName)}</strong> (${this.escapeHtml(params.amountLabel)}) بتاريخ ${dateFmt}.</p>
+<p><a href="${this.escapeHtml(params.payUrl)}">ادفع الآن لتجديد الاشتراك</a></p>
+<p>يمكنك إيقاف التجديد التلقائي من صفحة الحساب في ChatLoora.</p>`,
+      });
+      return result.data;
+    } catch (err) {
+      this.logger.error(`Renewal email failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { id: null };
+    }
+  }
+
   private invoiceTemplate(params: {
     customerName: string;
     invoiceNumber: string;
@@ -84,7 +114,10 @@ export class BillingEmailService {
     paymentMethod?: string;
   }) {
     const { customerName, invoiceNumber, planName, billingCycle, amountCents, currency, paidAt, periodStart, periodEnd, paymentMethod } = params;
-    const amount = (amountCents / 100).toLocaleString('en-US', { style: 'currency', currency, minimumFractionDigits: 0 });
+    const amount =
+      currency === 'IQD'
+        ? `${amountCents.toLocaleString('en-US')} IQD`
+        : (amountCents / 100).toLocaleString('en-US', { style: 'currency', currency, minimumFractionDigits: 0 });
     const cycleLabel = billingCycle === 'YEARLY' ? 'Yearly' : 'Monthly';
     const dateFmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const methodLabel = paymentMethod ? this.escapeHtml(paymentMethod) : 'Online payment';
@@ -154,7 +187,74 @@ export class BillingEmailService {
 </html>`;
   }
 
+  async sendTrialStarted(params: { to: string; customerName: string; endsAt: Date; plansUrl: string }) {
+    return this.sendTrialMail(
+      params.to,
+      'تم تفعيل تجربتك المجانية لمدة 3 أيام',
+      `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
+<p>تم منح حسابك تجربة مجانية لمدة <strong>3 أيام</strong> بدون طلب تفعيل أو دفع الآن.</p>
+<p>تنتهي التجربة في <strong>${this.arabicDate(params.endsAt)}</strong>.</p>
+<p>بعد انتهاء المدة يجب تفعيل الاشتراك. إذا لم يتم التفعيل تتوقف روابط البكسل والحملات الإعلانية وبقية ميزات المنصة، وتُحفظ بياناتك لتعود بعد التفعيل.</p>
+<p><a href="${this.escapeHtml(params.plansUrl)}">صفحة الباقات</a></p>`,
+    );
+  }
+
+  async sendTrialReminder(params: { to: string; customerName: string; endsAt: Date; plansUrl: string }) {
+    return this.sendTrialMail(
+      params.to,
+      'تبقّى أقل من يوم على انتهاء تجربتك المجانية',
+      `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
+<p>تنتهي تجربتك المجانية في <strong>${this.arabicDate(params.endsAt)}</strong>.</p>
+<p>فعّل الاشتراك قبل انتهاء المدة حتى تستمر روابط البكسل والحملات الإعلانية دون توقف.</p>
+<p><a href="${this.escapeHtml(params.plansUrl)}">تفعيل الاشتراك</a></p>`,
+    );
+  }
+
+  async sendTrialEnded(params: { to: string; customerName: string; plansUrl: string }) {
+    return this.sendTrialMail(
+      params.to,
+      'انتهت الفترة المجانية — فعّل الاشتراك',
+      `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
+<p>انتهت تجربتك المجانية لمدة 3 أيام.</p>
+<p>روابط البكسل والحملات الإعلانية وبقية ميزات المنصة متوقفة إلى أن تفعّل الاشتراك. بياناتك محفوظة وتعود للعمل بعد التفعيل.</p>
+<p><a href="${this.escapeHtml(params.plansUrl)}">تفعيل الاشتراك الآن</a></p>`,
+    );
+  }
+
+  private arabicDate(value: Date) {
+    return value.toLocaleString('ar-IQ', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  private async sendTrialMail(to: string, subject: string, html: string) {
+    if (!this.resend) {
+      this.logger.warn(`RESEND_API_KEY not set — trial email for ${to} not sent`);
+      return false;
+    }
+    try {
+      const result = await this.resend.emails.send({ from: this.fromEmail, to, subject, html });
+      if (result.error) {
+        this.logger.error(`Trial email error for ${to}: ${result.error.message}`);
+        return false;
+      }
+      this.logger.log(`Trial email sent to ${to}: ${subject}`);
+      return true;
+    } catch (err) {
+      this.logger.error(`Trial email failed for ${to}: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+  }
+
   private escapeHtml(value: string) {
-    return value.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"');
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 }

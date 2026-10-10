@@ -1,7 +1,17 @@
+/** Browser pixel events that may run client-side. Purchase/CompletePayment/Lead must only go via Events API. */
+const BROWSER_SAFE_PIXEL_EVENTS = new Set(['PageView', 'ViewContent', 'InitiateCheckout']);
+
+function whitelistBrowserPixelEvents(events: string[]): string[] {
+  const allowed = events
+    .map((e) => e.trim())
+    .filter((e) => e && BROWSER_SAFE_PIXEL_EVENTS.has(e));
+  return allowed.length > 0 ? allowed : ['PageView'];
+}
+
 /** Inline TikTok Pixel base code — must appear in HTML for TikTok setup verification. */
 export function tiktokPixelInlineScript(pixelCode: string, extraEvents: string[] = []) {
   const safeCode = pixelCode.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const events = extraEvents.filter((e) => e && e !== 'PageView');
+  const events = whitelistBrowserPixelEvents(extraEvents).filter((e) => e !== 'PageView');
   const trackCalls = events
     .map((e, i) => `setTimeout(function(){ttq.track('${e.replace(/'/g, "\\'")}');},${400 + i * 400});`)
     .join('');

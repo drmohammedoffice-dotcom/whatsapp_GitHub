@@ -186,13 +186,33 @@ export class TikTokLifecycleEventsService {
   }
 
   async dispatchLifecycleEvent(conversionId: string) {
+    const leaseUntil = new Date(Date.now() + 5 * 60 * 1000);
+    const claimed = await this.prisma.tikTokIntegrationConversion.updateMany({
+      where: {
+        id: conversionId,
+        contactSent: false,
+        retryCount: { lt: TIKTOK_CONTACT_MAX_RETRIES },
+        OR: [
+          { tiktokStatus: 'pending' },
+          { tiktokStatus: 'sending', nextRetryAt: { lte: new Date() } },
+        ],
+      },
+      data: { tiktokStatus: 'sending', nextRetryAt: leaseUntil },
+    });
+    if (claimed.count !== 1) {
+      return this.prisma.tikTokIntegrationConversion.findUnique({ where: { id: conversionId } });
+    }
+
     const conversion = await this.prisma.tikTokIntegrationConversion.findUnique({
       where: { id: conversionId },
       include: { integration: true },
     });
     if (!conversion || conversion.contactSent) return conversion;
     const integration = conversion.integration;
-    if (!integration?.pixelCode) return null;
+    if (!integration?.pixelCode) {
+      await this.fail(conversion.id, 'missing_pixel_code', true);
+      return null;
+    }
 
     const accessToken =
       this.credentials.getAccessTokenForIntegration(integration) ??

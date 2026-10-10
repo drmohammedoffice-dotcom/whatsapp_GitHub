@@ -1,5 +1,5 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
-import { AiMemoryScope, AiProviderType, AiToolKind, AiTransferReason, AutomationActionType, AutomationTriggerType } from '@watsapp/database';
+import { ApiProperty } from '@nestjs/swagger';
+import { AiMemoryScope, AiProviderType, AiToolKind, AiTrainingPlatform, AiTransferReason, AutomationActionType, AutomationTriggerType } from '@watsapp/database';
 import { IsArray, IsBoolean, IsEnum, IsNumber, IsObject, IsOptional, IsString, IsUrl, Max, Min } from 'class-validator';
 
 export class AiChatDto {
@@ -119,6 +119,11 @@ export class ExecuteToolDto {
 }
 
 export class AiSettingsDto {
+  @ApiProperty({ required: false, enum: AiTrainingPlatform })
+  @IsOptional()
+  @IsEnum(AiTrainingPlatform)
+  platform?: AiTrainingPlatform;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsBoolean()

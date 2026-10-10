@@ -33,10 +33,16 @@ export class TikTokIntegrationPublicController {
 
     let pixelCode: string | null = null;
     let whatsappUrl = 'https://wa.me/';
+    let externalDestination = false;
 
     if (setupMode) {
       const config = await this.tracking.getPixelConfig(slug);
       pixelCode = config?.pixelCode ?? null;
+      if (!config) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(403).send(this.renderInactiveLandingHtml());
+      }
     } else {
       const result = await this.tracking.handleRedirect({
         slug,
@@ -48,8 +54,13 @@ export class TikTokIntegrationPublicController {
         ip: req.ip ?? null,
         userAgent: req.headers['user-agent'] ?? null,
       });
-      pixelCode = result.pixelCode ?? null;
-      whatsappUrl = result.redirectUrl || whatsappUrl;
+      if (result.subscriptionExpired || result.active === false || !result.redirectUrl) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(403).send(this.renderInactiveLandingHtml());
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      return res.redirect(302, result.redirectUrl);
     }
 
     const pixelScript = pixelCode ? tiktokPixelInlineScript(pixelCode, []) : '';
@@ -57,9 +68,10 @@ export class TikTokIntegrationPublicController {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).send(
       this.renderWhatsAppLandingHtml({
-        whatsappUrl: this.escapeHtmlAttr(whatsappUrl),
+        whatsappUrl,
         pixelScript,
         setupMode,
+        externalDestination,
       }),
     );
   }
@@ -99,6 +111,36 @@ export class TikTokIntegrationPublicController {
     });
   }
 
+  private renderInactiveLandingHtml() {
+    return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>الرابط غير متاح</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font-family: Tahoma, Arial, sans-serif; color: #fff; text-align: center;
+      background: radial-gradient(120% 80% at 50% -10%, #3a3a3a 0%, #1f1f1f 55%, #0d0d0d 100%);
+      padding: 2rem 1.25rem;
+    }
+    .card { max-width: 26rem; width: 100%; }
+    h1 { margin: 0 0 .75rem; font-size: clamp(1.5rem, 4vw, 2rem); }
+    p { margin: 0; line-height: 1.7; font-size: 1.05rem; color: rgba(255,255,255,.85); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>الرابط غير متاح حالياً</h1>
+    <p>تم إيقاف صفحة الهبوط مؤقتاً بسبب انتهاء الاشتراك. ستعود للعمل تلقائياً بعد إعادة تفعيل الباقة.</p>
+  </main>
+</body>
+</html>`;
+  }
+
   private escapeHtmlAttr(value: string) {
     return value
       .replace(/&/g, '&amp;')
@@ -112,15 +154,35 @@ export class TikTokIntegrationPublicController {
     whatsappUrl: string;
     pixelScript: string;
     setupMode: boolean;
+    externalDestination: boolean;
   }) {
     const headPixel = input.pixelScript
       ? `<script>${input.pixelScript}</script>`
       : '';
 
+    const safeUrl = this.escapeHtmlAttr(input.whatsappUrl);
+    const redirectScript = input.setupMode
+      ? ''
+      : `<script>setTimeout(function(){location.replace(${JSON.stringify(input.whatsappUrl)});},180);</script>`;
     const ctaBlock = input.setupMode
       ? `<p class="hint setup">تم تفعيل كود TikTok Pixel على هذه الصفحة. يمكنك الآن استخدام Launch Event Builder.<br/>حدث Contact يُرسل عبر Events API بعد أول رسالة واتساب فعلية.</p>`
-      : `<a class="btn" href="${input.whatsappUrl}" rel="noopener noreferrer">اضغط هنا وراسلنا عبر واتساب</a>
-    <p class="hint">سيتم فتح محادثة واتساب مباشرة بعد الضغط</p>`;
+      : '';
+
+    if (!input.setupMode) {
+      return `<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>واتساب</title>
+  <meta http-equiv="refresh" content="1;url=${safeUrl}" />
+  ${headPixel}
+  ${redirectScript}
+  <style>body{margin:0;min-height:100vh;background:#fff}</style>
+</head>
+<body></body>
+</html>`;
+    }
 
     return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -128,7 +190,9 @@ export class TikTokIntegrationPublicController {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>واتساب</title>
+  ${input.setupMode ? '' : `<meta http-equiv="refresh" content="1;url=${safeUrl}" />`}
   ${headPixel}
+  ${redirectScript}
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -164,8 +228,8 @@ export class TikTokIntegrationPublicController {
         <path fill="#fff" d="M21.7 18.8c-.3-.15-1.79-.88-2.07-.98-.28-.1-.48-.15-.68.15-.2.3-.78.98-.96 1.18-.18.2-.35.22-.65.07-.3-.15-1.27-.47-2.42-1.49-.9-.8-1.5-1.79-1.68-2.09-.18-.3-.02-.46.13-.61.14-.14.3-.35.45-.53.15-.18.2-.3.3-.5.1-.2.05-.38-.02-.53-.08-.15-.68-1.63-.93-2.23-.24-.58-.49-.5-.68-.51h-.58c-.2 0-.53.08-.8.38-.28.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.23 5.14 4.53.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.79-.73 2.04-1.44.25-.71.25-1.32.18-1.44-.08-.12-.28-.2-.58-.35z"/>
       </svg>
     </div>
-    <h1>واتساب</h1>
-    <p>للطلب اضغط هنا وراسلونا عبر الواتساب</p>
+    <h1>${input.externalDestination ? 'تابع معنا' : 'واتساب'}</h1>
+    <p>${input.externalDestination ? 'اضغط على الزر للانتقال إلى الرابط' : 'للطلب اضغط هنا وراسلونا عبر الواتساب'}</p>
     ${ctaBlock}
   </main>
 </body>

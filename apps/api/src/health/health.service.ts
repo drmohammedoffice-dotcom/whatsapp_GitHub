@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,7 +8,7 @@ export class HealthService {
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
   live() {
-    return { status: 'ok', service: 'api', uptime: process.uptime(), timestamp: new Date().toISOString() };
+    return { status: 'ok' };
   }
 
   async ready() {

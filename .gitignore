@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules
 .pnpm-store
 
@@ -28,6 +28,35 @@ storage/media/*
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Android build outputs and signing keys
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+*.jks
+*.keystore
+
+# Desktop app build artifacts (source stays tracked)
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/desktop/build/
+
+# Local temp / scratch (never push)
+.tmp-*/
+tmp-*
+git-check.txt
+git-log.txt
+reset_body.txt
+tmp_*.sql
+/*-campaign.pdf
+
+# Large installers (host on CDN/VPS, not GitHub)
+apps/web/public/downloads/*.exe
+apps/web/public/downloads/*.zip
+apps/web/public/downloads/*.msi
+!apps/web/public/downloads/README.md
+!apps/web/public/downloads/README.txt
 
 # OS & editor files
 .DS_Store

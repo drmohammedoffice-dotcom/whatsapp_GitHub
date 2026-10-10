@@ -27,6 +27,7 @@ import {
 } from '@/lib/tiktok-integration';
 import { cn, parseApiError } from '@/lib/utils';
 import { runTikTokSetupAutomation } from '@/lib/tiktok-pixel-setup';
+import { listInstantForms } from '@/lib/instant-forms/api';
 
 const STEPS = [1, 2, 3, 4, 5, 6] as const;
 
@@ -43,11 +44,16 @@ function WizardInner() {
 
   const [selectedAdvertiser, setSelectedAdvertiser] = useState('');
   const [advertiserSearch, setAdvertiserSearch] = useState('');
+  const [destinationType, setDestinationType] = useState<'WHATSAPP_NUMBER' | 'EXTERNAL_URL' | 'INSTANT_FORM' | 'STORE'>('INSTANT_FORM');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [externalRedirectUrl, setExternalRedirectUrl] = useState('');
+  const [instantFormId, setInstantFormId] = useState<string>('__new__');
+  const [instantForms, setInstantForms] = useState<Array<{ id: string; name: string; status: string; publicUrl: string }>>([]);
+  const [loadingForms, setLoadingForms] = useState(false);
   const [pixelName, setPixelName] = useState('');
   const [optimizationEvent, setOptimizationEvent] = useState<TikTokOptimizationEvent>('Lead');
   const [customEventName, setCustomEventName] = useState('');
-  const [enabledEvents, setEnabledEvents] = useState<Set<TikTokOptimizationEvent>>(new Set(['Lead']));
+  const [enabledEvents, setEnabledEvents] = useState<Set<TikTokOptimizationEvent>>(new Set(['Lead', 'Contact']));
   const [copied, setCopied] = useState(false);
   const [setupCopied, setSetupCopied] = useState(false);
   const [setupActivated, setSetupActivated] = useState(false);
@@ -86,7 +92,22 @@ function WizardInner() {
             : Math.min(wizard.integration.wizardStep, 5),
       );
       setSelectedAdvertiser(wizard.integration.advertiserId ?? '');
+      const dest = wizard.integration.destinationType;
+      const url = wizard.integration.externalRedirectUrl ?? '';
+      setDestinationType(
+        dest === 'STORE' || dest === 'INSTANT_FORM' || dest === 'WHATSAPP_NUMBER'
+          ? dest
+          : dest === 'EXTERNAL_URL' && (url.includes('/f/') || url.includes('/f/s/'))
+            ? 'INSTANT_FORM'
+            : dest === 'EXTERNAL_URL' && url.includes('/s/')
+              ? 'STORE'
+              : dest === 'EXTERNAL_URL'
+                ? 'EXTERNAL_URL'
+                : 'INSTANT_FORM',
+      );
       setWhatsappNumber(wizard.integration.whatsappNumber ?? '');
+      setExternalRedirectUrl(wizard.integration.externalRedirectUrl ?? '');
+      setInstantFormId(wizard.integration.linkedFormId || '__new__');
       setOptimizationEvent(wizard.integration.defaultOptimizationEvent ?? 'Lead');
       setCustomEventName(wizard.integration.customEventName ?? '');
       const enabled = new Set(
@@ -94,6 +115,7 @@ function WizardInner() {
       );
       if (enabled.size === 0) {
         enabled.add(wizard.integration.defaultOptimizationEvent ?? 'Lead');
+        enabled.add('Contact');
       }
       setEnabledEvents(enabled);
       if (shouldCreateNew && wizard.integration.id) {
@@ -113,6 +135,26 @@ function WizardInner() {
       setStep(2);
     }
   }, [load, searchParams, t]);
+
+  useEffect(() => {
+    if (destinationType !== 'INSTANT_FORM') return;
+    setLoadingForms(true);
+    void listInstantForms()
+      .then((rows) => {
+        setInstantForms(
+          rows
+            .filter((f) => f.status !== 'ARCHIVED')
+            .map((f) => ({
+              id: f.id,
+              name: f.name,
+              status: f.status,
+              publicUrl: f.publicUrl,
+            })),
+        );
+      })
+      .catch(() => setInstantForms([]))
+      .finally(() => setLoadingForms(false));
+  }, [destinationType]);
 
   const integrationId = state?.integration.id;
 
@@ -172,10 +214,31 @@ function WizardInner() {
     setBusy(true);
     setError(null);
     try {
-      const integration = await saveTikTokIntegrationWhatsapp(whatsappNumber, integrationId);
+      const payload =
+        destinationType === 'EXTERNAL_URL'
+          ? { destinationType, externalRedirectUrl: externalRedirectUrl.trim() }
+          : destinationType === 'INSTANT_FORM'
+            ? {
+                destinationType,
+                ...(instantFormId && instantFormId !== '__new__'
+                  ? { instantFormId }
+                  : {}),
+              }
+            : destinationType === 'STORE'
+              ? { destinationType }
+              : { destinationType, whatsappNumber };
+      const integration = await saveTikTokIntegrationWhatsapp(payload, integrationId);
       applyIntegration(integration);
       setStep(integration.pixelId ? 5 : 4);
-      setNotice(t('tiktokIntegration.whatsappSaved'));
+      setNotice(
+        destinationType === 'INSTANT_FORM'
+          ? instantFormId && instantFormId !== '__new__'
+            ? 'تم ربط البكسل بالاستمارة التي اخترتها — رابط التتبع يفتحها مباشرة'
+            : 'تم إنشاء استمارة فورية وربطها بهذا البكسل — الطلبات ستظهر في قسم الطلبات'
+          : destinationType === 'STORE'
+            ? 'تم ربط البكسل بالمتجر — الطلبات تذهب لطلبات المتجر/الحجوزات'
+            : t('tiktokIntegration.whatsappSaved'),
+      );
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -191,10 +254,12 @@ function WizardInner() {
     setBusy(true);
     setError(null);
     try {
-      const integration = await createTikTokIntegrationPixel(pixelName || undefined, integrationId);
-      applyIntegration(integration);
+      const created = await createTikTokIntegrationPixel(pixelName || undefined, integrationId);
+      applyIntegration(created);
       setStep(5);
       setNotice(t('tiktokIntegration.pixelCreated'));
+      // فعّل البكسل فوراً بعد الإنشاء (صفحة تفعيل + Events API)
+      void runAutoSetup(created);
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -203,8 +268,16 @@ function WizardInner() {
   }
 
   function selectDefaultEvent(event: TikTokOptimizationEvent) {
-    setOptimizationEvent(event);
-    setEnabledEvents((prev) => new Set([...prev, event]));
+    setOptimizationEvent((previous) => {
+      setEnabledEvents((prev) => {
+        const next = new Set(prev);
+        // عند تغيير هدف التحسين أزل التحديد السابق حتى لا يبدو خياران محددين معاً
+        if (previous && previous !== event) next.delete(previous);
+        next.add(event);
+        return next;
+      });
+      return event;
+    });
   }
 
   function toggleEnabledEvent(event: TikTokOptimizationEvent) {
@@ -274,6 +347,20 @@ function WizardInner() {
     setNotice(null);
     setStep((current) => Math.max(1, current - 1));
   }
+
+  const externalUrlValid = useMemo(() => {
+    if (destinationType !== 'EXTERNAL_URL') return true;
+    try {
+      const parsed = new URL(externalRedirectUrl.trim());
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  }, [destinationType, externalRedirectUrl]);
+
+  const destinationReady = destinationType === 'INSTANT_FORM' || destinationType === 'STORE'
+    || (destinationType === 'WHATSAPP_NUMBER' && whatsappNumber.replace(/\D/g, '').length >= 8)
+    || (destinationType === 'EXTERNAL_URL' && externalUrlValid);
 
   function WizardActions({
     onContinue,
@@ -401,21 +488,151 @@ function WizardInner() {
             {step === 3 && (
               <div className="space-y-4">
                 <CardHeader className="p-0">
-                  <CardTitle>{t('tiktokIntegration.wizard.step3Title')}</CardTitle>
-                  <CardDescription>{t('tiktokIntegration.wizard.step3Desc')}</CardDescription>
+                  <CardTitle>اختر نوع البكسل</CardTitle>
+                  <CardDescription>
+                    حدّد أين يذهب العميل عند الضغط على الإعلان — يُنشأ البكسل ويُربط بطريقة التتبع المناسبة لهذا النوع.
+                  </CardDescription>
                 </CardHeader>
-                <div className="space-y-2">
-                  <Label>{t('tiktokIntegration.whatsappNumber')}</Label>
-                  <Input
-                    inputMode="tel"
-                    placeholder="9647xxxxxxxxx"
-                    value={whatsappNumber}
-                    onChange={(e) => setWhatsappNumber(e.target.value)}
-                  />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-lg border p-4 text-start transition-colors',
+                      destinationType === 'WHATSAPP_NUMBER' && 'border-primary bg-primary/5 ring-1 ring-primary',
+                    )}
+                    onClick={() => {
+                      setDestinationType('WHATSAPP_NUMBER');
+                      setOptimizationEvent('Contact');
+                      setEnabledEvents(new Set(['Contact', 'Lead']));
+                    }}
+                  >
+                    <p className="font-medium">بكسل واتساب</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      يُحسب التحويل عند أول رسالة واتساب واردة (Contact / Lead).
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-lg border p-4 text-start transition-colors',
+                      destinationType === 'STORE' && 'border-primary bg-primary/5 ring-1 ring-primary',
+                    )}
+                    onClick={() => {
+                      setDestinationType('STORE');
+                      setOptimizationEvent('CompletePayment');
+                      setEnabledEvents(new Set(['CompletePayment', 'Purchase', 'InitiateCheckout']));
+                    }}
+                  >
+                    <p className="font-medium">بكسل المتجر الإلكتروني</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      عند أول طلب منتج من المتجر يُرسل CompletePayment لتيك توك لنتائج الحملة.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-lg border p-4 text-start transition-colors',
+                      destinationType === 'INSTANT_FORM' && 'border-primary bg-primary/5 ring-1 ring-primary',
+                    )}
+                    onClick={() => {
+                      setDestinationType('INSTANT_FORM');
+                      setOptimizationEvent('CompletePayment');
+                      setEnabledEvents(new Set(['CompletePayment', 'Lead', 'SubmitForm']));
+                    }}
+                  >
+                    <p className="font-medium">بكسل الاستمارة الفورية</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      عند أول طلب داخل الاستمارة تُرسل القراءة لتيك توك (Lead + CompletePayment).
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-lg border p-4 text-start transition-colors',
+                      destinationType === 'EXTERNAL_URL' && 'border-primary bg-primary/5 ring-1 ring-primary',
+                    )}
+                    onClick={() => setDestinationType('EXTERNAL_URL')}
+                  >
+                    <p className="font-medium">{t('tiktokIntegration.destinationExternal')}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('tiktokIntegration.destinationExternalHint')}</p>
+                  </button>
                 </div>
+                {destinationType === 'WHATSAPP_NUMBER' && (
+                  <div className="space-y-2">
+                    <Label>{t('tiktokIntegration.whatsappNumber')}</Label>
+                    <Input
+                      inputMode="tel"
+                      placeholder="9647xxxxxxxxx"
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsappNumber(e.target.value)}
+                    />
+                  </div>
+                )}
+                {destinationType === 'EXTERNAL_URL' && (
+                  <div className="space-y-2">
+                    <Label>{t('tiktokIntegration.externalRedirectUrl')}</Label>
+                    <Input
+                      inputMode="url"
+                      placeholder="https://..."
+                      value={externalRedirectUrl}
+                      onChange={(e) => setExternalRedirectUrl(e.target.value)}
+                      dir="ltr"
+                    />
+                    <p className="text-xs text-muted-foreground">{t('tiktokIntegration.externalRedirectNotice')}</p>
+                  </div>
+                )}
+                {destinationType === 'INSTANT_FORM' && (
+                  <div className="space-y-3 rounded-lg border border-teal-200 bg-teal-50 p-3">
+                    <p className="text-sm text-teal-900">
+                      اختر الاستمارة الفورية التي يفتحها رابط التتبع. إن كانت مسودة سيتم نشرها تلقائياً عند الربط.
+                    </p>
+                    {loadingForms ? (
+                      <div className="flex items-center gap-2 text-sm text-teal-800">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        جاري تحميل الاستمارات…
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label>الاستمارة الفورية</Label>
+                        <select
+                          className="h-11 w-full rounded-xl border bg-background px-3 text-sm outline-none focus:border-teal-400"
+                          value={instantFormId}
+                          onChange={(e) => setInstantFormId(e.target.value)}
+                        >
+                          <option value="__new__">إنشاء استمارة جديدة وربطها</option>
+                          {instantForms.map((form) => (
+                            <option key={form.id} value={form.id}>
+                              {form.name}
+                              {form.status === 'DRAFT' ? ' (مسودة — تُنشر عند الربط)' : ''}
+                              {form.status === 'PUBLISHED' ? ' (منشورة)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {instantForms.length === 0 ? (
+                          <p className="text-xs text-teal-800/80">
+                            لا توجد استمارات بعد — سيتم إنشاء استمارة أساسية وربطها. يمكنك لاحقاً إنشاء استمارة بالذكاء الاصطناعي وربطها من هنا أو من صفحة البكسل.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-teal-800/80">
+                            أو{' '}
+                            <Link href="/tiktok/integration/forms/new" className="font-medium underline">
+                              أنشئ استمارة فورية جديدة
+                            </Link>{' '}
+                            ثم ارجع واخترها من القائمة.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {destinationType === 'STORE' && (
+                  <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+                    تأكد من إعداد المتجر أولاً. رابط البكسل يفتح المتجر، وأول طلب منتج يُرسل لتيك توك كتأكيد شراء.
+                  </p>
+                )}
                 <WizardActions
                   onContinue={() => void saveWhatsapp()}
-                  continueDisabled={whatsappNumber.length < 8}
+                  continueDisabled={!destinationReady}
                 />
               </div>
             )}
@@ -462,10 +679,10 @@ function WizardInner() {
 
                 <p className="text-sm text-muted-foreground">{t('tiktokIntegration.enabledEventsHint')}</p>
 
-                <div className="space-y-2">
+                <div className="space-y-2" role="radiogroup" aria-label={t('tiktokIntegration.wizard.step5Title')}>
                   {OPTIMIZATION_EVENT_OPTIONS.map((event) => {
                     const isDefault = optimizationEvent === event;
-                    const isEnabled = enabledEvents.has(event);
+                    const isExtraEnabled = !isDefault && enabledEvents.has(event);
                     const desc = t(`tiktokIntegration.eventDesc.${event}`);
                     return (
                       <div
@@ -478,6 +695,8 @@ function WizardInner() {
                         <div className="flex shrink-0 flex-col items-center gap-2 pt-0.5">
                           <button
                             type="button"
+                            role="radio"
+                            aria-checked={isDefault}
                             title={t('tiktokIntegration.defaultEvent')}
                             className={cn(
                               'h-4 w-4 rounded-full border-2',
@@ -485,18 +704,22 @@ function WizardInner() {
                             )}
                             onClick={() => selectDefaultEvent(event)}
                           />
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-muted-foreground"
-                            checked={isEnabled}
-                            disabled={isDefault}
-                            onChange={() => toggleEnabledEvent(event)}
-                            title={t('tiktokIntegration.enableEvent')}
-                          />
+                          {/* هدف التحسين = اختيار واحد؛ مربع التفعيل الإضافي يظهر فقط لغير الهدف الحالي */}
+                          {!isDefault ? (
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-muted-foreground"
+                              checked={isExtraEnabled}
+                              onChange={() => toggleEnabledEvent(event)}
+                              title={t('tiktokIntegration.enableEvent')}
+                            />
+                          ) : (
+                            <span className="h-4 w-4" aria-hidden />
+                          )}
                         </div>
                         <button
                           type="button"
-                          className="min-w-0 flex-1 text-left"
+                          className="min-w-0 flex-1 text-start"
                           onClick={() => selectDefaultEvent(event)}
                         >
                           <p className="font-medium">{t(`tiktokIntegration.events.${event}`)}</p>
@@ -618,8 +841,12 @@ function WizardInner() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">{t('tiktokIntegration.whatsappNumber')}</p>
-                    <p className="font-mono text-sm">{integration.whatsappNumber ?? '—'}</p>
+                    <p className="text-xs text-muted-foreground">{t('tiktokIntegration.redirectDestination')}</p>
+                    <p className="break-all font-mono text-sm">
+                      {integration.destinationType === 'EXTERNAL_URL'
+                        ? integration.externalRedirectUrl ?? '—'
+                        : integration.whatsappNumber ?? '—'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{t('tiktokIntegration.enabledEvents')}</p>

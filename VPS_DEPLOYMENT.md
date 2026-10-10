@@ -156,3 +156,16 @@ ufw enable
 
 Postgres (5432) and Redis (6379) are **not** published to the host in
 `docker-compose.prod.yml`, so they remain private to the Docker network.
+
+## PM2 deployment (without Docker)
+
+If you run `pm2 start` directly on the VPS instead of Docker:
+
+1. Set `apps/web/.env.local` with your public API URL, then rebuild web:
+   `pnpm --filter @watsapp/web build`
+2. Set `CORS_ORIGINS`, `API_PUBLIC_URL`, and `WEB_PUBLIC_URL` in the **root**
+   `.env` to match your VPS IP or domain.
+3. **Critical:** `packages/database/.env` must contain **only** `DATABASE_URL`.
+   Prisma loads this file first; if it contains `CORS_ORIGINS=localhost`, the
+   browser will show "Server offline" even when the API health endpoint works.
+4. Restart after env changes: `pm2 restart api worker --update-env`

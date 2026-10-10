@@ -1,26 +1,13 @@
+export { UNLIMITED_LIMIT, canCreateWithLimit, isOverLimit } from './feature-registry';
+export type { PlanLimits } from './feature-registry';
+export { EMPTY_PLAN_LIMITS, seedLimitsForSlug as planLimitsForSlug } from './feature-registry';
+
 export const PLAN_SLUGS = ['basic', 'professional', 'business'] as const;
+export type PlanSlug = string;
 
-export type PlanSlug = (typeof PLAN_SLUGS)[number];
+export const GRACE_PERIOD_DAYS = 3;
+export const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
 
-export type PlanLimits = {
-  maxTrackingPhones: number;
-  socialIntegrations: boolean;
-  aiEnabled: boolean;
-};
-
-export const PLAN_LIMITS: Record<PlanSlug, PlanLimits> = {
-  basic: { maxTrackingPhones: 1, socialIntegrations: false, aiEnabled: false },
-  professional: { maxTrackingPhones: 5, socialIntegrations: true, aiEnabled: true },
-  business: { maxTrackingPhones: 10, socialIntegrations: true, aiEnabled: true },
-};
-
-export const GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
-
-export function resolvePlanSlug(slug: string | null | undefined): PlanSlug {
-  if (slug === 'professional' || slug === 'business') return slug;
-  return 'basic';
-}
-
-export function planLimitsForSlug(slug: string | null | undefined): PlanLimits {
-  return PLAN_LIMITS[resolvePlanSlug(slug)];
+export function resolvePlanSlug(slug: string | null | undefined): string {
+  return (slug ?? 'basic').toLowerCase() || 'basic';
 }

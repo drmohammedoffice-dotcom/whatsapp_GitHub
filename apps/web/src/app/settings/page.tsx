@@ -1,9 +1,10 @@
-﻿'use client';
+'use client';
 
 import { SOCKET_EVENTS } from '@watsapp/shared';
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
-import { ArrowRight, Bell, Key, Link2, MessageCircle } from 'lucide-react';
+import { ArrowRight, Bell, Key, Link2, MessageCircle, Share2 } from 'lucide-react';
+import { MetaOAuthConnect } from '@/components/integrations/meta-oauth-connect';
 import { AppShell } from '@/components/layout/app-shell';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
@@ -22,7 +23,14 @@ type ApiKey = { id: string; name: string; prefix: string; apiKey?: string };
 type Webhook = { id: string; url: string; events: string[]; enabled: boolean };
 type Notification = { id: string; title: string; body: string; readAt?: string };
 
-type ChannelRow = { id: string; provider: string; name: string; status: string; connected: boolean };
+type ChannelRow = {
+  id: string;
+  provider: string;
+  name: string;
+  status: string;
+  connected: boolean;
+  whatsAppCloudAccountId?: string | null;
+};
 
 export default function SettingsPage() {
   const { t, dir } = useTranslation();
@@ -119,6 +127,25 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card className="mt-4 border-0 shadow-card">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-black text-white">
+              <Share2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-semibold">{t('settings.integrationsLink')}</p>
+              <p className="text-sm text-muted-foreground">{t('settings.integrationsLinkDesc')}</p>
+            </div>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/settings/integrations">
+              {t('settings.integrationsLink')} <ArrowRight className={cn('h-4 w-4', dir === 'rtl' && 'rotate-180')} />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
       <Tabs defaultValue="channels" className="mt-6">
         <TabsList className="mb-4 h-auto flex-wrap">
           <TabsTrigger value="channels"><MessageCircle className="me-2 h-4 w-4" />{t('settings.tabChannels')}</TabsTrigger>
@@ -134,40 +161,22 @@ export default function SettingsPage() {
               <CardDescription>{t('settings.channelsDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <p className="text-sm text-muted-foreground">{t('settings.metaWebhookHint')}</p>
-              <div className="grid gap-4 lg:grid-cols-3">
-                {([
-                  { provider: 'META_MESSENGER', title: t('settings.connectMessenger') },
-                  { provider: 'META_INSTAGRAM', title: t('settings.connectInstagram') },
-                ] as const).map((item) => (
-                  <form
-                    key={item.provider}
-                    className="space-y-3 rounded-lg border bg-muted/20 p-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const form = new FormData(event.currentTarget);
-                      runForm(async () => {
-                        await api('/meta/connect', {
-                          method: 'POST',
-                          body: JSON.stringify({
-                            provider: item.provider,
-                            pageId: form.get('pageId'),
-                            pageAccessToken: form.get('pageAccessToken'),
-                            name: form.get('name'),
-                          }),
-                        });
-                        await load();
-                        setSuccess(t('settings.connectChannel'));
-                      }).catch(() => undefined);
-                    }}
-                  >
-                    <p className="font-medium">{item.title}</p>
-                    <Input name="name" placeholder={t('settings.keyName')} />
-                    <Input name="pageId" placeholder={t('settings.pageId')} required />
-                    <Input name="pageAccessToken" placeholder={t('settings.pageAccessToken')} required />
-                    <Button type="submit" className="w-full">{t('settings.connectChannel')}</Button>
-                  </form>
-                ))}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+                  <div>
+                    <p className="font-medium">{t('settings.metaOAuthTitle')}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{t('settings.metaOAuthDesc')}</p>
+                  </div>
+                  <MetaOAuthConnect
+                    label={t('integrations.connectFacebook')}
+                    busyLabel={t('integrations.connecting')}
+                    onError={setError}
+                  />
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href="/settings/integrations">{t('settings.manageMetaConnections')}</Link>
+                  </Button>
+                  <p className="text-xs text-muted-foreground">{t('settings.metaWebhookHint')}</p>
+                </div>
                 <form
                   className="space-y-3 rounded-lg border bg-muted/20 p-4"
                   onSubmit={(event) => {
@@ -206,8 +215,24 @@ export default function SettingsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => runForm(async () => {
-                        const path = channel.provider === 'TELEGRAM' ? '/telegram/disconnect' : '/meta/disconnect';
-                        await api(path, { method: 'POST', body: JSON.stringify({ channelId: channel.id }) });
+                        if (channel.provider === 'TELEGRAM') {
+                          await api('/telegram/disconnect', {
+                            method: 'POST',
+                            body: JSON.stringify({ channelId: channel.id }),
+                          });
+                        } else if (channel.provider === 'WHATSAPP_CLOUD') {
+                          const accountId = channel.whatsAppCloudAccountId;
+                          if (!accountId) throw new Error('WhatsApp Cloud account id missing');
+                          await api(`/whatsapp-cloud/accounts/${accountId}/disconnect`, {
+                            method: 'POST',
+                            body: '{}',
+                          });
+                        } else {
+                          await api('/meta/disconnect', {
+                            method: 'POST',
+                            body: JSON.stringify({ channelId: channel.id }),
+                          });
+                        }
                         await load();
                       })}
                     >

@@ -1,7 +1,8 @@
-import { Global, Module, forwardRef } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { SecurityModule } from '../security/security.module';
-import { TikTokIntegrationModule } from '../tiktok-integration/tiktok-integration.module';
+import { SalesPartnersModule } from '../sales-partners/sales-partners.module';
+import { OfficialWhatsAppModule } from '../official-whatsapp/official-whatsapp.module';
 import { AuthController } from './auth.controller';
 import { AuthEmailService } from './auth-email.service';
 import { AuthService } from './auth.service';
@@ -10,7 +11,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Global()
 @Module({
-  imports: [JwtModule.register({}), SecurityModule, forwardRef(() => TikTokIntegrationModule)],
+  imports: [JwtModule.register({}), SecurityModule, SalesPartnersModule, OfficialWhatsAppModule],
   controllers: [AuthController],
   providers: [AuthService, AuthEmailService, EmailVerificationService, JwtAuthGuard],
   exports: [JwtModule, JwtAuthGuard, AuthService],

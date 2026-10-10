@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TikTokEventType } from '@watsapp/database';
 import { PrismaService } from '../prisma/prisma.service';
-import { TIKTOK_TRACKING_REF_PREFIX, TIKTOK_TRACKING_REF_SUFFIX } from './tiktok.constants';
 import { TikTokEventsService } from './tiktok-events.service';
 import { TikTokLogService } from './tiktok-log.service';
 
@@ -87,28 +86,33 @@ export class TikTokTrackingService {
   async buildWhatsAppRedirectUrl(teamId: string, clickToken: string, campaignId: string) {
     const settings = await this.prisma.tikTokSettings.findUnique({ where: { teamId } });
     const campaign = await this.prisma.tikTokCampaign.findUnique({ where: { id: campaignId } });
-    const session = await this.prisma.whatsAppSession.findFirst({
-      where: { teamId, status: 'CONNECTED' },
-      orderBy: { connectedAt: 'desc' },
-    });
+    const [session, cloud, integration] = await Promise.all([
+      this.prisma.whatsAppSession.findFirst({
+        where: { teamId, status: 'CONNECTED' },
+        orderBy: { connectedAt: 'desc' },
+      }),
+      this.prisma.whatsAppCloudAccount.findFirst({
+        where: { teamId, status: 'CONNECTED' },
+        orderBy: { connectedAt: 'desc' },
+      }),
+      this.prisma.tikTokIntegration.findFirst({
+        where: { teamId, whatsappNumber: { not: null } },
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ]);
 
     const phone =
-      campaign?.whatsappNumber?.replace(/\D/g, '') ??
-      settings?.defaultWhatsAppNumber?.replace(/\D/g, '') ??
-      session?.phoneNumber?.replace(/\D/g, '') ??
+      campaign?.whatsappNumber?.replace(/\D/g, '') ||
+      settings?.defaultWhatsAppNumber?.replace(/\D/g, '') ||
+      session?.phoneNumber?.replace(/\D/g, '') ||
+      cloud?.phoneNumber?.replace(/\D/g, '') ||
+      integration?.whatsappNumber?.replace(/\D/g, '') ||
       null;
 
     if (!phone) {
       const webUrl = this.config.getOrThrow<string>('WEB_PUBLIC_URL');
       return `${webUrl}/whatsapp`;
     }
-
-    const template =
-      settings?.trackingRedirectMessage?.trim() ||
-      `Hello, I am interested in your offer ${TIKTOK_TRACKING_REF_PREFIX}${clickToken}${TIKTOK_TRACKING_REF_SUFFIX}`;
-    const text = template.includes(TIKTOK_TRACKING_REF_PREFIX)
-      ? template
-      : `${template} ${TIKTOK_TRACKING_REF_PREFIX}${clickToken}${TIKTOK_TRACKING_REF_SUFFIX}`;
 
     await this.events.recordWithAccount({
       teamId,
@@ -117,7 +121,7 @@ export class TikTokTrackingService {
       clickId: clickToken,
     });
 
-    return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    return `https://wa.me/${phone}`;
   }
 
   buildTrackingLink(teamId: string, campaignId: string) {

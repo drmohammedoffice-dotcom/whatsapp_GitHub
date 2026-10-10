@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
@@ -74,6 +76,37 @@ export interface WaylWebhookPayload {
   id: string;
 }
 
+function stripEnvValue(value: string | undefined | null): string {
+  return (value ?? '').replace(/^['"]+|['"]+$/g, '').trim();
+}
+
+function readEnvFromFiles(name: string): string {
+  const files = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../../.env'),
+    '/root/whatsapp_GitHub/.env',
+    '/root/whatsapp_GitHub/apps/api/.env',
+  ];
+  for (const file of files) {
+    if (!existsSync(file)) continue;
+    const text = readFileSync(file, 'utf8');
+    const match = text.match(new RegExp(`^${name}=(.*)$`, 'm'));
+    if (!match) continue;
+    const value = stripEnvValue(match[1]);
+    if (value) return value;
+  }
+  return '';
+}
+
+function resolveEnv(config: ConfigService, name: string): string {
+  const candidates = [
+    stripEnvValue(process.env[name]),
+    readEnvFromFiles(name),
+    stripEnvValue(config.get<string>(name)),
+  ];
+  return candidates.find((value) => value && value !== 'not-configured') ?? '';
+}
+
 @Injectable()
 export class WaylService {
   private readonly logger = new Logger(WaylService.name);
@@ -83,14 +116,17 @@ export class WaylService {
   private readonly env: 'live' | 'test';
 
   constructor(private readonly config: ConfigService) {
-    this.apiKey = this.config.get<string>('WAYL_API_KEY') ?? 'not-configured';
-    this.baseUrl = this.config.get<string>('WAYL_API_BASE_URL') ?? 'https://api.thewayl.com';
-    this.webhookSecret = this.config.get<string>('WAYL_WEBHOOK_SECRET') ?? 'wayl-webhook-secret';
-    this.env = (this.config.get<string>('WAYL_ENV') as 'live' | 'test') ?? 'test';
+    this.apiKey = resolveEnv(config, 'WAYL_API_KEY');
+    this.baseUrl = resolveEnv(config, 'WAYL_API_BASE_URL') || 'https://api.thewayl.com';
+    this.webhookSecret = resolveEnv(config, 'WAYL_WEBHOOK_SECRET') || 'wayl-webhook-secret';
+    this.env = resolveEnv(config, 'WAYL_ENV') === 'test' ? 'test' : 'live';
+    this.logger.log(
+      `Wayl ${this.isConfigured ? 'ready' : 'NOT configured'} keyLen=${this.apiKey.length} env=${this.env}`,
+    );
   }
 
   get isConfigured(): boolean {
-    return this.apiKey !== 'not-configured' && this.apiKey.length > 0;
+    return this.apiKey.length > 20 && this.apiKey !== 'not-configured';
   }
 
   /**
@@ -118,6 +154,7 @@ export class WaylService {
           linkExpiresIn: input.linkExpiresIn ?? '24h',
         },
         {
+          timeout: 12_000,
           headers: {
             'X-WAYL-AUTHENTICATION': this.apiKey,
             'Content-Type': 'application/json',
@@ -127,9 +164,20 @@ export class WaylService {
 
       return data.data;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Wayl createLink failed: ${message}`);
-      throw new ServiceUnavailableException(`Wayl payment link creation failed: ${message}`);
+      const ax = err as {
+        code?: string;
+        response?: { data?: unknown; status?: number };
+        message?: string;
+      };
+      if (ax.code === 'ECONNABORTED' || /timeout/i.test(ax.message ?? '')) {
+        this.logger.error('Wayl createLink timed out after 12s');
+        throw new ServiceUnavailableException(
+          'بوابة الدفع تأخرت في الرد. أعد المحاولة خلال لحظات.',
+        );
+      }
+      const detail = ax.response?.data ? JSON.stringify(ax.response.data) : ax.message ?? String(err);
+      this.logger.error(`Wayl createLink failed (${ax.response?.status ?? 'n/a'}): ${detail}`);
+      throw new ServiceUnavailableException(`Wayl payment link creation failed: ${detail}`);
     }
   }
 
@@ -145,6 +193,7 @@ export class WaylService {
       const { data } = await axios.get<{ data: WaylLink; message: string }>(
         `${this.baseUrl}/api/v1/links/${encodeURIComponent(referenceId)}`,
         {
+          timeout: 10_000,
           headers: {
             'X-WAYL-AUTHENTICATION': this.apiKey,
             'Content-Type': 'application/json',
@@ -210,10 +259,24 @@ export class WaylService {
     if (!body || typeof body !== 'object') {
       throw new BadRequestException('Invalid webhook payload');
     }
-    const payload = body as Partial<WaylWebhookPayload>;
-    if (!payload.referenceId || !payload.event || !payload.id) {
-      throw new BadRequestException('Invalid webhook payload: missing required fields');
+    const payload = body as Partial<WaylWebhookPayload> & { reference_id?: string };
+    const referenceId = payload.referenceId || payload.reference_id;
+    if (!referenceId) {
+      throw new BadRequestException('Invalid webhook payload: missing referenceId');
     }
-    return payload as WaylWebhookPayload;
+    return {
+      verb: payload.verb ?? 'POST',
+      event: payload.event ?? 'order.updated',
+      referenceId,
+      paymentMethod: payload.paymentMethod ?? '',
+      paymentStatus: payload.paymentStatus ?? '',
+      paymentProcessor: payload.paymentProcessor ?? '',
+      total: Number(payload.total ?? 0),
+      commission: Number(payload.commission ?? 0),
+      code: payload.code ?? '',
+      customer: payload.customer ?? { id: '', name: '', phone: '', city: '', country: '', address: '' },
+      items: payload.items ?? [],
+      id: payload.id ?? referenceId,
+    };
   }
 }

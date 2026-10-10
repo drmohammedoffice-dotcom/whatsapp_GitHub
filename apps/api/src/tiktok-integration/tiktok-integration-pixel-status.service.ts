@@ -63,7 +63,30 @@ export class TikTokIntegrationPixelStatusService {
     const accessToken = await this.marketingOAuth.getValidMarketingAccessToken(userId);
     const pixels = await this.ads.listPixels(accessToken, advertiserId);
     const match = pixels.find((p) => p.pixel_id === pixelId);
-    const { status, message } = this.mapTikTokPixelStatus(match?.activity_status);
+    let { status, message } = this.mapTikTokPixelStatus(match?.activity_status);
+
+    const existing = await this.prisma.tikTokIntegration.findUnique({
+      where: { id: integrationId },
+      select: {
+        eventsApiConnected: true,
+        eventsApiStatus: true,
+        lastEventSentAt: true,
+        activatedAt: true,
+      },
+    });
+    const eventsLive =
+      Boolean(existing?.eventsApiConnected)
+      || existing?.eventsApiStatus === 'connected'
+      || Boolean(existing?.lastEventSentAt);
+
+    // لا نُرجع البكسل إلى «بانتظار النشاط» إذا Events API يعمل — واجهة تيك توك قد تتأخر
+    if (
+      eventsLive
+      && (status === 'waiting_for_activity' || status === 'pending' || status === 'unknown')
+    ) {
+      status = 'active';
+      message = 'مفعّل عبر Events API';
+    }
 
     await this.prisma.tikTokIntegration.update({
       where: { id: integrationId },
@@ -78,12 +101,16 @@ export class TikTokIntegrationPixelStatusService {
   }
 
   mapTikTokPixelStatus(raw: unknown): { status: PixelStatusValue; message: string | null } {
-    const value = String(raw ?? '').toLowerCase();
+    const value = String(raw ?? '').toLowerCase().trim();
 
+    // TikTok Ads API commonly returns ENABLE / ACTIVE / 1 for a usable pixel.
     if (
       value === '1' ||
       value === 'active' ||
-      value.includes('active')
+      value === 'enable' ||
+      value === 'enabled' ||
+      value.includes('active') ||
+      value.includes('enable')
     ) {
       return { status: 'active', message: null };
     }
@@ -91,7 +118,9 @@ export class TikTokIntegrationPixelStatusService {
     if (
       value === '0' ||
       value.includes('waiting') ||
-      value.includes('no_recent_activity')
+      value.includes('no_recent_activity') ||
+      value.includes('inactive') ||
+      value.includes('disable')
     ) {
       return {
         status: 'waiting_for_activity',

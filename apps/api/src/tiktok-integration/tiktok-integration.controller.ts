@@ -61,9 +61,14 @@ export class TikTokIntegrationController {
   @ApiOperation({ summary: 'Start TikTok Business OAuth (wizard step 1)' })
   startOAuth(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Body() body: { integrationId?: string },
+    @Body() body: { integrationId?: string; returnOrigin?: string },
   ) {
-    return this.integration.startOAuth(principal.userId!, principal.teamId, body.integrationId);
+    return this.integration.startOAuth(
+      principal.userId!,
+      principal.teamId,
+      body.integrationId,
+      body.returnOrigin,
+    );
   }
 
   @Post('wizard/advertiser')
@@ -122,6 +127,19 @@ export class TikTokIntegrationController {
     @Param('id') integrationId: string,
   ) {
     return this.integration.refreshPixelStatus(
+      principal.userId!,
+      principal.teamId,
+      integrationId,
+    );
+  }
+
+  @Post('integrations/:id/resync-ecommerce-events')
+  @ApiOperation({ summary: 'Register CompletePayment/Lead on TikTok and re-fire recent store/form orders' })
+  resyncEcommerceEvents(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id') integrationId: string,
+  ) {
+    return this.integration.resyncEcommercePixel(
       principal.userId!,
       principal.teamId,
       integrationId,
@@ -227,6 +245,15 @@ export class TikTokIntegrationController {
     @Body() body: { displayName?: string; integrationId?: string },
   ) {
     return this.trackingPhones.connect(principal.teamId, principal.userId!, body);
+  }
+
+  @Post('tracking-phones/link')
+  @ApiOperation({ summary: 'Link an existing tracking WhatsApp number to a TikTok pixel' })
+  linkTrackingPhone(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Body() body: { channelId: string; integrationId: string },
+  ) {
+    return this.trackingPhones.linkToIntegration(principal.teamId, body.channelId, body.integrationId);
   }
 
   @Get('tracking-phones/qr')

@@ -15,10 +15,26 @@ export function LanguageToggle({ variant = 'icon' }: { variant?: 'icon' | 'butto
 
   if (variant === 'button') {
     return (
-      <Button variant="outline" size="sm" onClick={() => setLocale(locale === 'en' ? 'ar' : 'en')} className="gap-2">
-        <Languages className="h-4 w-4" />
-        {locale === 'en' ? t('lang.switchToArabic') : t('lang.switchToEnglish')}
-      </Button>
+      <div className="inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 p-0.5 shadow-sm backdrop-blur">
+        <button
+          type="button"
+          onClick={() => setLocale('en')}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+            locale === 'en' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          EN
+        </button>
+        <button
+          type="button"
+          onClick={() => setLocale('ar')}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+            locale === 'ar' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          ع
+        </button>
+      </div>
     );
   }
 

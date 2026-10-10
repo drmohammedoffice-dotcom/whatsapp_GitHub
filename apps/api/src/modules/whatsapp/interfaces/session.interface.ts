@@ -20,6 +20,7 @@ export interface DisconnectInfo {
   message: string;
   shouldReconnect: boolean;
   isLoggedOut: boolean;
+  isConnectionReplaced: boolean;
 }
 
 export interface SessionProfile {
@@ -50,7 +51,7 @@ export interface ISessionManager {
   setSocket(sessionId: string, socket: BaileysSocket): void;
   removeSocket(sessionId: string): void;
   hasSocket(sessionId: string): boolean;
-  scheduleReconnect(context: SessionContext, attempt: number): void;
+  scheduleReconnect(context: SessionContext, options?: { connectionReplaced?: boolean }): void;
   clearReconnect(sessionId: string): void;
 }
 

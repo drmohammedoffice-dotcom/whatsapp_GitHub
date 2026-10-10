@@ -2,8 +2,11 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { MulterModule } from '@nestjs/platform-express';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { AgentsModule } from './agents/agents.module';
 import { AiModule } from './ai/ai.module';
@@ -26,9 +29,22 @@ import { StorageModule } from './storage/storage.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { ProductsModule } from './products/products.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { AppointmentsModule } from './appointments/appointments.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { TikTokModule } from './tiktok/tiktok.module';
+import { TikTokIntegrationModule } from './tiktok-integration/tiktok-integration.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { MetaPublicModule } from './integrations/meta/meta-public.module';
+import { PlatformModule } from './platform/platform.module';
+import { AdminModule } from './admin/admin.module';
+import { BillingModule } from './billing/billing.module';
+import { LandingModule } from './landing/landing.module';
+import { InstantFormsModule } from './instant-forms/instant-forms.module';
+import { SalesPartnersModule } from './sales-partners/sales-partners.module';
+import { AssistantModule } from './assistant/assistant.module';
+import { VoiceAiModule } from './voice-ai/voice-ai.module';
+import { CreativeStudioModule } from './creative-studio/creative-studio.module';
+import { OfficialWhatsAppModule } from './official-whatsapp/official-whatsapp.module';
 
 function resolveEnvFilePath(): string {
   const candidates = [
@@ -45,9 +61,37 @@ function resolveEnvFilePath(): string {
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: resolveEnvFilePath(),
-      validate: (env) => envSchema.parse(env),
+      validate: (env) => {
+        const parsed = envSchema.parse(env);
+        // Preserve any AI_API_KEY_N / weights / OPENROUTER_KEYS beyond the schema (dynamic key pool).
+        const extras: Record<string, string> = {};
+        for (const [key, value] of Object.entries(env)) {
+          if (
+            (/^AI_API_KEY_\d+$/.test(key) ||
+              /^AI_API_KEY_WEIGHT_\d+$/.test(key) ||
+              key === 'OPENROUTER_KEYS') &&
+            typeof value === 'string' &&
+            value.trim()
+          ) {
+            extras[key] = value.trim();
+          }
+        }
+        return { ...parsed, ...extras };
+      },
     }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 240 }],
+      skipIf: (ctx) => {
+        if (ctx.getType() !== 'http') return true;
+        const req = ctx.switchToHttp().getRequest<{ originalUrl?: string; url?: string }>();
+        const url = `${req.originalUrl ?? req.url ?? ''}`;
+        return /\/(webhooks|wayl-return|health|sdk-config)\b/i.test(url);
+      },
+    }),
+    MulterModule.register({
+      limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+    }),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({ connection: { url: config.getOrThrow<string>('REDIS_URL') } }),
@@ -70,12 +114,26 @@ function resolveEnvFilePath(): string {
     AiModule,
     ProductsModule,
     BookingsModule,
+    AppointmentsModule,
     DepartmentsModule,
     AnalyticsModule,
     SettingsModule,
     WebhooksModule,
     TikTokModule,
+    TikTokIntegrationModule,
     IntegrationsModule,
+    MetaPublicModule,
+    PlatformModule,
+    AdminModule,
+    BillingModule,
+    LandingModule,
+    InstantFormsModule,
+    SalesPartnersModule,
+    AssistantModule,
+    VoiceAiModule,
+    CreativeStudioModule,
+    OfficialWhatsAppModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

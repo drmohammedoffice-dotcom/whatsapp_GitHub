@@ -16,6 +16,7 @@ import { TikTokTrackingPhonesService } from './tiktok-tracking-phones.service';
 import { TikTokContactProcessor } from './tiktok-contact.processor';
 import { TikTokEventsApiCredentialsService } from './tiktok-events-api-credentials.service';
 import { TikTokLifecycleEventsService } from './tiktok-lifecycle-events.service';
+import { InstantFormsModule } from '../instant-forms/instant-forms.module';
 import { SecurityModule } from '../security/security.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { SecurityModule } from '../security/security.module';
     TikTokLoginKitModule,
     forwardRef(() => ChannelsModule),
     forwardRef(() => WhatsAppModule),
+    forwardRef(() => InstantFormsModule),
     BullModule.registerQueue({ name: QUEUES.TIKTOK_CONTACT }),
   ],
   controllers: [TikTokIntegrationController, TikTokIntegrationPublicController],

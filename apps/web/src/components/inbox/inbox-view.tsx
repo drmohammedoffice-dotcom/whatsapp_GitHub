@@ -2,16 +2,32 @@
 
 import { SOCKET_EVENTS } from '@watsapp/shared';
 import { motion } from 'framer-motion';
-import { Archive, ArrowLeft, Bot, Mic, PanelRight, Paperclip, Pin, Search, Send, Smile, Trash2, UserRound } from 'lucide-react';
+import {
+  Archive,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Bot,
+  Link2,
+  Mic,
+  PanelRight,
+  Paperclip,
+  Pin,
+  Search,
+  Send,
+  Smile,
+  Trash2,
+  UserRound,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChannelBrandIcon } from '@/components/channels/channel-brand-icon';
 import { AppShell } from '@/components/layout/app-shell';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
 import { EmptyState } from '@/components/shared/empty-state';
 import { MessageMedia } from '@/components/inbox/message-media';
-import { PageHeader } from '@/components/shared/page-header';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import type { ChannelDefinition } from '@/lib/channels';
@@ -40,11 +57,31 @@ type Conversation = {
   isPinned: boolean;
   assigneeUserId?: string;
   aiMode?: string;
+  kind?: 'DIRECT_MESSAGE' | 'COMMENT';
+  metadata?: Record<string, unknown> | null;
   contact: ContactSummary;
   messages?: Message[];
 };
-type Message = { id: string; direction: string; type: string; status: string; text?: string; createdAt: string; mediaStorageKey?: string | null; mediaMimeType?: string | null; mediaFileName?: string | null; mediaSizeBytes?: number | null };
-type Detail = Omit<Conversation, 'messages'> & { aiMode?: string; messages: Message[]; notes: Array<{ id: string; body: string; author: { name: string } }>; comments: Array<{ id: string; body: string; author: { name: string } }>; tags: Array<{ label: { name: string; color: string } }>; events: Array<{ id: string; type: string; createdAt: string }> };
+type Message = {
+  id: string;
+  direction: string;
+  type: string;
+  status: string;
+  text?: string;
+  createdAt: string;
+  mediaStorageKey?: string | null;
+  mediaMimeType?: string | null;
+  mediaFileName?: string | null;
+  mediaSizeBytes?: number | null;
+};
+type Detail = Omit<Conversation, 'messages'> & {
+  aiMode?: string;
+  messages: Message[];
+  notes: Array<{ id: string; body: string; author: { name: string } }>;
+  comments: Array<{ id: string; body: string; author: { name: string } }>;
+  tags: Array<{ label: { name: string; color: string } }>;
+  events: Array<{ id: string; type: string; createdAt: string }>;
+};
 
 function contactInitials(contact: ContactSummary) {
   const source = contact.displayName || contact.phone || 'WA';
@@ -66,6 +103,19 @@ function contactPrimaryLabel(contact: ContactSummary) {
     return name;
   }
   return phone || name || 'WhatsApp';
+}
+
+function isConversationAiActive(aiMode?: string | null) {
+  return (aiMode ?? 'AI_ACTIVE') === 'AI_ACTIVE';
+}
+
+function channelProviderToAiPlatform(provider: string): string {
+  if (provider.startsWith('WHATSAPP')) return 'WHATSAPP';
+  if (provider.includes('TELEGRAM')) return 'TELEGRAM';
+  if (provider.includes('MESSENGER')) return 'MESSENGER';
+  if (provider.includes('INSTAGRAM')) return 'INSTAGRAM';
+  if (provider.includes('TIKTOK')) return 'TIKTOK';
+  return 'WHATSAPP';
 }
 
 type InboxViewProps = {
@@ -99,6 +149,47 @@ async function emojiToStickerFile(emoji: string): Promise<File | null> {
   return new File([blob], `sticker-${Date.now()}.webp`, { type: 'image/webp' });
 }
 
+function AiReplySwitch({
+  checked,
+  disabled,
+  onCheckedChange,
+  label,
+  hint,
+  compact,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onCheckedChange: (next: boolean) => void;
+  label: string;
+  hint?: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 rounded-full border bg-muted/40',
+        compact ? 'px-2.5 py-1' : 'gap-3 border-[#25D366]/25 bg-[#25D366]/10 px-3 py-1.5',
+      )}
+      title={hint}
+    >
+      <Bot className={cn('h-3.5 w-3.5 shrink-0', checked ? 'text-[#25D366]' : 'text-muted-foreground', !compact && 'h-4 w-4')} />
+      {compact ? (
+        <span className="max-w-[7rem] truncate text-xs font-medium whitespace-nowrap">{label}</span>
+      ) : (
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-xs font-semibold text-foreground">{label}</p>
+        </div>
+      )}
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+        className="shrink-0 data-[state=checked]:bg-[#25D366]"
+      />
+    </div>
+  );
+}
+
 export function InboxView({ channel, socialMode }: InboxViewProps) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -108,6 +199,7 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'all' | 'open' | 'unread' | 'read' | 'closed' | 'pinned' | 'archived'>('all');
+  const [threadKind, setThreadKind] = useState<'DIRECT_MESSAGE' | 'COMMENT'>('DIRECT_MESSAGE');
   const [mobilePanel, setMobilePanel] = useState<'list' | 'thread' | 'tools'>('list');
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -116,63 +208,231 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
   const [mediaCaption, setMediaCaption] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  const [workspaceAiEnabled, setWorkspaceAiEnabled] = useState(true);
+  const [aiToggleBusy, setAiToggleBusy] = useState(false);
+  const [scrollAtTop, setScrollAtTop] = useState(true);
+  const [scrollAtBottom, setScrollAtBottom] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const cancelRecordingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const threadKindRef = useRef(threadKind);
+  const viewRef = useRef(view);
+  const selectedIdRef = useRef(selectedId);
+  const loadSeqRef = useRef(0);
+  threadKindRef.current = threadKind;
+  viewRef.current = view;
+  selectedIdRef.current = selectedId;
 
-  const selected = useMemo(() => detail ?? items.find((item) => item.id === selectedId) ?? null, [detail, items, selectedId]);
+  const selected = useMemo(
+    () => detail ?? items.find((item) => item.id === selectedId) ?? null,
+    [detail, items, selectedId],
+  );
+  // Per-conversation AI mode — independent from the workspace master switch.
+  const supportsComments =
+    !socialMode && (channel.provider === 'META_MESSENGER' || channel.provider === 'META_INSTAGRAM');
+  const conversationAiActive = isConversationAiActive(selected?.aiMode);
+  const aiPlatform = channelProviderToAiPlatform(channel.provider);
+
+  const updateMessagesScrollState = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) {
+      setScrollAtTop(true);
+      setScrollAtBottom(true);
+      return;
+    }
+    const top = el.scrollTop <= 8;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 8;
+    setScrollAtTop(top);
+    setScrollAtBottom(bottom);
+  }, []);
+
+  const scrollMessagesTo = useCallback(
+    (position: 'top' | 'bottom') => {
+      const el = messagesScrollRef.current;
+      if (!el) return;
+      el.scrollTo({
+        top: position === 'top' ? 0 : el.scrollHeight,
+        behavior: 'smooth',
+      });
+    },
+    [],
+  );
+
+  function applyConversationAiMode(conversationId: string, aiMode: 'AI_ACTIVE' | 'AI_PAUSED') {
+    setDetail((current) => (current?.id === conversationId ? { ...current, aiMode } : current));
+    setItems((current) =>
+      current.map((item) => (item.id === conversationId ? { ...item, aiMode } : item)),
+    );
+  }
+
+  useEffect(() => {
+    api<{ enabled?: boolean; autoReplyEnabled?: boolean }>(`/ai/settings?platform=${aiPlatform}`)
+      .then((settings) =>
+        setWorkspaceAiEnabled(Boolean(settings.enabled && settings.autoReplyEnabled)),
+      )
+      .catch(() => undefined);
+  }, [aiPlatform]);
+
+  async function setWorkspaceAi(next: boolean) {
+    const updated = await api<{ enabled?: boolean; autoReplyEnabled: boolean }>('/ai/settings', {
+      method: 'POST',
+      body: JSON.stringify({ platform: aiPlatform, enabled: next, autoReplyEnabled: next }),
+    });
+    const enabled = Boolean(updated.enabled && updated.autoReplyEnabled);
+    setWorkspaceAiEnabled(enabled);
+    return enabled;
+  }
+
+  async function toggleWorkspaceAi(next: boolean) {
+    setAiToggleBusy(true);
+    const previous = workspaceAiEnabled;
+    setWorkspaceAiEnabled(next);
+    try {
+      await setWorkspaceAi(next);
+    } catch (err) {
+      setWorkspaceAiEnabled(previous);
+      setError(parseApiError(err));
+    } finally {
+      setAiToggleBusy(false);
+    }
+  }
+
+  async function toggleConversationAi(next: boolean) {
+    if (!selectedId) return;
+    setAiToggleBusy(true);
+    const previousMode = (selected?.aiMode ?? 'AI_ACTIVE') as 'AI_ACTIVE' | 'AI_PAUSED' | 'HUMAN_ONLY';
+    const nextMode = next ? 'AI_ACTIVE' : 'AI_PAUSED';
+    // Only this conversation — never touch the workspace master switch.
+    applyConversationAiMode(selectedId, nextMode);
+    try {
+      const path = next ? '/ai/conversations/:id/reactivate' : '/ai/conversations/:id/pause';
+      await api(path.replace(':id', selectedId), { method: 'POST', body: JSON.stringify({}) });
+      await Promise.all([load(), loadDetail(selectedId)]);
+    } catch (err) {
+      applyConversationAiMode(selectedId, previousMode === 'HUMAN_ONLY' ? 'AI_PAUSED' : previousMode);
+      setError(parseApiError(err));
+    } finally {
+      setAiToggleBusy(false);
+    }
+  }
 
   async function load() {
+    const requestKind = threadKindRef.current;
+    const requestView = viewRef.current;
+    const seq = ++loadSeqRef.current;
     try {
       const query = new URLSearchParams();
       if (socialMode) query.set('social', 'true');
       else query.set('provider', channel.provider);
-      if (view === 'open') query.set('status', 'OPEN');
-      if (view === 'closed') query.set('status', 'CLOSED');
-      if (view === 'unread') query.set('unread', 'true');
-      if (view === 'read') query.set('read', 'true');
-      if (view === 'pinned') query.set('pinned', 'true');
-      if (view === 'archived') query.set('archived', 'true');
+      if (supportsComments) query.set('kind', requestKind);
+      else query.set('kind', 'DIRECT_MESSAGE');
+      if (requestView === 'open') query.set('status', 'OPEN');
+      if (requestView === 'closed') query.set('status', 'CLOSED');
+      if (requestView === 'unread') query.set('unread', 'true');
+      if (requestView === 'read') query.set('read', 'true');
+      if (requestView === 'pinned') query.set('pinned', 'true');
+      if (requestView === 'archived') query.set('archived', 'true');
       query.set('limit', '200');
       if (filter) query.set('search', filter);
       const conversations = await api<Conversation[]>(`/conversations?${query}`);
+      // Ignore stale responses from an older tab/filter so the list never flashes empty.
+      if (seq !== loadSeqRef.current) return;
+      if (threadKindRef.current !== requestKind || viewRef.current !== requestView) return;
       setItems(conversations);
-      if (!selectedId && conversations[0]) setSelectedId(conversations[0].id);
-      if (selectedId && !conversations.some((c) => c.id === selectedId)) {
-        setSelectedId(conversations[0]?.id ?? null);
-        setDetail(null);
+      const currentSelected = selectedIdRef.current;
+      if (!currentSelected && conversations[0]) {
+        setSelectedId(conversations[0].id);
+      } else if (currentSelected && !conversations.some((c) => c.id === currentSelected)) {
+        if (conversations[0]) setSelectedId(conversations[0].id);
+        else {
+          setSelectedId(null);
+          setDetail(null);
+        }
+      } else if (currentSelected) {
+        // Keep the open thread in sync with newest messages (avoids stale "old comments only" view).
+        void loadDetail(currentSelected).catch(console.error);
       }
     } catch (err) {
+      if (seq !== loadSeqRef.current) return;
       setError(parseApiError(err));
     }
   }
 
   async function loadDetail(id: string) {
-    setDetail(await api<Detail>(`/conversations/${id}`));
+    const detailData = await api<Detail>(`/conversations/${id}`);
+    if (selectedIdRef.current !== id) return;
+    setDetail(detailData);
   }
 
   useEffect(() => {
+    let cancelled = false;
     setSelectedId(null);
     setDetail(null);
-    load().catch(console.error);
-  }, [view, channel.provider, socialMode]);
+    // Show DB data immediately — never wait on Graph sync before painting the list.
+    void load().catch(console.error);
+    void (async () => {
+      if (!(supportsComments && threadKind === 'COMMENT' && !socialMode)) return;
+      try {
+        await api('/meta/sync-comments', { method: 'POST', body: JSON.stringify({}) });
+        if (!cancelled) await load();
+      } catch {
+        // Server poller still updates; ignore transient sync errors in UI.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, channel.provider, socialMode, threadKind]);
 
-  useEffect(() => { if (selectedId) loadDetail(selectedId).catch(console.error); }, [selectedId]);
+  useEffect(() => {
+    setThreadKind('DIRECT_MESSAGE');
+  }, [channel.provider, socialMode]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDetail(null);
+      return;
+    }
+    loadDetail(selectedId).catch(console.error);
+  }, [selectedId]);
 
   useEffect(() => {
     const socket = createSocket();
-    socket.on(SOCKET_EVENTS.CONVERSATION_UPDATED, () => load().catch(console.error));
-    socket.on(SOCKET_EVENTS.CONVERSATION_ASSIGNED, () => load().catch(console.error));
-    socket.on(SOCKET_EVENTS.CONVERSATION_MESSAGE_CREATED, () => { load().catch(console.error); if (selectedId) loadDetail(selectedId).catch(console.error); });
-    socket.on(SOCKET_EVENTS.CONVERSATION_NOTE_CREATED, () => selectedId && loadDetail(selectedId).catch(console.error));
-    socket.on(SOCKET_EVENTS.AI_TRANSFERRED, () => { load().catch(console.error); if (selectedId) loadDetail(selectedId).catch(console.error); });
-    socket.on(SOCKET_EVENTS.AI_REACTIVATED, () => { if (selectedId) loadDetail(selectedId).catch(console.error); });
-    socket.on(SOCKET_EVENTS.AI_PAUSED, () => { if (selectedId) loadDetail(selectedId).catch(console.error); });
-    return () => { socket.disconnect(); };
-  }, [selectedId, channel.provider]);
+    let refreshTimer: number | null = null;
+    const softRefresh = () => {
+      // Debounce socket bursts (comment poll + AI reply) so the thread doesn't flicker.
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        load().catch(console.error);
+        const id = selectedIdRef.current;
+        if (id) loadDetail(id).catch(console.error);
+      }, 400);
+    };
+    socket.on(SOCKET_EVENTS.CONVERSATION_UPDATED, softRefresh);
+    socket.on(SOCKET_EVENTS.CONVERSATION_ASSIGNED, softRefresh);
+    socket.on(SOCKET_EVENTS.CONVERSATION_MESSAGE_CREATED, softRefresh);
+    socket.on(SOCKET_EVENTS.CONVERSATION_NOTE_CREATED, () => {
+      const id = selectedIdRef.current;
+      if (id) loadDetail(id).catch(console.error);
+    });
+    socket.on(SOCKET_EVENTS.AI_TRANSFERRED, softRefresh);
+    socket.on(SOCKET_EVENTS.AI_REACTIVATED, softRefresh);
+    socket.on(SOCKET_EVENTS.AI_PAUSED, softRefresh);
+    const poll = window.setInterval(() => {
+      load().catch(console.error);
+      const id = selectedIdRef.current;
+      if (id) loadDetail(id).catch(console.error);
+    }, 5_000);
+    return () => {
+      if (refreshTimer != null) window.clearTimeout(refreshTimer);
+      window.clearInterval(poll);
+      socket.disconnect();
+    };
+  }, [channel.provider, socialMode]);
 
   async function submit(path: string, body?: object) {
     if (!selectedId) return;
@@ -188,7 +448,9 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [detail?.messages.length, selectedId]);
+    // Let layout settle before measuring scroll edges.
+    requestAnimationFrame(() => updateMessagesScrollState());
+  }, [detail?.messages.length, selectedId, updateMessagesScrollState]);
 
   useEffect(() => {
     setPendingAttachments((current) => {
@@ -332,26 +594,57 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
 
   return (
     <AppShell>
-      <PageHeader
-        title={t(channel.inboxTitleKey)}
-        description={t(channel.inboxDescKey)}
-        actions={(
-          <div className="flex items-center gap-2">
+      <div className="flex h-[calc(100vh-5.5rem)] min-h-[36rem] flex-col gap-4 overflow-hidden">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-soft">
+          <div className="flex min-w-0 items-center gap-3">
+            <ChannelBrandIcon brand={socialMode ? 'social' : channel.slug} size="lg" featured={channel.slug === 'whatsapp'} />
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold tracking-tight">
+                {socialMode ? t('nav.socialInbox') : t(channel.inboxTitleKey)}
+              </h1>
+              <p className="truncate text-sm text-muted-foreground">
+                {socialMode ? t('nav.socialInboxDesc') : t(channel.inboxDescKey)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <AiReplySwitch
+              checked={workspaceAiEnabled}
+              disabled={aiToggleBusy}
+              onCheckedChange={(checked) => void toggleWorkspaceAi(checked)}
+              label={t('inbox.workspaceAiReply')}
+              hint={t('inbox.workspaceAiReplyHint')}
+            />
             <Badge variant="secondary">{items.length} {t('inbox.openCount')}</Badge>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={channel.connectHref}>{t('channels.manageConnection')}</Link>
+            <Button variant="outline" size="sm" className="gap-1.5" asChild>
+              <Link href={channel.connectHref}>
+                <Link2 className="h-3.5 w-3.5" />
+                {t('inbox.openConnect')}
+              </Link>
             </Button>
           </div>
+        </div>
+
+        {error && (
+          <AlertBanner message={error} onDismiss={() => setError(null)} />
         )}
-      />
 
-      {error && (
-        <AlertBanner className="mt-4" message={error} onDismiss={() => setError(null)} />
-      )}
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-[320px_1fr_280px]">
-        <Card className={cn('flex flex-col overflow-hidden border-0 shadow-card xl:max-h-[calc(100vh-11rem)]', mobilePanel !== 'list' && 'hidden xl:flex')}>
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-background shadow-card">
+          <div className="grid min-h-0 min-w-0 flex-1 gap-0 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(220px,260px)]">
+        <Card className={cn('flex min-h-0 flex-col overflow-hidden rounded-none border-0 border-e shadow-none', mobilePanel !== 'list' && 'hidden xl:flex')}>
           <CardHeader className="space-y-4 pb-3">
+            {supportsComments ? (
+              <Tabs
+                value={threadKind}
+                onValueChange={(v) => setThreadKind(v as 'DIRECT_MESSAGE' | 'COMMENT')}
+              >
+                <TabsList className="grid h-auto w-full grid-cols-2">
+                  <TabsTrigger value="DIRECT_MESSAGE">{t('inbox.tabMessages')}</TabsTrigger>
+                  <TabsTrigger value="COMMENT">{t('inbox.tabPostComments')}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : null}
             <form onSubmit={(event) => { event.preventDefault(); load().catch(console.error); }} className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('inbox.search')} className="ps-9" />
@@ -377,15 +670,25 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
             </Tabs>
           </CardHeader>
           <CardContent className="flex-1 p-0">
-            <ScrollArea className="h-[calc(100vh-18rem)]">
+            <ScrollArea className="h-full min-h-0">
               {items.length === 0 ? (
                 <div className="p-4">
                   <EmptyState
                     icon={ChannelIcon}
-                    title={t('inbox.noConversations')}
-                    description={t('inbox.noConversationsChannelDesc')}
-                    action={t('channels.connectNow')}
-                    onAction={() => router.push(channel.connectHref)}
+                    title={
+                      threadKind === 'COMMENT'
+                        ? t('inbox.noPostComments')
+                        : t('inbox.noConversations')
+                    }
+                    description={
+                      threadKind === 'COMMENT'
+                        ? channel.provider === 'META_INSTAGRAM'
+                          ? t('inbox.noPostCommentsInstagramDesc')
+                          : t('inbox.noPostCommentsDesc')
+                        : t('inbox.noConversationsChannelDesc')
+                    }
+                    action={threadKind === 'COMMENT' ? undefined : t('channels.connectNow')}
+                    onAction={threadKind === 'COMMENT' ? undefined : () => router.push(channel.connectHref)}
                   />
                 </div>
               ) : (
@@ -432,14 +735,14 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
           </CardContent>
         </Card>
 
-        <Card className={cn('flex h-[calc(100vh-11rem)] min-h-[34rem] flex-col overflow-hidden border-0 shadow-card', mobilePanel !== 'thread' && 'hidden xl:flex')}>
-          <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="xl:hidden" onClick={() => setMobilePanel('list')}>
+        <Card className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden rounded-none border-0 border-e shadow-none', mobilePanel !== 'thread' && 'hidden xl:flex')}>
+          <CardHeader className="flex !flex-row items-center justify-between gap-3 space-y-0 border-b !pb-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <Button variant="ghost" size="icon" className="shrink-0 xl:hidden" onClick={() => setMobilePanel('list')}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               {selected && (
-                <Avatar className="h-10 w-10">
+                <Avatar className="h-10 w-10 shrink-0">
                   {selected.contact.avatarUrl ? (
                     <AvatarImage src={selected.contact.avatarUrl} alt={contactPrimaryLabel(selected.contact)} />
                   ) : null}
@@ -448,19 +751,35 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
                   </AvatarFallback>
                 </Avatar>
               )}
-              <div>
-                <CardTitle className="text-base">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <CardTitle
+                  className="block max-w-full truncate text-base leading-snug"
+                  title={selected ? contactPrimaryLabel(selected.contact) : undefined}
+                >
                   {selected ? contactPrimaryLabel(selected.contact) : t('inbox.selectConversation')}
                 </CardTitle>
                 {selected && (
-                  <p className="text-xs text-muted-foreground">
+                  <p
+                    className="block truncate text-xs text-muted-foreground"
+                    title={formatWhatsAppPhone(selected.contact.phone) || selected.status}
+                  >
                     {formatWhatsAppPhone(selected.contact.phone) || selected.status}
                   </p>
                 )}
               </div>
             </div>
             {selected && (
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="hidden sm:block">
+                  <AiReplySwitch
+                    compact
+                    checked={conversationAiActive}
+                    disabled={aiToggleBusy}
+                    onCheckedChange={(checked) => void toggleConversationAi(checked)}
+                    label={conversationAiActive ? t('inbox.aiReplyOn') : t('inbox.aiReplyOff')}
+                    hint={t('inbox.aiReplyHint')}
+                  />
+                </div>
                 <Badge variant={selected.status === 'OPEN' ? 'success' : 'secondary'}>{selected.status}</Badge>
                 <Button variant="ghost" size="icon" className="xl:hidden" onClick={() => setMobilePanel('tools')}>
                   <PanelRight className="h-4 w-4" />
@@ -468,8 +787,12 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
               </div>
             )}
           </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-            <ScrollArea className="min-h-0 flex-1 p-4">
+          <CardContent className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+            <div
+              ref={messagesScrollRef}
+              onScroll={updateMessagesScrollState}
+              className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4"
+            >
               {detail ? (
                 <div className="space-y-3">
                   {detail.messages?.map((message) => (
@@ -480,17 +803,17 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
                       className={cn(
                         'max-w-[85%] rounded-2xl px-4 py-2.5 text-sm',
                         message.direction === 'OUTBOUND'
-                          ? 'ml-auto bg-primary text-primary-foreground'
+                          ? 'ms-auto bg-primary text-primary-foreground'
                           : 'bg-muted',
                       )}
                     >
                       {message.mediaStorageKey || ['IMAGE', 'STICKER', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(message.type) ? (
                         <div className="space-y-1.5">
                           <MessageMedia conversationId={detail.id} message={message} />
-                          {message.text && <p className="whitespace-pre-wrap">{message.text}</p>}
+                          {message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>}
                         </div>
                       ) : (
-                        <p className="whitespace-pre-wrap">{message.text || message.type}</p>
+                        <p className="whitespace-pre-wrap break-words">{message.text || message.type}</p>
                       )}
                       <span className="mt-1 block text-[10px] opacity-70">{message.status}</span>
                     </motion.div>
@@ -500,7 +823,41 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
               ) : (
                 <EmptyState icon={ChannelIcon} title={t('inbox.noThread')} description={t('inbox.noThreadDesc')} />
               )}
-            </ScrollArea>
+            </div>
+
+            {detail && (detail.messages?.length ?? 0) > 0 && (
+              <div className="pointer-events-none absolute end-3 bottom-28 top-16 z-10 flex flex-col justify-between py-2">
+                <div className="flex flex-col gap-2">
+                  {!scrollAtTop && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="pointer-events-auto h-9 w-9 rounded-full border bg-background/95 shadow-md backdrop-blur"
+                      onClick={() => scrollMessagesTo('top')}
+                      title={t('inbox.scrollToTop')}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  {!scrollAtBottom && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="secondary"
+                      className="pointer-events-auto h-9 w-9 rounded-full border bg-background/95 shadow-md backdrop-blur"
+                      onClick={() => scrollMessagesTo('bottom')}
+                      title={t('inbox.scrollToBottom')}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {selectedId && (
               <div className="shrink-0 border-t p-3">
                 <input
@@ -603,33 +960,45 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
                   <form
                     onSubmit={(event: FormEvent<HTMLFormElement>) => {
                       event.preventDefault();
+                      if (threadKind === 'COMMENT') {
+                        void sendText();
+                        return;
+                      }
                       if (pendingAttachments.length) void sendPendingAttachments();
                       else void sendText();
                     }}
                     className="flex items-end gap-1.5"
                   >
-                    <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => setStickerPickerOpen((open) => !open)} title={t('inbox.sendSticker')}>
-                      <Smile className="h-5 w-5 text-muted-foreground" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => fileInputRef.current?.click()} title={t('inbox.attachFile')}>
-                      <Paperclip className="h-5 w-5 text-muted-foreground" />
-                    </Button>
+                    {threadKind !== 'COMMENT' ? (
+                      <>
+                        <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => setStickerPickerOpen((open) => !open)} title={t('inbox.sendSticker')}>
+                          <Smile className="h-5 w-5 text-muted-foreground" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => fileInputRef.current?.click()} title={t('inbox.attachFile')}>
+                          <Paperclip className="h-5 w-5 text-muted-foreground" />
+                        </Button>
+                      </>
+                    ) : null}
                     <Textarea
                       value={text}
                       onChange={(event) => setText(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();
-                          if (pendingAttachments.length) void sendPendingAttachments();
+                          if (threadKind !== 'COMMENT' && pendingAttachments.length) void sendPendingAttachments();
                           else void sendText();
                         }
                       }}
-                      placeholder={t(channel.replyPlaceholderKey)}
+                      placeholder={
+                        threadKind === 'COMMENT'
+                          ? t('inbox.replyCommentPlaceholder')
+                          : t(channel.replyPlaceholderKey)
+                      }
                       rows={1}
                       className="max-h-32 min-h-[2.5rem] flex-1 resize-none py-2"
                     />
-                    {text.trim() || pendingAttachments.length ? (
-                      <Button type="submit" size="icon" disabled={sending} title={t('inbox.sendMedia')}>
+                    {threadKind === 'COMMENT' || text.trim() || pendingAttachments.length ? (
+                      <Button type="submit" size="icon" disabled={sending || (threadKind === 'COMMENT' && !text.trim())} title={t('inbox.sendMedia')}>
                         <Send className="h-4 w-4" />
                       </Button>
                     ) : (
@@ -644,14 +1013,14 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
           </CardContent>
         </Card>
 
-        <Card className={cn('border-0 shadow-card xl:max-h-[calc(100vh-11rem)]', mobilePanel !== 'tools' && 'hidden xl:block')}>
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className={cn('flex min-h-0 flex-col overflow-hidden rounded-none border-0 shadow-none', mobilePanel !== 'tools' && 'hidden xl:flex')}>
+          <CardHeader className="flex !flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">{t('inbox.tools')}</CardTitle>
             <Button variant="ghost" size="icon" className="xl:hidden" onClick={() => setMobilePanel('thread')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
             {selectedId && (
               <div className="grid gap-2">
                 <Button variant="outline" size="sm" onClick={() => patch('/conversations/:id/read')}>
@@ -681,12 +1050,37 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
                 </Button>
                 <Separator />
                 <p className="text-xs font-semibold uppercase text-muted-foreground">{t('inbox.aiControl')}</p>
-                <Badge variant="outline" className="w-fit gap-1"><Bot className="h-3 w-3" /> {(detail as Detail)?.aiMode ?? 'AI_ACTIVE'}</Badge>
+                <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/30 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t('inbox.aiReply')}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {conversationAiActive ? t('inbox.aiReplyOn') : t('inbox.aiReplyOff')}
+                      {' · '}
+                      {t('inbox.aiReplyHint')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={conversationAiActive}
+                    disabled={aiToggleBusy || !selectedId}
+                    onCheckedChange={(checked) => void toggleConversationAi(checked)}
+                    className="shrink-0 data-[state=checked]:bg-[#25D366]"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{t('inbox.workspaceAiReply')}</p>
+                    <p className="text-[11px] text-muted-foreground">{t('inbox.workspaceAiReplyHint')}</p>
+                  </div>
+                  <Switch
+                    checked={workspaceAiEnabled}
+                    disabled={aiToggleBusy}
+                    onCheckedChange={(checked) => void toggleWorkspaceAi(checked)}
+                    className="shrink-0 data-[state=checked]:bg-[#25D366]"
+                  />
+                </div>
                 <Button variant="outline" size="sm" onClick={() => submit('/ai/conversations/:id/transfer', { reason: 'CUSTOMER_REQUEST' }).catch(console.error)}>
                   <UserRound className="h-3.5 w-3.5" /> {t('inbox.transferHuman')}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => submit('/ai/conversations/:id/pause').catch(console.error)}>{t('inbox.pauseAi')}</Button>
-                <Button variant="outline" size="sm" onClick={() => submit('/ai/conversations/:id/reactivate').catch(console.error)}>{t('inbox.reactivateAi')}</Button>
                 <Separator />
                 <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); submit('/conversations/:id/notes', { body: form.get('body') }).catch(console.error); event.currentTarget.reset(); }} className="space-y-2">
                   <Textarea name="body" placeholder={t('inbox.privateNote')} rows={2} />
@@ -718,6 +1112,8 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
             )}
           </CardContent>
         </Card>
+          </div>
+        </div>
       </div>
     </AppShell>
   );

@@ -1,5 +1,6 @@
-﻿import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { AiAgentType } from '@watsapp/database';
+import { PlanEntitlementsService } from '../billing/plan-entitlements.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AiChatDto, AiTextTaskDto } from './dto/ai.dto';
@@ -10,9 +11,22 @@ import { AiProviderService } from './ai-provider.service';
 
 @Injectable()
 export class AiAssistantService {
-  constructor(private readonly prisma: PrismaService, private readonly provider: AiProviderService, private readonly knowledge: AiKnowledgeService, private readonly memory: AiMemoryService, private readonly costs: AiCostService, private readonly audit: AuditService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly provider: AiProviderService,
+    private readonly knowledge: AiKnowledgeService,
+    private readonly memory: AiMemoryService,
+    private readonly costs: AiCostService,
+    private readonly audit: AuditService,
+    private readonly entitlements: PlanEntitlementsService,
+  ) {}
+
+  private async ensureAi(teamId: string) {
+    await this.entitlements.assertAiEnabled(teamId);
+  }
 
   async chat(teamId: string, userId: string | undefined, dto: AiChatDto) {
+    await this.ensureAi(teamId);
     const context = dto.useKnowledge ? await this.knowledge.search(teamId, dto.message) : [];
     const memory = dto.conversationId ? await this.memory.context(teamId, { conversationId: dto.conversationId }) : await this.memory.context(teamId, {});
     return this.run(teamId, userId, 'chat', [
@@ -22,6 +36,7 @@ export class AiAssistantService {
   }
 
   async conversationTask(teamId: string, userId: string | undefined, conversationId: string, task: string) {
+    await this.ensureAi(teamId);
     const conversation = await this.prisma.conversation.findFirst({ where: { id: conversationId, teamId }, include: { contact: true, messages: { orderBy: { createdAt: 'asc' }, take: 50 } } });
     const transcript = conversation?.messages.map((m) => `${m.direction}: ${m.text ?? m.type}`).join('\n') ?? '';
     return this.run(teamId, userId, task, [
@@ -30,11 +45,13 @@ export class AiAssistantService {
     ], conversationId);
   }
 
-  rewrite(teamId: string, userId: string | undefined, dto: AiTextTaskDto) {
+  async rewrite(teamId: string, userId: string | undefined, dto: AiTextTaskDto) {
+    await this.ensureAi(teamId);
     return this.run(teamId, userId, 'rewrite', [{ role: 'system', content: `Rewrite the message for a customer support agent. Tone: ${dto.tone ?? 'professional'}.` }, { role: 'user', content: dto.text }]);
   }
 
-  translate(teamId: string, userId: string | undefined, dto: AiTextTaskDto) {
+  async translate(teamId: string, userId: string | undefined, dto: AiTextTaskDto) {
+    await this.ensureAi(teamId);
     return this.run(teamId, userId, 'translate', [{ role: 'system', content: `Translate to ${dto.targetLanguage ?? 'English'} preserving meaning and formatting.` }, { role: 'user', content: dto.text }]);
   }
 

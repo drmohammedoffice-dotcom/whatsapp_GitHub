@@ -11,7 +11,7 @@ export const PROVIDER_DEFAULTS: Record<AiProviderType, { baseUrl: string; model:
   OPENAI_COMPATIBLE: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   OPENROUTER: { baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
   GROQ: { baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
-  GEMINI: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash' },
+  GEMINI: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.6-flash' },
   CUSTOM: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
 };
 
@@ -230,9 +230,15 @@ export class AiProviderConfigService {
     });
   }
 
+  private static readonly PLACEHOLDER_API_KEYS = new Set([
+    'not-configured',
+    'replace-with-openai-compatible-key',
+    'change-me',
+  ]);
+
   private envFallback(): ProviderRuntimeConfig | null {
-    const apiKey = this.config.get<string>('AI_API_KEY');
-    if (!apiKey || apiKey === 'not-configured') return null;
+    const apiKey = this.config.get<string>('AI_API_KEY')?.trim();
+    if (!apiKey || AiProviderConfigService.PLACEHOLDER_API_KEYS.has(apiKey)) return null;
     return {
       provider: AiProviderType.OPENAI_COMPATIBLE,
       baseUrl: this.config.getOrThrow<string>('AI_API_BASE_URL').replace(/\/$/, ''),

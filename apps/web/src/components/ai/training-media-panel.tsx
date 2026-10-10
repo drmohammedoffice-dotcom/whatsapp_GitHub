@@ -7,6 +7,7 @@ import { AlertBanner } from '@/components/shared/alert-banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { type AiTrainingPlatform } from '@/lib/ai-platforms';
 import { api, apiUpload, fetchAuthedBlobUrl, parseApiError } from '@/lib/utils';
 
 type TrainingMedia = {
@@ -71,7 +72,13 @@ function MediaPreview({ id, type }: { id: string; type: string }) {
   );
 }
 
-export function TrainingMediaPanel() {
+export function TrainingMediaPanel({
+  platform = 'WHATSAPP',
+  platformLabelKey,
+}: {
+  platform?: AiTrainingPlatform;
+  platformLabelKey?: string;
+}) {
   const { t } = useTranslation();
   const [items, setItems] = useState<TrainingMedia[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -81,10 +88,10 @@ export function TrainingMediaPanel() {
   const [noticeVariant, setNoticeVariant] = useState<'success' | 'error'>('success');
 
   async function load() {
-    setItems(await api<TrainingMedia[]>('/ai/training-media'));
+    setItems(await api<TrainingMedia[]>(`/ai/training-media?platform=${platform}&voiceNotes=0`));
   }
 
-  useEffect(() => { load().catch(console.error); }, []);
+  useEffect(() => { load().catch(console.error); }, [platform]);
 
   function onFilesChange(event: ChangeEvent<HTMLInputElement>) {
     setSelectedCount(event.target.files?.length ?? 0);
@@ -120,6 +127,7 @@ export function TrainingMediaPanel() {
           body.append('title', buildMediaTitle(titlePrefix, file));
           body.append('productName', productName);
           body.append('tags', tags);
+          body.append('platform', platform);
           await apiUpload('/ai/training-media', body);
           success += 1;
         } catch (err) {
@@ -170,7 +178,11 @@ export function TrainingMediaPanel() {
     <div className="space-y-4 border-t pt-6">
       <div>
         <h3 className="text-base font-semibold">{t('ai.trainingMediaTitle')}</h3>
-        <p className="text-sm text-muted-foreground">{t('ai.trainingMediaDesc')}</p>
+        <p className="text-sm text-muted-foreground">
+          {platformLabelKey
+            ? t('ai.trainingMediaDescPlatform').replace('{platform}', t(platformLabelKey))
+            : t('ai.trainingMediaDesc')}
+        </p>
       </div>
 
       {notice && (

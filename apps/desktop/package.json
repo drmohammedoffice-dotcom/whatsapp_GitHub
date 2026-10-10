@@ -1,0 +1,63 @@
+{
+  "name": "chatloora-desktop",
+  "version": "1.0.1",
+  "private": true,
+  "description": "ChatLoora desktop app for Windows (wraps the web platform)",
+  "author": "ChatLoora",
+  "main": "electron/main.js",
+  "scripts": {
+    "prepare:icon": "node scripts/copy-icon.js",
+    "start": "electron .",
+    "dist": "npm run prepare:icon && electron-builder --win",
+    "dist:dir": "npm run prepare:icon && electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^2.1.8",
+    "rcedit": "^4.0.1"
+  },
+  "build": {
+    "appId": "com.chatloora.desktop",
+    "productName": "ChatLoora",
+    "copyright": "Copyright © ChatLoora",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "afterPack": "./scripts/after-pack.js",
+    "files": [
+      "electron/**/*",
+      "package.json",
+      "build/icon.png",
+      "build/icon.ico"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "ChatLoora-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ChatLoora",
+      "installerLanguages": ["en_US", "ar_SA"],
+      "language": "1033",
+      "artifactName": "ChatLoora-Setup-${version}.${ext}"
+    }
+  }
+}

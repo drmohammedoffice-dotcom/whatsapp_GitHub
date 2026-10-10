@@ -33,6 +33,62 @@ export class TikTokEventsApiCredentialsService {
     private readonly config: ConfigService,
   ) {}
 
+  async ensureAdvertiserToken(
+    userId: string,
+    integration: {
+      id: string;
+      pixelCode: string | null;
+      pixelId: string | null;
+      advertiserId: string | null;
+      eventsApiConnected: boolean;
+      eventsApiTokenHint: string | null;
+      encryptedEventsApiAccessToken: string | null;
+    },
+  ) {
+    if (!integration.pixelCode || !integration.advertiserId) return integration;
+    if (integration.eventsApiConnected && integration.encryptedEventsApiAccessToken && integration.eventsApiTokenHint !== 'advertiser') {
+      return integration;
+    }
+    let marketingToken = '';
+    try {
+      marketingToken = await this.marketingOAuth.getValidMarketingAccessToken(userId);
+      await this.ads.trackPixelEvent(marketingToken, integration.pixelCode, {
+        event: 'PageView',
+        event_id: `auto_${randomUUID()}`,
+        event_time: Math.floor(Date.now() / 1000),
+        url: `${this.config.getOrThrow<string>('WEB_PUBLIC_URL').replace(/\/$/, '')}/tiktok/integration`,
+        properties: { content_id: 'chatloora_auto_pixel' },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'تعذر تفعيل البكسل من الحساب الإعلاني';
+      const eventsApiStatusMessage = message.slice(0, 300);
+      const lastEventsApiVerificationAt = new Date();
+      await this.prisma.tikTokIntegration.update({
+        where: { id: integration.id },
+        data: {
+          eventsApiStatus: 'events_api_unavailable',
+          eventsApiStatusMessage,
+          lastEventsApiVerificationAt,
+        },
+      }).catch(() => undefined);
+      return { ...integration, eventsApiStatus: 'events_api_unavailable', eventsApiStatusMessage, lastEventsApiVerificationAt };
+    }
+    return this.prisma.tikTokIntegration.update({
+      where: { id: integration.id },
+      data: {
+        encryptedEventsApiAccessToken: this.encryption.encryptJson(marketingToken),
+        eventsApiTokenHint: 'advertiser',
+        eventsApiConnected: true,
+        eventsApiStatus: 'connected',
+        eventsApiStatusMessage: 'مفعّل تلقائياً من الحساب الإعلاني',
+        lastEventsApiVerificationAt: new Date(),
+        pixelStatus: 'active',
+        pixelStatusMessage: 'Events API verified',
+        lastPixelStatusCheckAt: new Date(),
+      },
+    });
+  }
+
   async saveCredentials(
     userId: string,
     teamId: string,
@@ -54,6 +110,16 @@ export class TikTokEventsApiCredentialsService {
     });
 
     if (!validation.ok) {
+      await this.prisma.tikTokIntegration.update({
+        where: { id: integration.id },
+        data: {
+          eventsApiConnected: false,
+          eventsApiStatus: validation.status,
+          eventsApiStatusMessage: validation.message,
+          lastEventsApiVerificationAt: new Date(),
+          lastApiError: validation.message.slice(0, 2000),
+        },
+      }).catch(() => undefined);
       throw new BadRequestException(validation.message || 'TikTok Events API validation failed');
     }
 
@@ -146,7 +212,9 @@ export class TikTokEventsApiCredentialsService {
 
   getAccessTokenForIntegration(integration: {
     encryptedEventsApiAccessToken?: string | null;
+    eventsApiTokenHint?: string | null;
   }): string | null {
+    if (integration.eventsApiTokenHint === 'advertiser') return null;
     return this.decryptToken(integration.encryptedEventsApiAccessToken);
   }
 
@@ -212,12 +280,13 @@ export class TikTokEventsApiCredentialsService {
     }
 
     try {
+      // Minimal PageView probe — never send `contents` as a string (TikTok requires JSON array).
       const response = await this.ads.trackPixelEvent(input.accessToken, input.pixelCode, {
         event: 'PageView',
         event_id: `verify_${randomUUID()}`,
         event_time: Math.floor(Date.now() / 1000),
         url: `${this.config.getOrThrow<string>('WEB_PUBLIC_URL').replace(/\/$/, '')}/tiktok/integration`,
-        properties: { contents: 'chatloora_events_api_verification' },
+        properties: { content_id: 'chatloora_events_api_verification' },
       });
       const code = Number((response as { code?: number })?.code ?? 0);
       if (code !== 0) {
@@ -233,14 +302,33 @@ export class TikTokEventsApiCredentialsService {
         verifiedAt,
       };
     } catch (err) {
-      return this.mapApiError(err instanceof Error ? err.message : String(err), verifiedAt);
+      return this.mapApiError(this.extractTikTokError(err), verifiedAt);
     }
+  }
+
+  private extractTikTokError(err: unknown): string {
+    if (err && typeof err === 'object' && 'response' in err) {
+      const data = (err as { response?: { data?: { message?: string; code?: number } } }).response?.data;
+      if (data?.message) {
+        return data.code != null ? `${data.message} (code ${data.code})` : data.message;
+      }
+    }
+    return err instanceof Error ? err.message : String(err);
   }
 
   private mapApiError(message: string, verifiedAt: string): EventsApiValidationResult {
     const m = message.toLowerCase();
     if (/unauthorized|invalid.?token|401|access.?token/i.test(m)) {
       return { ok: false, status: 'invalid_token', message: 'Invalid Access Token', verifiedAt };
+    }
+    if (/no permission to operate event source|token does not belong|mismatch/i.test(m)) {
+      return {
+        ok: false,
+        status: 'token_mismatch',
+        message:
+          'Access Token does not belong to this Pixel — generate the token from Events Manager for this Pixel',
+        verifiedAt,
+      };
     }
     if (/permission|forbidden|403|scope/i.test(m)) {
       return { ok: false, status: 'permission_denied', message: 'Permission denied', verifiedAt };
@@ -275,7 +363,7 @@ export class TikTokEventsApiCredentialsService {
 
   private async requireIntegration(userId: string, teamId: string, integrationId: string) {
     const integration = await this.prisma.tikTokIntegration.findFirst({
-      where: { id: integrationId, userId, teamId },
+      where: { id: integrationId, teamId },
     });
     if (!integration) throw new NotFoundException('Integration not found');
     return integration;

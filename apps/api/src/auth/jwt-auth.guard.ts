@@ -19,19 +19,33 @@ export class JwtAuthGuard implements CanActivate {
     const token = this.extractToken(request);
     if (!token) throw new UnauthorizedException('Missing bearer token');
 
+    let payload: AccessPayload;
     try {
-      const payload = await this.jwt.verifyAsync<AccessPayload>(token, {
+      payload = await this.jwt.verifyAsync<AccessPayload>(token, {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        // Tolerate small clock skew between app servers / clients.
+        clockTolerance: 60,
       });
-      const membership = await this.prisma.teamMember.findUnique({
-        where: { teamId_userId: { teamId: payload.teamId, userId: payload.sub } },
-      });
-      if (!membership) throw new UnauthorizedException('User is not a member of this team');
-      request.principal = { userId: payload.sub, teamId: payload.teamId, role: membership.role, permissions: membership.permissions };
-      return true;
     } catch {
       throw new UnauthorizedException('Invalid bearer token');
     }
+
+    const membership = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: payload.teamId, userId: payload.sub } },
+    });
+    if (!membership) throw new UnauthorizedException('User is not a member of this team');
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { suspendedAt: true },
+    });
+    if (!user || user.suspendedAt) throw new UnauthorizedException('Account is suspended');
+    request.principal = {
+      userId: payload.sub,
+      teamId: payload.teamId,
+      role: membership.role,
+      permissions: membership.permissions,
+    };
+    return true;
   }
 
   private extractToken(request: Request) {

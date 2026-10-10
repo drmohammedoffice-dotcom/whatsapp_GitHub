@@ -68,7 +68,19 @@ export function MessageMedia({ conversationId, message }: { conversationId: stri
   }
 
   if (!message.mediaStorageKey) {
-    return <span className="text-xs opacity-70">{message.type}</span>;
+    const label =
+      message.type === 'STICKER'
+        ? '🎭 Sticker'
+        : message.type === 'IMAGE'
+          ? '📷 Photo'
+          : message.type === 'VIDEO'
+            ? '🎬 Video'
+            : message.type === 'AUDIO'
+              ? '🎵 Audio'
+              : message.type === 'DOCUMENT'
+                ? '📎 File'
+                : message.type;
+    return <span className="text-xs opacity-70">{label}</span>;
   }
 
   return (

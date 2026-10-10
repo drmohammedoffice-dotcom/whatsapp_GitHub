@@ -16,7 +16,8 @@ export const TIKTOK_OPTIMIZATION_EVENTS: TikTokOptimizationEvent[] = [
 
 export const DEFAULT_REDIRECT_MESSAGE = 'مرحبا، أريد الاستفسار عن الخدمة.';
 
-export const TIKTOK_CONVERSION_DEDUP_HOURS = 24;
+/** @deprecated Contact fires per inbound message; kept for reference only. */
+export const TIKTOK_CONVERSION_DEDUP_HOURS = 0;
 export const TIKTOK_CONVERSION_ATTRIBUTION_DAYS = 7;
 /** After a tracking-link click, link the next inbound WhatsApp message to that pixel. */
 export const TIKTOK_CLICK_TO_MESSAGE_MINUTES = 24 * 60;
@@ -84,9 +85,17 @@ export function eventsToActivate(input: {
   return Array.from(events);
 }
 
-/** Browser/server fire during activation — no fake conversions. */
+/** Browser/server fire during activation — PageView يفعّل البكسل فقط. */
 export function activationTrackEvents(): string[] {
   return ['PageView'];
+}
+
+/**
+ * أحداث تُرسل عبر Events API عند إنشاء البكسل لتفعيل أهداف التحسين في Ads Manager
+ * (Contact / Lead / Purchase) دون انتظار رسالة واتساب حقيقية.
+ */
+export function activationOptimizationSeedEvents(): string[] {
+  return ['Contact', 'Lead', 'Purchase', 'CompletePayment'];
 }
 
 export function generateRedirectSlug(): string {
@@ -98,16 +107,32 @@ export function contactRetryDelayMs(retryCount: number): number {
   return minutes * 60 * 1000;
 }
 
-/** Destination URL for TikTok Ads — selected conversion event + click-id macro. */
+/** Reject unsubstituted TikTok URL macros (campaign/ad ids, click id, etc.). */
+export function sanitizeTikTokMacroId(value?: string | null): string | null {
+  if (!value) return null;
+  const v = value.trim();
+  if (!v) return null;
+  if (/^__[\w]+__$/i.test(v)) return null;
+  if (/^\{+\s*[\w.]+\s*\}+$/i.test(v)) return null;
+  return v;
+}
+
+/** Destination URL for TikTok Ads — selected conversion event + click/campaign macros. */
 export function buildConversionTrackingUrl(
   webUrl: string,
   redirectSlug: string,
   eventName: string,
 ): string {
   const base = `${webUrl.replace(/\/$/, '')}/r/${redirectSlug}`;
+  // URL event mirrors Ads optimization choice (e.g. CompletePayment for Purchase).
+  // Inbound WhatsApp fires Contact (+ companion Lead) via Events API, then also mirrors
+  // the selected optimization event (Purchase → CompletePayment) with the same ttclid.
   const params = new URLSearchParams({
     event: eventName || TIKTOK_CONTACT_EVENT,
     ttclid: '__CLICKID__',
+    campaign_id: '__CAMPAIGN_ID__',
+    adgroup_id: '__AID__',
+    ad_id: '__CID__',
   });
   return `${base}?${params.toString()}`;
 }
@@ -144,5 +169,5 @@ export function sanitizeTtclid(value?: string | null): string | null {
   if (/^__CLICK_?ID__$/i.test(v)) return null;
   if (/^\{+\s*click_?id\s*\}+$/i.test(v)) return null;
   if (/^\{\{\s*ttclid\s*\}\}$/i.test(v)) return null;
-  return v;
+  return sanitizeTikTokMacroId(v);
 }
