@@ -9,6 +9,7 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
+  PaymentStatus,
   Prisma,
   SalesCommissionKind,
   SalesCommissionMode,
@@ -34,10 +35,24 @@ const DEFAULT_PERCENTS: Record<string, number> = {
   business: 30,
 };
 
+/** Fixed partner earnings (IQD) per plan slug — Wayl + admin manual activation. */
 const SUCCESS_PARTNER_IQD: Record<string, number> = {
   basic: 5000,
+  starter: 5000,
   professional: 10000,
+  pro: 10000,
   business: 15000,
+};
+
+/** Fallback by plan monthly USD cents when slug is custom. */
+const SUCCESS_PARTNER_IQD_BY_USD_CENTS: Record<number, number> = {
+  1500: 5000,
+  2500: 5000,
+  2900: 5000,
+  3500: 10000,
+  4900: 15000,
+  7900: 10000,
+  14900: 15000,
 };
 
 const PAYOUT_FEE_IQD = 500;
@@ -361,6 +376,28 @@ export class SalesPartnersService {
     });
   }
 
+  /** Resolve fixed IQD commission for a plan (slug first, then USD price, then DB rule). */
+  resolvePartnerIqd(
+    plan: { slug: string; priceCents: number },
+    saleCents: number,
+    ruleFixedCents?: number | null,
+    ruleMode?: SalesCommissionMode | null,
+    rulePercent?: unknown,
+  ) {
+    const slug = (plan.slug || '').toLowerCase().trim();
+    const bySlug = SUCCESS_PARTNER_IQD[slug];
+    if (bySlug) return bySlug;
+    const byPrice = SUCCESS_PARTNER_IQD_BY_USD_CENTS[plan.priceCents];
+    if (byPrice) return byPrice;
+    if (ruleMode === SalesCommissionMode.FIXED && ruleFixedCents) return ruleFixedCents;
+    const percent = Number(rulePercent ?? DEFAULT_PERCENTS[slug] ?? 20);
+    return Math.round((saleCents * percent) / 100);
+  }
+
+  /**
+   * Credit partner wallet after any completed activation payment (Wayl or admin manual).
+   * Idempotent per paymentId.
+   */
   async creditFromPayment(paymentId: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
@@ -377,17 +414,13 @@ export class SalesPartnersService {
     await this.ensureRules();
     const rule = await this.prisma.salesCommissionRule.findUnique({ where: { planId: payment.subscription.planId } });
     const saleCents = payment.amountCents;
-    const slug = payment.subscription.plan.slug;
-    const fixed = SUCCESS_PARTNER_IQD[slug];
-    let amountCents = 0;
-    if (fixed) {
-      amountCents = fixed;
-    } else if (rule?.mode === SalesCommissionMode.FIXED) {
-      amountCents = rule.fixedCents;
-    } else {
-      const percent = Number(rule?.percent ?? DEFAULT_PERCENTS[slug] ?? 20);
-      amountCents = Math.round((saleCents * percent) / 100);
-    }
+    const amountCents = this.resolvePartnerIqd(
+      payment.subscription.plan,
+      saleCents,
+      rule?.fixedCents,
+      rule?.mode,
+      rule?.percent,
+    );
     if (amountCents <= 0) return null;
 
     const prior = await this.prisma.salesCommission.count({
@@ -411,6 +444,39 @@ export class SalesPartnersService {
         saleCents,
       },
     });
+  }
+
+  /**
+   * Create a completed manual payment for an activated subscription and credit the referring partner.
+   * Used by admin panel activate and AI/email activation (same earnings as Wayl).
+   */
+  async creditForSubscriptionActivation(input: {
+    teamId: string;
+    subscriptionId: string;
+    planId: string;
+    amountCents?: number;
+    description?: string;
+    provider?: string;
+  }) {
+    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: input.planId } });
+    if (!plan) return null;
+    const referral = await this.prisma.salesReferral.findUnique({ where: { teamId: input.teamId } });
+    if (!referral) return null;
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        subscriptionId: input.subscriptionId,
+        teamId: input.teamId,
+        amountCents: input.amountCents ?? plan.priceCents,
+        currency: plan.currency || 'USD',
+        status: PaymentStatus.COMPLETED,
+        description: input.description ?? 'Admin subscription activation',
+        paidAt: new Date(),
+        provider: input.provider ?? 'admin_manual',
+      },
+    });
+
+    return this.creditFromPayment(payment.id);
   }
 
   async listCommissions(filters: { status?: SalesCommissionStatus; partnerId?: string }) {
