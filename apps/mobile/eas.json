@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 14.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./play-store-service-account.json",
+        "track": "internal"
+      },
+      "ios": {
+        "appleId": "REPLACE_APPLE_ID_EMAIL",
+        "ascAppId": "REPLACE_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "REPLACE_APPLE_TEAM_ID"
+      }
+    }
+  }
+}

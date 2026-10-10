@@ -12,7 +12,9 @@
     "prisma:generate": "pnpm --filter @watsapp/database prisma:generate",
     "prisma:migrate": "pnpm --filter @watsapp/database prisma:migrate",
     "prisma:studio": "pnpm --filter @watsapp/database prisma:studio",
-    "desktop:pack": "node scripts/pack-chatloora-windows-for-web.js"
+    "desktop:pack": "node scripts/pack-chatloora-windows-for-web.js",
+    "mobile:start": "npm --prefix apps/mobile start",
+    "mobile:android": "npm --prefix apps/mobile run android"
   },
   "devDependencies": {
     "@types/node": "latest",

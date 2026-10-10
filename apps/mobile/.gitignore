@@ -1,0 +1,26 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+play-store-service-account.json
+google-services.json
+GoogleService-Info.plist
+.env
+.env.*
+!.env.example
+
+# Keep committed native projects; ignore local build outputs only
+android/app/build/
+android/.gradle/
+android/build/
+ios/build/
+ios/Pods/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/

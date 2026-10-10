@@ -25,7 +25,7 @@
             android:theme="@style/Theme.ChatLoora.Launch">
             <meta-data
                 android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="https://almutamayiziq.com/login" />
+                android:value="https://www.chatloora.com/login" />
             <meta-data
                 android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/background" />
@@ -48,7 +48,8 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="almutamayiziq.com" />
+                <data android:scheme="https" android:host="www.chatloora.com" />
+                <data android:scheme="https" android:host="chatloora.com" />
             </intent-filter>
         </activity>
 
