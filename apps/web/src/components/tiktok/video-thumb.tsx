@@ -1,7 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Film } from 'lucide-react';
+
+function withBust(url: string) {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.has('_cl')) parsed.searchParams.set('_cl', '1');
+    return parsed.toString();
+  } catch {
+    return url.includes('?') ? `${url}&_cl=1` : `${url}?_cl=1`;
+  }
+}
 
 export function TikTokVideoThumb({
   posterUrl,
@@ -13,15 +24,32 @@ export function TikTokVideoThumb({
   itemId?: string;
 }) {
   const [posterFailed, setPosterFailed] = useState(false);
+  const [retryPoster, setRetryPoster] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+
+  useEffect(() => {
+    setPosterFailed(false);
+    setRetryPoster(false);
+    setVideoFailed(false);
+  }, [posterUrl, videoUrl]);
+
   if (posterUrl && !posterFailed) {
     return (
       <img
-        src={posterUrl}
+        key={`${posterUrl}:${retryPoster ? 'retry' : 'first'}`}
+        src={retryPoster ? withBust(posterUrl) : posterUrl}
         alt=""
-        referrerPolicy="no-referrer"
+        referrerPolicy={retryPoster ? undefined : 'no-referrer'}
+        loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover"
-        onError={() => setPosterFailed(true)}
+        onError={() => {
+          if (!retryPoster) {
+            setRetryPoster(true);
+            return;
+          }
+          setPosterFailed(true);
+        }}
       />
     );
   }

@@ -153,9 +153,49 @@ function TikTokCampaignsInner() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [renamingId, setRenamingId] = useState('');
   const [renameDraft, setRenameDraft] = useState('');
+  /** Keep local ENABLE/DISABLE for a while so stale TikTok reads don't flip the switch back. */
+  const statusOverridesRef = useRef<Map<string, { status: string; until: number }>>(new Map());
+  const statsRef = useRef<TikTokCampaignStat[]>([]);
   const { status: subscription } = useSubscription();
   const pixelLimit = subscription?.limits?.maxTiktokPixels ?? 0;
   const canReview = Boolean(subscription?.isActive) && (pixelLimit < 0 || pixelLimit >= 15);
+
+  useEffect(() => {
+    statsRef.current = stats;
+  }, [stats]);
+
+  function rememberStatus(id: string, status: string, ttlMs = 120_000) {
+    statusOverridesRef.current.set(id, { status, until: Date.now() + ttlMs });
+  }
+
+  function mergeCampaignRows(incoming: TikTokCampaignStat[], previous: TikTokCampaignStat[]): TikTokCampaignStat[] {
+    const prevById = new Map(previous.map((row) => [row.campaignId, row]));
+    const now = Date.now();
+    for (const [id, override] of [...statusOverridesRef.current.entries()]) {
+      if (override.until <= now) statusOverridesRef.current.delete(id);
+    }
+    return incoming.map((row) => {
+      const prev = prevById.get(row.campaignId);
+      const override = statusOverridesRef.current.get(row.campaignId);
+      const status = override?.status || row.status;
+      const prevVideos = prev?.videos ?? [];
+      const videos = (row.videos ?? []).map((video) => {
+        const prevVideo = prevVideos.find((item) => item.adId === video.adId);
+        const adOverride = statusOverridesRef.current.get(video.adId);
+        return {
+          ...video,
+          status: adOverride?.status || video.status,
+          posterUrl: video.posterUrl || prevVideo?.posterUrl || '',
+          videoUrl: video.videoUrl || prevVideo?.videoUrl || '',
+        };
+      });
+      const adGroups = (row.adGroups ?? []).map((group) => {
+        const groupOverride = statusOverridesRef.current.get(group.adGroupId);
+        return groupOverride ? { ...group, status: groupOverride.status } : group;
+      });
+      return { ...row, status, videos, adGroups };
+    });
+  }
 
   async function openPreview(video: NonNullable<TikTokCampaignStat['videos']>[number]) {
     setPreview({
@@ -249,7 +289,7 @@ function TikTokCampaignsInner() {
     if (!silent) setLoadingStats(true);
     try {
       const data = await fetchTikTokCampaignPerformance(advertiserId, startDate, endDate);
-      setStats(data.campaigns);
+      setStats((current) => mergeCampaignRows(data.campaigns, current.length ? current : statsRef.current));
       setCurrency(data.currency || advertisers.find((row) => row.advertiserId === advertiserId)?.currency || null);
     } catch (err) {
       if (!silent) setError(parseApiError(err));
@@ -386,6 +426,7 @@ function TikTokCampaignsInner() {
     setError(null);
     const previous = row.status;
     const nextStatus = enabled ? 'ENABLE' : 'DISABLE';
+    rememberStatus(row.campaignId, nextStatus);
     setStats((current) => current.map((item) => (item.campaignId === row.campaignId
       ? {
           ...item,
@@ -396,17 +437,22 @@ function TikTokCampaignsInner() {
       : item)));
     try {
       const result = await setTikTokCampaignStatus({ advertiserId, campaignId: row.campaignId, enabled });
+      const applied = result.status === 'ENABLE' || result.status === 'DISABLE' ? result.status : nextStatus;
+      rememberStatus(row.campaignId, applied);
       setStats((current) => current.map((item) => (item.campaignId === row.campaignId
         ? {
             ...item,
-            status: result.status,
-            adGroups: item.adGroups?.map((group) => ({ ...group, status: result.status })),
-            videos: item.videos?.map((video) => ({ ...video, status: result.status })),
+            status: applied,
+            adGroups: item.adGroups?.map((group) => ({ ...group, status: applied })),
+            videos: item.videos?.map((video) => ({ ...video, status: applied })),
           }
         : item)));
-      // إعادة قراءة من تيك توك للتأكد من التزامن الكامل (deliveryStatus)
-      void loadPerformance({ silent: true });
+      // Delayed sync only — immediate reload was flipping the switch back from stale ENABLE.
+      window.setTimeout(() => {
+        void loadPerformance({ silent: true });
+      }, 8000);
     } catch (err) {
+      statusOverridesRef.current.delete(row.campaignId);
       setStats((current) => current.map((item) => (item.campaignId === row.campaignId ? { ...item, status: previous } : item)));
       setError(parseApiError(err));
     } finally {
@@ -424,18 +470,22 @@ function TikTokCampaignsInner() {
       ]),
     );
     const nextStatus = enabled ? 'ENABLE' : 'DISABLE';
+    rememberStatus(adGroupId, nextStatus);
     setStats((current) => current.map((item) => ({
       ...item,
       adGroups: item.adGroups?.map((group) => group.adGroupId === adGroupId ? { ...group, status: nextStatus } : group),
     })));
     try {
       const result = await setTikTokAdGroupStatus({ advertiserId, adGroupId, enabled });
+      const applied = result.status === 'ENABLE' || result.status === 'DISABLE' ? result.status : nextStatus;
+      rememberStatus(adGroupId, applied);
       setStats((current) => current.map((item) => ({
         ...item,
-        adGroups: item.adGroups?.map((group) => group.adGroupId === adGroupId ? { ...group, status: result.status } : group),
+        adGroups: item.adGroups?.map((group) => group.adGroupId === adGroupId ? { ...group, status: applied } : group),
       })));
-      void loadPerformance({ silent: true });
+      window.setTimeout(() => void loadPerformance({ silent: true }), 8000);
     } catch (err) {
+      statusOverridesRef.current.delete(adGroupId);
       setStats((current) => current.map((item) => ({
         ...item,
         adGroups: item.adGroups?.map((group) => (
@@ -460,18 +510,22 @@ function TikTokCampaignsInner() {
       ]),
     );
     const nextStatus = enabled ? 'ENABLE' : 'DISABLE';
+    rememberStatus(adId, nextStatus);
     setStats((current) => current.map((item) => ({
       ...item,
       videos: item.videos?.map((video) => video.adId === adId ? { ...video, status: nextStatus } : video),
     })));
     try {
       const result = await setTikTokCampaignVideoStatus({ advertiserId, adId, enabled });
+      const applied = result.status === 'ENABLE' || result.status === 'DISABLE' ? result.status : nextStatus;
+      rememberStatus(adId, applied);
       setStats((current) => current.map((item) => ({
         ...item,
-        videos: item.videos?.map((video) => video.adId === adId ? { ...video, status: result.status } : video),
+        videos: item.videos?.map((video) => video.adId === adId ? { ...video, status: applied } : video),
       })));
-      void loadPerformance({ silent: true });
+      window.setTimeout(() => void loadPerformance({ silent: true }), 8000);
     } catch (err) {
+      statusOverridesRef.current.delete(adId);
       setStats((current) => current.map((item) => ({
         ...item,
         videos: item.videos?.map((video) => (

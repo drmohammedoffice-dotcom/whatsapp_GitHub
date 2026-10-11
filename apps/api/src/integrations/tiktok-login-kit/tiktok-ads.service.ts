@@ -525,24 +525,24 @@ export class TikTokAdsService {
 
     // سجّل واحداً واحداً حتى لا يفشل الطلب كله عند وجود حدث مسجّل مسبقاً
     for (const pixel_event of pixel_events) {
-      this.logger.log(
+    this.logger.log(
         `[Marketing API] POST /pixel/event/create/ pixel=${pixelId} events=${pixel_event.event_name}:${pixel_event.event_type}`,
-      );
-      try {
-        const { data } = await this.http.post(
-          '/pixel/event/create/',
+    );
+    try {
+      const { data } = await this.http.post(
+        '/pixel/event/create/',
           { advertiser_id: advertiserId, pixel_id: pixelId, pixel_events: [pixel_event] },
-          { headers: { 'Access-Token': accessToken } },
-        );
-        this.assertOk(data, 'registerPixelEvents');
-      } catch (err) {
+        { headers: { 'Access-Token': accessToken } },
+      );
+      this.assertOk(data, 'registerPixelEvents');
+    } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // الحدث موجود مسبقاً = نجاح عملي
         if (/duplicat/i.test(msg) || /already/i.test(msg) || /40002/.test(msg)) {
           this.logger.log(`[Marketing API] registerPixelEvents skip existing ${pixel_event.event_name}: ${msg}`);
           continue;
         }
-        this.logApiError('registerPixelEvents', err);
+      this.logApiError('registerPixelEvents', err);
         this.logger.warn(`[Marketing API] registerPixelEvents soft-fail ${pixel_event.event_name}: ${msg}`);
       }
     }
@@ -1179,8 +1179,9 @@ export class TikTokAdsService {
 
   async publicItemCovers(itemIds: string[]) {
     const covers = new Map<string, string>();
-    const pending = [...new Set(itemIds.filter(Boolean))].slice(0, 16);
-    const workers = Array.from({ length: Math.min(4, pending.length) }, async () => {
+    // Fetch enough covers for long campaign rows (was capped at 16 → many blank thumbs).
+    const pending = [...new Set(itemIds.filter(Boolean))].slice(0, 120);
+    const workers = Array.from({ length: Math.min(8, pending.length || 1) }, async () => {
       while (pending.length) {
         const itemId = pending.shift();
         if (!itemId || covers.has(itemId)) continue;
@@ -1321,7 +1322,14 @@ export class TikTokAdsService {
         await this.setSmartPlusCampaignStatus(accessToken, advertiserId, [id], status);
       }
     }
-    return this.readCampaignOperationStatus(accessToken, advertiserId, id, status);
+    // TikTok often returns stale ENABLE for a few seconds after DISABLE — trust the write.
+    await this.sleep(1200);
+    const live = await this.readCampaignOperationStatus(accessToken, advertiserId, id, status);
+    if (live !== status) {
+      this.logger.warn(`[Marketing API] campaign ${id} readback=${live} after write=${status}; returning requested status`);
+      return status;
+    }
+    return live;
   }
 
   async setAdGroupStatus(accessToken: string, advertiserId: string, adGroupIds: string[], status: 'ENABLE' | 'DISABLE') {

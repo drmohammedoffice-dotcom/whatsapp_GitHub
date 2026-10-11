@@ -1566,14 +1566,30 @@ export class TikTokAdPublishService {
         }
       }
     }
-    const stillMissing = ads
+    let stillMissing = ads
       .filter((ad) => {
         const current = byAd.get(String(ad.ad_id ?? ''));
         return Boolean(current && !current.posterUrl && ad.tiktok_item_id);
       })
       .map((ad) => String(ad.tiktok_item_id ?? ''));
     if (stillMissing.length) {
-      const covers = await this.ads.publicItemCovers(stillMissing.slice(0, 40)).catch(() => new Map<string, string>());
+      const sparks = await this.ads.listSparkMedia(token, advertiserId).catch(() => new Map<string, { posterUrl: string; videoUrl: string; text: string }>());
+      for (const ad of ads) {
+        const current = byAd.get(String(ad.ad_id ?? ''));
+        const itemId = String(ad.tiktok_item_id ?? '');
+        if (!current || current.posterUrl || !itemId) continue;
+        const spark = sparks.get(itemId);
+        if (spark?.posterUrl) current.posterUrl = spark.posterUrl;
+      }
+      stillMissing = ads
+        .filter((ad) => {
+          const current = byAd.get(String(ad.ad_id ?? ''));
+          return Boolean(current && !current.posterUrl && ad.tiktok_item_id);
+        })
+        .map((ad) => String(ad.tiktok_item_id ?? ''));
+    }
+    if (stillMissing.length) {
+      const covers = await this.ads.publicItemCovers(stillMissing).catch(() => new Map<string, string>());
       for (const ad of ads) {
         const current = byAd.get(String(ad.ad_id ?? ''));
         const itemId = String(ad.tiktok_item_id ?? '');
@@ -2086,7 +2102,8 @@ export class TikTokAdPublishService {
         ...groupIds.map((id) => this.ads.setAdGroupStatusLive(token, advertiserId, id, status)),
         ...adIds.map((id) => this.ads.setAdStatusLive(token, advertiserId, id, status)),
       ]);
-      return { campaignId, status: liveStatus };
+      // Prefer requested status when TikTok readback is still stale.
+      return { campaignId, status: liveStatus === status ? liveStatus : status };
     } catch (err) {
       throw new BadRequestException(this.message(err));
     }
