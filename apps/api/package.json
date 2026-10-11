@@ -9,7 +9,7 @@
     "start": "node dist/apps/api/src/main.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "jest --passWithNoTests",
+    "test": "jest --passWithNoTests --forceExit --ci --runInBand",
     "test:watch": "jest --watch",
     "test:tiktok-conversion": "jest --coverage --testPathPatterns=tiktok-integration/__tests__",
     "test:coverage": "jest --coverage --testPathPatterns=tiktok-integration"
