@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -355,7 +355,16 @@ export class TikTokBusinessPublicController {
     @UploadedFile() file: UploadedMediaFile,
     @Body() body: { advertiserId?: string; pixelId?: string; landingPageUrl?: string; title?: string },
   ) {
-    return this.publishAds.createDisplayCard(principal.userId!, principal.teamId!, {
+    if (!principal.teamId) {
+      throw new BadRequestException('جلسة غير مكتملة — أعد تسجيل الدخول');
+    }
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('ارفع صورة بطاقة العرض');
+    }
+    if (!String(body.advertiserId ?? '').trim()) {
+      throw new BadRequestException('اختر الحساب الإعلاني أولاً');
+    }
+    return this.publishAds.createDisplayCard(principal.userId!, principal.teamId, {
       advertiserId: String(body.advertiserId ?? ''),
       pixelId: body.pixelId ? String(body.pixelId) : undefined,
       landingPageUrl: body.landingPageUrl ? String(body.landingPageUrl) : undefined,

@@ -1027,32 +1027,47 @@ export class TikTokAdPublishService {
       file: { buffer: Buffer; originalname?: string; mimetype?: string };
     },
   ) {
+    if (!input.advertiserId?.trim()) throw new BadRequestException('اختر الحساب الإعلاني أولاً');
     if (!input.file?.buffer?.length) throw new BadRequestException('ارفع صورة بطاقة العرض');
-    const token = await this.tokenForAdvertiser(userId, input.advertiserId);
-    let landingPageUrl = input.landingPageUrl?.trim() || '';
-    if (!landingPageUrl && input.pixelId?.trim()) {
-      landingPageUrl = (await this.pixelTrackingUrl(teamId, input.advertiserId, input.pixelId.trim())) || '';
+    const mime = String(input.file.mimetype || '').toLowerCase();
+    if (mime && !mime.startsWith('image/')) {
+      throw new BadRequestException('ملف بطاقة العرض يجب أن يكون صورة (JPG أو PNG)');
     }
-    if (!landingPageUrl) {
-      throw new BadRequestException('لا يوجد رابط تتبع للبكسل — اربط البكسل من صفحة البكسلات أولاً أو الصق الرابط يدوياً.');
+    try {
+      const token = await this.tokenForAdvertiser(userId, input.advertiserId);
+      let landingPageUrl = input.landingPageUrl?.trim() || '';
+      if (!landingPageUrl && input.pixelId?.trim()) {
+        landingPageUrl = (await this.pixelTrackingUrl(teamId, input.advertiserId, input.pixelId.trim())) || '';
+      }
+      if (!landingPageUrl) {
+        throw new BadRequestException(
+          'لا يوجد رابط تتبع للبكسل — اربط البكسل من صفحة البكسلات أولاً أو الصق الرابط يدوياً.',
+        );
+      }
+      if (!/^https:\/\//i.test(landingPageUrl)) {
+        throw new BadRequestException('رابط التتبع يجب أن يبدأ بـ https://');
+      }
+      const uploaded = await this.ads.uploadAdImage(token, input.advertiserId, input.file);
+      const cardId = await this.ads.createDisplayCardPortfolio(token, input.advertiserId, {
+        imageId: uploaded.imageId,
+        landingPageUrl,
+        title: input.title,
+      });
+      let previewUrl = uploaded.previewUrl;
+      if (!previewUrl) {
+        previewUrl = await this.ads.imageCover(token, input.advertiserId, [uploaded.imageId]).catch(() => '');
+      }
+      return {
+        cardId,
+        imageId: uploaded.imageId,
+        previewUrl,
+        landingPageUrl,
+        title: input.title?.trim() || '',
+      };
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException(this.message(err) || 'تعذر إنشاء بطاقة العرض');
     }
-    const uploaded = await this.ads.uploadAdImage(token, input.advertiserId, input.file);
-    const cardId = await this.ads.createDisplayCardPortfolio(token, input.advertiserId, {
-      imageId: uploaded.imageId,
-      landingPageUrl,
-      title: input.title,
-    });
-    let previewUrl = uploaded.previewUrl;
-    if (!previewUrl) {
-      previewUrl = await this.ads.imageCover(token, input.advertiserId, [uploaded.imageId]).catch(() => '');
-    }
-    return {
-      cardId,
-      imageId: uploaded.imageId,
-      previewUrl,
-      landingPageUrl,
-      title: input.title?.trim() || '',
-    };
   }
 
   private adGroupBody(input: PublishTikTokAdInput, timezone: string | null, campaignId: string) {

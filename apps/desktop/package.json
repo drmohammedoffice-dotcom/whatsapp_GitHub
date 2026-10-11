@@ -1,6 +1,6 @@
 {
   "name": "chatloora-desktop",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "private": true,
   "description": "ChatLoora desktop app for Windows (wraps the web platform)",
   "author": "ChatLoora",

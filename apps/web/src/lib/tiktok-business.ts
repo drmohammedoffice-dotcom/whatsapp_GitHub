@@ -740,8 +740,11 @@ export async function createTikTokDisplayCard(input: {
     body: form,
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error((body as { message?: string }).message ?? `Request failed (${response.status})`);
+    const body = (await response.json().catch(() => ({}))) as { message?: string | string[] };
+    const msg = Array.isArray(body.message)
+      ? body.message.join(' · ')
+      : body.message || `Request failed (${response.status})`;
+    throw new Error(msg);
   }
   return response.json() as Promise<{
     cardId: string;

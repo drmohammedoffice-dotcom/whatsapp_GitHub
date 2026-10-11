@@ -1969,28 +1969,41 @@ export class TikTokAdsService {
     advertiserId: string,
     file: { buffer: Buffer; originalname?: string; mimetype?: string },
   ) {
-    const fileName = (file.originalname || `display-card-${Date.now()}.jpg`).slice(0, 100);
+    const rawName = file.originalname || `display-card-${Date.now()}.jpg`;
+    const ext = /\.(jpe?g|png|webp)$/i.test(rawName)
+      ? rawName.match(/\.(jpe?g|png|webp)$/i)![0].toLowerCase()
+      : file.mimetype?.includes('png')
+        ? '.png'
+        : '.jpg';
+    const fileName = `display-card-${Date.now()}${ext}`.slice(0, 100);
+    const mime = file.mimetype || (ext === '.png' ? 'image/png' : 'image/jpeg');
     const signature = createHash('md5').update(file.buffer).digest('hex');
     const form = new FormData();
     form.append('advertiser_id', advertiserId);
     form.append('upload_type', 'UPLOAD_BY_FILE');
     form.append('image_signature', signature);
     form.append('file_name', fileName);
-    form.append(
-      'image_file',
-      new Blob([new Uint8Array(file.buffer)], { type: file.mimetype || 'image/jpeg' }),
-      fileName,
-    );
-    const { data } = await axios.post(`${TIKTOK_MARKETING_API_BASE}/file/image/ad/upload/`, form, {
-      headers: { 'Access-Token': accessToken },
-      timeout: 60_000,
-      maxBodyLength: Infinity,
-    });
-    this.assertOk(data, 'uploadAdImage');
-    const imageId = String(data.data?.image_id ?? data.data?.id ?? '');
-    const previewUrl = String(data.data?.url ?? data.data?.image_url ?? '');
-    if (!imageId) throw new Error('TikTok did not return image_id');
-    return { imageId, previewUrl };
+    form.append('image_file', new Blob([Uint8Array.from(file.buffer)], { type: mime }), fileName);
+    try {
+      const { data } = await axios.post(`${TIKTOK_MARKETING_API_BASE}/file/image/ad/upload/`, form, {
+        headers: { 'Access-Token': accessToken },
+        timeout: 90_000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+      this.assertOk(data, 'uploadAdImage');
+      const imageId = String(data.data?.image_id ?? data.data?.id ?? '');
+      const previewUrl = String(data.data?.url ?? data.data?.image_url ?? '');
+      if (!imageId) throw new Error('TikTok did not return image_id');
+      return { imageId, previewUrl };
+    } catch (err) {
+      this.logApiError('uploadAdImage', err);
+      if (err instanceof AxiosError && err.response?.data) {
+        const body = err.response.data as { message?: string; code?: number };
+        throw new Error(body.message || `uploadAdImage failed (${err.response.status})`);
+      }
+      throw err instanceof Error ? err : new Error('تعذر رفع صورة بطاقة العرض إلى تيك توك');
+    }
   }
 
   /** إنشاء بطاقة عرض (Display Card) في مكتبة الوظائف التفاعلية. */
@@ -1999,21 +2012,36 @@ export class TikTokAdsService {
     advertiserId: string,
     input: { imageId: string; landingPageUrl?: string; title?: string },
   ) {
-    const content: Record<string, unknown> = {
+    const landing = input.landingPageUrl?.trim() || '';
+    const title = input.title?.trim().slice(0, 40) || undefined;
+    const withSticker: Record<string, unknown> = {
       card_type: 'IMAGE',
       image_id: input.imageId,
+      call_to_action: 'LEARN_MORE',
     };
-    if (input.title?.trim()) content.title = input.title.trim().slice(0, 40);
-    if (input.landingPageUrl?.trim()) {
-      content.sticker_param = { landing_page_url: input.landingPageUrl.trim() };
-    }
+    if (title) withSticker.title = title;
+    if (landing) withSticker.sticker_param = { landing_page_url: landing };
+
     const attempts: Array<Record<string, unknown>> = [
       {
         advertiser_id: advertiserId,
         creative_portfolio_type: 'CARD',
-        portfolio_content: [content],
+        portfolio_content: [withSticker],
       },
-      // بعض الحسابات تقبل البطاقة بدون sticker_param
+      // بدون CTA
+      {
+        advertiser_id: advertiserId,
+        creative_portfolio_type: 'CARD',
+        portfolio_content: [
+          {
+            card_type: 'IMAGE',
+            image_id: input.imageId,
+            ...(title ? { title } : {}),
+            ...(landing ? { sticker_param: { landing_page_url: landing } } : {}),
+          },
+        ],
+      },
+      // الحد الأدنى
       {
         advertiser_id: advertiserId,
         creative_portfolio_type: 'CARD',
@@ -2029,9 +2057,12 @@ export class TikTokAdsService {
         this.assertOk(data, 'createDisplayCard');
         const cardId = String(data.data?.creative_portfolio_id ?? data.data?.portfolio_id ?? '');
         if (cardId) return cardId;
+        lastError = new Error('TikTok did not return display card id');
       } catch (err) {
         lastError = err;
-        this.logger.warn(`[Marketing API] createDisplayCard attempt failed: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.warn(
+          `[Marketing API] createDisplayCard attempt failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
     if (lastError) throw lastError;
