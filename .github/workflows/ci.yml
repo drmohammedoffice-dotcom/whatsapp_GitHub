@@ -8,6 +8,9 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      # Prisma reads DATABASE_URL at generate time; CI does not connect to a real DB.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci?schema=public
     steps:
       - uses: actions/checkout@v4
 
