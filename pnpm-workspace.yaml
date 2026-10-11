@@ -1,4 +1,6 @@
 packages:
   - apps/*
   - '!apps/mobile'
+  # Desktop uses its own npm/electron install; keep it out of the pnpm lockfile.
+  - '!apps/desktop'
   - packages/*
