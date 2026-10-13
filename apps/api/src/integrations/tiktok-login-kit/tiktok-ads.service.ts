@@ -1235,6 +1235,34 @@ export class TikTokAdsService {
     this.assertOk(data, 'updateCampaign');
   }
 
+  /** تحديث اسم/ميزانية حملة Upgraded Smart+ عبر المسار المخصص */
+  async updateSmartPlusCampaign(
+    accessToken: string,
+    advertiserId: string,
+    campaignId: string,
+    patch: { name?: string; budget?: number; budgetMode?: string },
+  ) {
+    const body: Record<string, unknown> = {
+      advertiser_id: advertiserId,
+      campaign_id: campaignId,
+    };
+    if (patch.name?.trim()) body.campaign_name = patch.name.trim().slice(0, 512);
+    if (Number.isFinite(patch.budget) && Number(patch.budget) > 0) {
+      body.budget = Number(patch.budget);
+      body.budget_optimize_on = true;
+      const mode = String(patch.budgetMode || 'BUDGET_MODE_DAY');
+      body.budget_mode = mode === 'BUDGET_MODE_TOTAL'
+        ? 'BUDGET_MODE_TOTAL'
+        : 'BUDGET_MODE_DYNAMIC_DAILY_BUDGET';
+    }
+    await this.withEntityUpdateRetry('updateSmartPlusCampaign', async () => {
+      const { data } = await this.http.post('/smart_plus/campaign/update/', body, {
+        headers: { 'Access-Token': accessToken },
+      });
+      this.assertOk(data, 'updateSmartPlusCampaign');
+    });
+  }
+
   async updateAdGroup(accessToken: string, body: Record<string, unknown>) {
     const payload = { ...body };
     if (Array.isArray(payload.operating_systems)) {
@@ -1250,6 +1278,50 @@ export class TikTokAdsService {
     });
   }
 
+  /** تحديث مجموعة إعلانية Upgraded Smart+ */
+  async updateSmartPlusAdGroup(accessToken: string, body: Record<string, unknown>) {
+    const payload: Record<string, unknown> = { ...body };
+    delete payload.campaign_id;
+    delete payload.request_id;
+    delete payload.objective_type;
+    delete payload.budget;
+    delete payload.budget_mode;
+    if (Array.isArray(payload.operating_systems)) {
+      const systems = (payload.operating_systems as unknown[])
+        .map((item) => String(item).toUpperCase())
+        .filter((item) => item === 'ANDROID' || item === 'IOS');
+      if (systems.length === 1) payload.operating_systems = systems;
+      else delete payload.operating_systems;
+    }
+    // نفس تحويل الاستهداف المستخدم عند الإنشاء
+    const targetingKeys = [
+      'location_ids', 'gender', 'age_groups', 'languages', 'interest_category_ids',
+      'audience_ids', 'excluded_audience_ids', 'operating_systems', 'network_types',
+      'spending_power', 'min_android_version', 'min_ios_version', 'carrier_ids', 'isp_ids',
+      'device_price_ranges', 'device_model_ids', 'household_income',
+      'smart_interest_behavior_enabled', 'smart_audience_enabled', 'spc_audience_age',
+      'saved_audience_id', 'blocked_pangle_app_ids',
+      'included_pangle_audience_package_ids', 'excluded_pangle_audience_package_ids',
+    ] as const;
+    const existingSpec = payload.targeting_spec && typeof payload.targeting_spec === 'object' && !Array.isArray(payload.targeting_spec)
+      ? { ...(payload.targeting_spec as Record<string, unknown>) }
+      : {};
+    const targetingSpec: Record<string, unknown> = { ...existingSpec };
+    for (const key of targetingKeys) {
+      if (payload[key] !== undefined && targetingSpec[key] === undefined) {
+        targetingSpec[key] = payload[key];
+      }
+      delete payload[key];
+    }
+    if (Object.keys(targetingSpec).length) payload.targeting_spec = targetingSpec;
+    await this.withEntityUpdateRetry('updateSmartPlusAdGroup', async () => {
+      const { data } = await this.http.post('/smart_plus/adgroup/update/', payload, {
+        headers: { 'Access-Token': accessToken },
+      });
+      this.assertOk(data, 'updateSmartPlusAdGroup');
+    });
+  }
+
   async updateAds(accessToken: string, advertiserId: string, adGroupId: string, creatives: Array<Record<string, unknown>>) {
     await this.withEntityUpdateRetry('updateAd', async () => {
       const { data } = await this.http.post(
@@ -1259,6 +1331,44 @@ export class TikTokAdsService {
       );
       this.assertOk(data, 'updateAd');
     });
+  }
+
+  /** تحديث إعلانات Upgraded Smart+ واحداً تلو الآخر */
+  async updateSmartPlusAds(
+    accessToken: string,
+    advertiserId: string,
+    creatives: Array<Record<string, unknown>>,
+  ) {
+    for (let i = 0; i < creatives.length; i += 1) {
+      if (i > 0) await this.sleep(700);
+      const creative = creatives[i];
+      const adId = String(creative.ad_id ?? creative.smart_plus_ad_id ?? '');
+      if (!adId) continue;
+      const body: Record<string, unknown> = {
+        advertiser_id: advertiserId,
+        smart_plus_ad_id: adId,
+      };
+      if (creative.ad_name) body.ad_name = creative.ad_name;
+      if (creative.ad_text) body.ad_text_list = [{ ad_text: creative.ad_text }];
+      if (creative.call_to_action) body.call_to_action_list = [{ call_to_action: creative.call_to_action }];
+      if (creative.landing_page_url) body.landing_page_url_list = [{ landing_page_url: creative.landing_page_url }];
+      if (creative.page_id) body.page_list = [{ page_id: creative.page_id }];
+      if (creative.identity_id) {
+        body.ad_configuration = {
+          identity_id: creative.identity_id,
+          identity_type: creative.identity_type,
+          ...(creative.identity_authorized_bc_id
+            ? { identity_authorized_bc_id: creative.identity_authorized_bc_id }
+            : {}),
+        };
+      }
+      await this.withEntityUpdateRetry('updateSmartPlusAd', async () => {
+        const { data } = await this.http.post('/smart_plus/ad/update/', body, {
+          headers: { 'Access-Token': accessToken },
+        });
+        this.assertOk(data, 'updateSmartPlusAd');
+      });
+    }
   }
 
   async deleteCampaigns(accessToken: string, advertiserId: string, campaignIds: string[]) {

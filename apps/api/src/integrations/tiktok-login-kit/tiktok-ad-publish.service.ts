@@ -502,7 +502,12 @@ export class TikTokAdPublishService {
         });
       await this.sleep(1200);
       const groupBody: Record<string, unknown> = {
-        ...this.adGroupBody(input, input.timezone || advertiser.timezone, campaignId),
+        ...this.adGroupBody(
+          input,
+          input.timezone || advertiser.timezone,
+          campaignId,
+          advertiser.timezone,
+        ),
         // يساعد Smart+ على اختيار قاعدة المواضع الصحيحة لكل هدف
         objective_type: plan.objective,
       };
@@ -578,7 +583,12 @@ export class TikTokAdPublishService {
       const creatives = await this.resolveCreatives(token, input, landingPageUrl);
       const useSmartPlus = Boolean(input.smartPlus && OBJECTIVE_SPECS[input.objective].allowsSmartPlus)
         || await this.ads.isUpgradedSmartPlusCampaign(token, input.advertiserId, campaignId);
-      const groupBody = this.adGroupBody(input, input.timezone || advertiser.timezone, campaignId);
+      const groupBody = this.adGroupBody(
+        input,
+        input.timezone || advertiser.timezone,
+        campaignId,
+        advertiser.timezone,
+      );
       if (useSmartPlus) {
         this.logger.log(`[Marketing API] appendAdGroup using Smart+ endpoints campaign=${campaignId}`);
         adGroupId = await this.ads.createSmartPlusAdGroup(token, groupBody);
@@ -1070,13 +1080,21 @@ export class TikTokAdPublishService {
     }
   }
 
-  private adGroupBody(input: PublishTikTokAdInput, timezone: string | null, campaignId: string) {
+  private adGroupBody(
+    input: PublishTikTokAdInput,
+    timezone: string | null,
+    campaignId: string,
+    advertiserTimezone?: string | null,
+  ) {
     const spec = OBJECTIVE_SPECS[input.objective];
-    const zone = timezone || 'Asia/Baghdad';
+    // المستخدم يختار توقيتاً في الواجهة؛ تيك توك يفسّر الجدول بتوقيت الحساب الإعلاني فقط.
+    const userZone = timezone || advertiserTimezone || 'Asia/Baghdad';
+    const tikTokZone = advertiserTimezone || userZone;
     const ranged = input.scheduleMode === 'RANGE';
-    const start = ranged && input.scheduleStartDate
+    const startRaw = ranged && input.scheduleStartDate
       ? `${input.scheduleStartDate} 00:05:00`
-      : this.formatTikTokTime(new Date(Date.now() + 15 * 60_000), zone);
+      : this.formatTikTokTime(new Date(Date.now() + 15 * 60_000), userZone);
+    const start = this.convertScheduleWallClock(startRaw, userZone, tikTokZone);
     const automatic = input.placementMode === 'AUTOMATIC';
     const placements = (input.placements?.length ? input.placements : ['PLACEMENT_TIKTOK'])
       .filter((item) => ['PLACEMENT_TIKTOK', 'PLACEMENT_PANGLE', 'PLACEMENT_GLOBAL_APP_BUNDLE'].includes(item));
@@ -1189,7 +1207,13 @@ export class TikTokAdPublishService {
     const excludeAudience = (input.excludedAudienceIds ?? []).map((id) => id.trim()).filter(Boolean);
     if (excludeAudience.length) body.excluded_audience_ids = excludeAudience;
     if (input.smartInterestBehavior) body.smart_interest_behavior_enabled = true;
-    if (ranged && input.scheduleEndDate) body.schedule_end_time = `${input.scheduleEndDate} 23:59:00`;
+    if (ranged && input.scheduleEndDate) {
+      body.schedule_end_time = this.convertScheduleWallClock(
+        `${input.scheduleEndDate} 23:59:00`,
+        userZone,
+        tikTokZone,
+      );
+    }
     const trafficNeedsPixel = Boolean(trafficGoal && TRAFFIC_GOAL_SPECS[trafficGoal].needsPixel);
     if ((spec.needsPixel || trafficNeedsPixel) && input.destination !== 'WHATSAPP' && input.destination !== 'INSTANT_PAGE' && input.pixelId) {
       body.pixel_id = input.pixelId;
@@ -1426,6 +1450,49 @@ export class TikTokAdPublishService {
     } catch {
       return date.toISOString().slice(0, 19).replace('T', ' ');
     }
+  }
+
+  /** يحوّل وقتاً محلياً من منطقة إلى أخرى (تيك توك يقرأ الجدول بتوقيت الحساب الإعلاني). */
+  private convertScheduleWallClock(wallClock: string, fromZone: string, toZone: string) {
+    const from = String(fromZone || '').trim() || 'Asia/Baghdad';
+    const to = String(toZone || '').trim() || from;
+    if (!wallClock || from === to) return wallClock;
+    try {
+      const utcMs = this.wallClockToUtcMs(wallClock, from);
+      return this.formatTikTokTime(new Date(utcMs), to);
+    } catch {
+      return wallClock;
+    }
+  }
+
+  private wallClockToUtcMs(wallClock: string, timeZone: string) {
+    const match = String(wallClock).trim().match(
+      /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/,
+    );
+    if (!match) throw new Error(`Invalid schedule wall clock: ${wallClock}`);
+    const y = Number(match[1]);
+    const mo = Number(match[2]);
+    const d = Number(match[3]);
+    const h = Number(match[4]);
+    const mi = Number(match[5]);
+    const s = Number(match[6] || 0);
+    const wantedAsUtc = Date.UTC(y, mo - 1, d, h, mi, s);
+    let guess = wantedAsUtc;
+    for (let i = 0; i < 4; i += 1) {
+      const shown = this.formatTikTokTime(new Date(guess), timeZone);
+      const parts = shown.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+      if (!parts) break;
+      const shownAsUtc = Date.UTC(
+        Number(parts[1]),
+        Number(parts[2]) - 1,
+        Number(parts[3]),
+        Number(parts[4]),
+        Number(parts[5]),
+        Number(parts[6]),
+      );
+      guess -= shownAsUtc - wantedAsUtc;
+    }
+    return guess;
   }
 
   private async trackingUrlsForAdvertiser(
@@ -1931,6 +1998,9 @@ export class TikTokAdPublishService {
   private async updateExisting(userId: string, teamId: string, input: PublishTikTokAdInput) {
     input = this.normalizeSchedule(input);
     this.validate(input);
+    const advertiser = await this.prisma.tikTokMarketingAdvertiser.findUnique({
+      where: { userId_advertiserId: { userId, advertiserId: input.advertiserId } },
+    });
     const token = await this.tokenForAdvertiser(userId, input.advertiserId);
     const landingPageUrl = input.destination === 'WHATSAPP'
       ? `https://wa.me/${(input.whatsappNumber ?? '').replace(/\D/g, '')}`
@@ -1938,10 +2008,24 @@ export class TikTokAdPublishService {
     const campaignId = input.campaignId!;
     const adGroupId = input.adGroupId!;
     try {
-      await this.ads.updateCampaignName(token, input.advertiserId, campaignId, input.campaignName.trim());
       const useSmartPlus = Boolean(input.smartPlus && OBJECTIVE_SPECS[input.objective].allowsSmartPlus)
         || await this.ads.isUpgradedSmartPlusCampaign(token, input.advertiserId, campaignId);
-      const body = this.adGroupBody(input, input.timezone || null, campaignId);
+      if (useSmartPlus) {
+        this.logger.log(`[Marketing API] updateExisting using Smart+ endpoints campaign=${campaignId}`);
+        await this.ads.updateSmartPlusCampaign(token, input.advertiserId, campaignId, {
+          name: input.campaignName.trim(),
+          budget: Number(input.budget),
+          budgetMode: input.budgetMode,
+        });
+      } else {
+        await this.ads.updateCampaignName(token, input.advertiserId, campaignId, input.campaignName.trim());
+      }
+      const body = this.adGroupBody(
+        input,
+        input.timezone || advertiser?.timezone || null,
+        campaignId,
+        advertiser?.timezone || null,
+      );
       const promotionType = String(body.promotion_type || OBJECTIVE_SPECS[input.objective].promotionType || 'WEBSITE');
       delete body.promotion_type;
       delete body.optimization_goal;
@@ -1952,9 +2036,11 @@ export class TikTokAdPublishService {
       delete body.operation_status;
       delete body.campaign_id;
       delete body.cpv_video_duration;
+      delete body.objective_type;
       body.adgroup_id = adGroupId;
-      // تحديث المجموعة عبر الواجهة اليدوية يفشل على حملات Upgraded Smart+
-      if (!useSmartPlus) {
+      if (useSmartPlus) {
+        await this.ads.updateSmartPlusAdGroup(token, body);
+      } else {
         await this.ads.updateAdGroup(token, body);
       }
       const creatives = await this.resolveCreatives(token, input, landingPageUrl);
@@ -1972,8 +2058,18 @@ export class TikTokAdPublishService {
         if (adId) updates.push({ ...creative, ad_id: adId });
         else creates.push(creative);
       });
-      if (updates.length && !useSmartPlus) {
-        await this.ads.updateAds(token, input.advertiserId, adGroupId, updates);
+      if (updates.length) {
+        if (useSmartPlus) {
+          try {
+            await this.ads.updateSmartPlusAds(token, input.advertiserId, updates);
+          } catch (err) {
+            this.logger.warn(
+              `[Marketing API] Smart+ ad update skipped: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        } else {
+          await this.ads.updateAds(token, input.advertiserId, adGroupId, updates);
+        }
       }
       const created = creates.length
         ? (useSmartPlus
@@ -1984,13 +2080,26 @@ export class TikTokAdPublishService {
           })
           : await this.ads.createMarketingAds(token, input.advertiserId, adGroupId, creates))
         : [];
-      if (disableIds.length) await this.ads.setAdStatus(token, input.advertiserId, disableIds, 'DISABLE');
+      if (disableIds.length) {
+        if (useSmartPlus) {
+          try {
+            await this.ads.setSmartPlusAdStatus(token, input.advertiserId, disableIds, 'DISABLE');
+          } catch {
+            for (const id of disableIds) {
+              await this.ads.setAdStatusLive(token, input.advertiserId, id, 'DISABLE').catch(() => undefined);
+            }
+          }
+        } else {
+          await this.ads.setAdStatus(token, input.advertiserId, disableIds, 'DISABLE');
+        }
+      }
       return {
         campaignId,
         adGroupId,
         adIds: [...updates.map((row) => String(row.ad_id)), ...created],
         landingPageUrl,
         campaignName: input.campaignName,
+        smartPlus: useSmartPlus,
       };
     } catch (err) {
       throw new BadRequestException(this.message(err));

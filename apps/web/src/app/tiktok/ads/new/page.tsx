@@ -3634,8 +3634,20 @@ function NewTikTokCampaignForm() {
                   <div className="grid gap-2">
                     <Label>توقيت الجدولة</Label>
                     <select className="h-10 rounded-md border bg-background px-3 text-sm" value={timezone} onChange={(event) => setTimezone(event.target.value)}>
-                      {Object.entries(TIMEZONE_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                      {Object.entries({
+                        ...TIMEZONE_LABELS,
+                        ...(selectedAdvertiser?.timezone && !TIMEZONE_LABELS[selectedAdvertiser.timezone]
+                          ? { [selectedAdvertiser.timezone]: `توقيت الحساب (${selectedAdvertiser.timezone})` }
+                          : {}),
+                      }).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                     </select>
+                    <p className="text-xs text-muted-foreground">
+                      تيك توك يعتمد توقيت الحساب الإعلاني
+                      {selectedAdvertiser?.timezone
+                        ? ` (${TIMEZONE_LABELS[selectedAdvertiser.timezone] || selectedAdvertiser.timezone})`
+                        : ''}.
+                      {' '}إذا اخترت بغداد نُحوّل الوقت تلقائياً إلى توقيت الحساب قبل النشر.
+                    </p>
                   </div>
                   <DaypartEditor week={week} onChange={setWeek} />
                 </div>
