@@ -1011,7 +1011,8 @@ function NewTikTokCampaignForm() {
         }
         if (data.advertiser?.currency || data.advertiser?.timezone) {
           setAdvertisers((current) => current.map((row) => row.advertiserId === advertiserId ? { ...row, currency: data.advertiser?.currency || row.currency, timezone: data.advertiser?.timezone || row.timezone, name: data.advertiser?.name || row.name } : row));
-          if (data.advertiser?.timezone && !draftReady.current && !keepOptions) setTimezone(data.advertiser.timezone);
+          // دائماً نزامِن توقيت الجدولة مع توقيت الحساب الإعلاني (تيك توك يعتمد عليه)
+          if (data.advertiser?.timezone && !keepOptions) setTimezone(data.advertiser.timezone);
         }
       })
       .catch((err) => setOptionsError(parseApiError(err)))
@@ -1063,6 +1064,7 @@ function NewTikTokCampaignForm() {
         if (draft.scheduleEndDate) setScheduleEndDate(draft.scheduleEndDate);
         setDevices(draft.devices || 'ALL');
         setWeek(weekFromDayparting(draft.dayparting));
+        if (selectedAdvertiser?.timezone) setTimezone(selectedAdvertiser.timezone);
         setCallToAction(draft.callToAction || 'LEARN_MORE');
         setLandingPageUrl(draft.landingPageUrl);
         setUsePlatformLink(draft.destination !== 'WHATSAPP' && (!draft.landingPageUrl || draft.landingPageUrl.includes('/r/')));
@@ -1127,7 +1129,7 @@ function NewTikTokCampaignForm() {
           devicePriceMin: '',
           devicePriceMax: '',
           week: weekFromDayparting(draft.dayparting),
-          timezone: 'Asia/Baghdad',
+          timezone: selectedAdvertiser?.timezone || timezone || 'Asia/Baghdad',
           identityKey: '',
           selected: loadedVideos,
           authCodes: '',
@@ -1263,8 +1265,7 @@ function NewTikTokCampaignForm() {
   function toggleCountry(region: { locationId: string; regionCode: string }) {
     const exists = locationIds.includes(region.locationId);
     setLocationIds(exists ? locationIds.filter((item) => item !== region.locationId) : [...locationIds, region.locationId]);
-    const zone = COUNTRY_TIMEZONES[region.regionCode];
-    if (zone && !exists) setTimezone(zone);
+    // لا نغيّر توقيت الجدولة عند اختيار الدولة — تيك توك يعتمد توقيت الحساب الإعلاني.
   }
 
   function applySelectedInstantForm(form: TikTokInstantForm) {
