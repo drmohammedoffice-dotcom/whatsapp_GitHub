@@ -1095,6 +1095,11 @@ export class TikTokAdPublishService {
       ? `${input.scheduleStartDate} 00:05:00`
       : this.formatTikTokTime(new Date(Date.now() + 15 * 60_000), userZone);
     const start = this.convertScheduleWallClock(startRaw, userZone, tikTokZone);
+    if (userZone !== tikTokZone || start !== startRaw) {
+      this.logger.log(
+        `[Marketing API] schedule convert ${startRaw} (${userZone}) → ${start} (${tikTokZone})`,
+      );
+    }
     const automatic = input.placementMode === 'AUTOMATIC';
     const placements = (input.placements?.length ? input.placements : ['PLACEMENT_TIKTOK'])
       .filter((item) => ['PLACEMENT_TIKTOK', 'PLACEMENT_PANGLE', 'PLACEMENT_GLOBAL_APP_BUNDLE'].includes(item));

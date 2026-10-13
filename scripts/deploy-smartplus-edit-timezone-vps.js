@@ -102,7 +102,7 @@ set -e
 cd ${PROJECT}
 grep -q "updateSmartPlusCampaign" apps/api/src/integrations/tiktok-login-kit/tiktok-ads.service.ts
 grep -q "convertScheduleWallClock" apps/api/src/integrations/tiktok-login-kit/tiktok-ad-publish.service.ts
-grep -q "نُحوّل الوقت تلقائياً" apps/web/src/app/tiktok/ads/new/page.tsx
+grep -q "توقيت جدولة الحملة" apps/web/src/app/tiktok/ads/new/page.tsx
 pnpm --filter @watsapp/api build
 pnpm --filter @watsapp/web build
 pm2 restart api web --update-env

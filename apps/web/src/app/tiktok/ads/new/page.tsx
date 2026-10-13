@@ -1031,8 +1031,7 @@ function NewTikTokCampaignForm() {
         }
         if (data.advertiser?.currency || data.advertiser?.timezone) {
           setAdvertisers((current) => current.map((row) => row.advertiserId === advertiserId ? { ...row, currency: data.advertiser?.currency || row.currency, timezone: data.advertiser?.timezone || row.timezone, name: data.advertiser?.name || row.name } : row));
-          // دائماً نزامِن توقيت الجدولة مع توقيت الحساب الإعلاني (تيك توك يعتمد عليه)
-          if (data.advertiser?.timezone && !keepOptions) setTimezone(data.advertiser.timezone);
+          // لا نفرض توقيت الحساب على «توقيت الجدولة» — المستخدم يختار بغداد لمعنى التواريخ
         }
       })
       .catch((err) => setOptionsError(parseApiError(err)))
@@ -1084,7 +1083,6 @@ function NewTikTokCampaignForm() {
         if (draft.scheduleEndDate) setScheduleEndDate(draft.scheduleEndDate);
         setDevices(draft.devices || 'ALL');
         setWeek(weekFromDayparting(draft.dayparting));
-        if (selectedAdvertiser?.timezone) setTimezone(selectedAdvertiser.timezone);
         setCallToAction(draft.callToAction || 'LEARN_MORE');
         setLandingPageUrl(draft.landingPageUrl);
         setUsePlatformLink(draft.destination !== 'WHATSAPP' && (!draft.landingPageUrl || draft.landingPageUrl.includes('/r/')));
@@ -1149,7 +1147,7 @@ function NewTikTokCampaignForm() {
           devicePriceMin: '',
           devicePriceMax: '',
           week: weekFromDayparting(draft.dayparting),
-          timezone: selectedAdvertiser?.timezone || timezone || 'Asia/Baghdad',
+          timezone: timezone || 'Asia/Baghdad',
           identityKey: '',
           selected: loadedVideos,
           authCodes: '',
@@ -1919,7 +1917,8 @@ function NewTikTokCampaignForm() {
         scheduleMode: group.scheduleMode === 'RANGE' ? 'RANGE' : 'CONTINUOUS',
         scheduleStartDate: group.scheduleMode === 'RANGE' ? group.scheduleStartDate : undefined,
         scheduleEndDate: group.scheduleMode === 'RANGE' ? group.scheduleEndDate : undefined,
-        timezone: selectedAdvertiser?.timezone || group.timezone || timezone,
+        // توقيت معنى التواريخ (مثلاً بغداد) — السيرفر يحوّله لتوقيت الحساب قبل إرساله لتيك توك
+        timezone: group.timezone || timezone || 'Asia/Baghdad',
         devices: group.devices,
         minAndroidVersion: undefined,
         minIosVersion: undefined,
@@ -2641,7 +2640,7 @@ function NewTikTokCampaignForm() {
                             checked={advertiserId === row.advertiserId}
                             onChange={() => {
                               setAdvertiserId(row.advertiserId);
-                              if (row.timezone) setTimezone(row.timezone);
+                              // لا نغيّر توقيت جدولة الحملة (بغداد) عند اختيار الحساب
                               setAccountMenuOpen(false);
                             }}
                           />
@@ -3653,16 +3652,32 @@ function NewTikTokCampaignForm() {
                     </div>
                   )}
                   <div className="grid gap-2">
-                    <Label>توقيت الحساب الإعلاني (تيك توك)</Label>
-                    <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm" dir="ltr">
-                      {timezoneLabel(selectedAdvertiser?.timezone || timezone)}
-                    </div>
-                    <p className="text-xs text-amber-800 dark:text-amber-200">
-                      توقيت الحساب يُحدَّد عند إنشاء الحساب في تيك توك ولا يمكن تغييره لاحقاً (لا من جات لورا ولا من مدير الإعلانات).
-                      لذلك ستظهر الحملة دائماً بتوقيت هذا الحساب
-                      {selectedAdvertiser?.timezone ? ` (${timezoneLabel(selectedAdvertiser.timezone)})` : ''}.
-                      إذا أردت بغداد UTC+3 يجب إنشاء حساب إعلاني جديد بتوقيت بغداد من Business Center.
+                    <Label>توقيت جدولة الحملة (معنى التواريخ)</Label>
+                    <select
+                      className="h-10 rounded-md border bg-background px-3 text-sm"
+                      value={timezone}
+                      onChange={(event) => setTimezone(event.target.value)}
+                    >
+                      {Object.entries({
+                        ...TIMEZONE_LABELS,
+                        ...(selectedAdvertiser?.timezone && !TIMEZONE_LABELS[selectedAdvertiser.timezone]
+                          ? { [selectedAdvertiser.timezone]: timezoneLabel(selectedAdvertiser.timezone) }
+                          : {}),
+                      }).map(([id, label]) => (
+                        <option key={id} value={id}>{label}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      اختر بغداد إذا كانت تواريخ البدء/الانتهاء حسب توقيت العراق (+3).
+                      جات لورا تحوّل الوقت تلقائياً إلى توقيت حساب تيك توك قبل النشر حتى يعمل الإعلان في الوقت الصحيح.
                     </p>
+                    {selectedAdvertiser?.timezone && (
+                      <p className="text-xs text-amber-800 dark:text-amber-200">
+                        في مدير إعلانات تيك توك ستظهر الأوقات بتوقيت الحساب
+                        {' '}({timezoneLabel(selectedAdvertiser.timezone)})
+                        {' '}بعد التحويل — هذا طبيعي ولا يعني أن الجدولة بقيت بتوقيت أمريكا بدون تحويل.
+                      </p>
+                    )}
                   </div>
                   <DaypartEditor week={week} onChange={setWeek} />
                 </div>
