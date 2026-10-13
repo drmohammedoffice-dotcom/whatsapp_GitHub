@@ -155,10 +155,30 @@ function AccountAvatar({ src, name }: { src?: string | null; name: string }) {
 }
 
 const TIMEZONE_LABELS: Record<string, string> = {
-  'Asia/Baghdad': 'بغداد', 'Asia/Riyadh': 'الرياض', 'Asia/Dubai': 'دبي', 'Asia/Kuwait': 'الكويت', 'Asia/Qatar': 'قطر',
-  'Asia/Bahrain': 'البحرين', 'Asia/Muscat': 'مسقط', 'Africa/Cairo': 'القاهرة', 'Asia/Amman': 'عمّان', 'Asia/Beirut': 'بيروت',
-  'Europe/Istanbul': 'إسطنبول', 'Europe/London': 'لندن', 'America/New_York': 'نيويورك',
+  'Asia/Baghdad': 'بغداد (UTC+3)',
+  'Asia/Riyadh': 'الرياض (UTC+3)',
+  'Asia/Dubai': 'دبي (UTC+4)',
+  'Asia/Kuwait': 'الكويت (UTC+3)',
+  'Asia/Qatar': 'قطر (UTC+3)',
+  'Asia/Bahrain': 'البحرين (UTC+3)',
+  'Asia/Muscat': 'مسقط (UTC+4)',
+  'Africa/Cairo': 'القاهرة (UTC+2)',
+  'Asia/Amman': 'عمّان',
+  'Asia/Beirut': 'بيروت',
+  'Europe/Istanbul': 'إسطنبول',
+  'Europe/London': 'لندن',
+  'America/New_York': 'نيويورك / الولايات المتحدة (UTC−5)',
+  'America/Chicago': 'شيكاغو (UTC−6)',
+  'America/Los_Angeles': 'لوس أنجلوس (UTC−8)',
+  'Etc/GMT+5': 'الولايات المتحدة (UTC−5)',
+  'Etc/GMT+4': 'الولايات المتحدة (UTC−4)',
+  'Etc/GMT-3': 'بغداد / الرياض (UTC+3)',
 };
+
+function timezoneLabel(zone?: string | null) {
+  if (!zone) return 'غير معروف';
+  return TIMEZONE_LABELS[zone] || zone;
+}
 
 type AdvertiserRow = { advertiserId: string; name: string | null; currency: string | null; timezone?: string | null };
 type DraftVideo = TikTokSparkVideo & { key: string };
@@ -1899,7 +1919,7 @@ function NewTikTokCampaignForm() {
         scheduleMode: group.scheduleMode === 'RANGE' ? 'RANGE' : 'CONTINUOUS',
         scheduleStartDate: group.scheduleMode === 'RANGE' ? group.scheduleStartDate : undefined,
         scheduleEndDate: group.scheduleMode === 'RANGE' ? group.scheduleEndDate : undefined,
-        timezone: group.timezone,
+        timezone: selectedAdvertiser?.timezone || group.timezone || timezone,
         devices: group.devices,
         minAndroidVersion: undefined,
         minIosVersion: undefined,
@@ -3633,21 +3653,15 @@ function NewTikTokCampaignForm() {
                     </div>
                   )}
                   <div className="grid gap-2">
-                    <Label>توقيت الجدولة</Label>
-                    <select className="h-10 rounded-md border bg-background px-3 text-sm" value={timezone} onChange={(event) => setTimezone(event.target.value)}>
-                      {Object.entries({
-                        ...TIMEZONE_LABELS,
-                        ...(selectedAdvertiser?.timezone && !TIMEZONE_LABELS[selectedAdvertiser.timezone]
-                          ? { [selectedAdvertiser.timezone]: `توقيت الحساب (${selectedAdvertiser.timezone})` }
-                          : {}),
-                      }).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-                    </select>
-                    <p className="text-xs text-muted-foreground">
-                      تيك توك يعتمد توقيت الحساب الإعلاني
-                      {selectedAdvertiser?.timezone
-                        ? ` (${TIMEZONE_LABELS[selectedAdvertiser.timezone] || selectedAdvertiser.timezone})`
-                        : ''}.
-                      {' '}إذا اخترت بغداد نُحوّل الوقت تلقائياً إلى توقيت الحساب قبل النشر.
+                    <Label>توقيت الحساب الإعلاني (تيك توك)</Label>
+                    <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm" dir="ltr">
+                      {timezoneLabel(selectedAdvertiser?.timezone || timezone)}
+                    </div>
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      توقيت الحساب يُحدَّد عند إنشاء الحساب في تيك توك ولا يمكن تغييره لاحقاً (لا من جات لورا ولا من مدير الإعلانات).
+                      لذلك ستظهر الحملة دائماً بتوقيت هذا الحساب
+                      {selectedAdvertiser?.timezone ? ` (${timezoneLabel(selectedAdvertiser.timezone)})` : ''}.
+                      إذا أردت بغداد UTC+3 يجب إنشاء حساب إعلاني جديد بتوقيت بغداد من Business Center.
                     </p>
                   </div>
                   <DaypartEditor week={week} onChange={setWeek} />
