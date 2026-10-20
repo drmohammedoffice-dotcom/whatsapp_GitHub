@@ -1,0 +1,45 @@
+# EAS Build uploads the git root, but only the Expo app in apps/mobile is needed.
+# Leaving out the root pnpm files also keeps EAS on apps/mobile's npm lockfile.
+# (Listed explicitly: EAS's ignore matcher does not honour `/*` + `!dir/` re-includes.)
+# Add new top-level folders here if they should not be uploaded.
+/.dockerignore
+/.env.example
+/.env.production.example
+/.github
+/.gitignore
+/.railwayignore
+/Caddyfile
+/*.md
+/android
+/deploy
+/docker-compose*.yml
+/docs
+/marketing
+/package.json
+/packages
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
+/railway*.json
+/scripts
+/storage
+/tsconfig.base.json
+/apps/api
+/apps/desktop
+/apps/web
+/apps/worker
+
+# Same exclusions as apps/mobile/.gitignore (this file replaces .gitignore for EAS)
+node_modules/
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+play-store-service-account.json
+.env
+.env.*
+/apps/mobile/android
+/apps/mobile/ios

@@ -1,47 +1,44 @@
 import type { ExpoConfig } from 'expo/config';
 
 const APP_URL = process.env.EXPO_PUBLIC_CHATLOORA_URL || 'https://www.chatloora.com';
+const EAS_PROJECT_ID = '35e3a22f-c864-461b-898e-4dfa8c805004';
 
 const config: ExpoConfig = {
   name: 'ChatLoora',
   slug: 'chatloora',
+  owner: 'hexdefender1',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'chatloora',
   userInterfaceStyle: 'automatic',
-  newArchEnabled: true,
-  splash: {
-    image: './assets/splash-icon.png',
-    resizeMode: 'contain',
-    backgroundColor: '#0f172a',
-  },
+  backgroundColor: '#0f172a',
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.chatloora.app',
-    buildNumber: '1',
     infoPlist: {
       NSCameraUsageDescription: 'ChatLoora needs camera access for media uploads in chat and store.',
       NSPhotoLibraryUsageDescription: 'ChatLoora needs photo library access for media uploads.',
       NSMicrophoneUsageDescription: 'ChatLoora needs microphone access for voice notes.',
       CFBundleAllowMixedLocalizations: true,
+      ITSAppUsesNonExemptEncryption: false,
     },
     associatedDomains: ['applinks:www.chatloora.com', 'applinks:chatloora.com'],
   },
   android: {
     package: 'com.chatloora.app',
-    versionCode: 1,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#0f172a',
+      backgroundColor: '#ffffff',
     },
-    permissions: [
-      'INTERNET',
-      'CAMERA',
-      'RECORD_AUDIO',
-      'READ_MEDIA_IMAGES',
-      'READ_MEDIA_VIDEO',
-      'POST_NOTIFICATIONS',
+    // The WebView file chooser uses the system picker, so no media/storage permissions are needed.
+    permissions: ['INTERNET', 'CAMERA', 'RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS'],
+    blockedPermissions: [
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.READ_MEDIA_IMAGES',
+      'android.permission.READ_MEDIA_VIDEO',
+      'android.permission.SYSTEM_ALERT_WINDOW',
     ],
     intentFilters: [
       {
@@ -59,23 +56,19 @@ const config: ExpoConfig = {
     favicon: './assets/favicon.png',
   },
   plugins: [
-    'expo-router',
     [
       'expo-splash-screen',
       {
         backgroundColor: '#0f172a',
         image: './assets/splash-icon.png',
+        imageWidth: 200,
       },
     ],
+    'expo-web-browser',
   ],
-  experiments: {
-    typedRoutes: true,
-  },
   extra: {
     appUrl: APP_URL,
-    eas: {
-      projectId: 'chatloora-mobile-replace-with-eas-id',
-    },
+    eas: { projectId: EAS_PROJECT_ID },
   },
 };
 

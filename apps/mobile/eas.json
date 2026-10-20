@@ -1,23 +1,32 @@
 {
   "cli": {
-    "version": ">= 14.0.0",
+    "version": ">= 16.0.0",
     "appVersionSource": "remote"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
+    "base": {
+      "node": "22.18.0",
+      "env": {
+        "EXPO_PUBLIC_CHATLOORA_URL": "https://www.chatloora.com"
+      }
     },
-    "preview": {
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "ios": {
-        "simulator": false
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
       }
     },
     "production": {
+      "extends": "base",
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
@@ -27,13 +36,7 @@
   "submit": {
     "production": {
       "android": {
-        "serviceAccountKeyPath": "./play-store-service-account.json",
         "track": "internal"
-      },
-      "ios": {
-        "appleId": "REPLACE_APPLE_ID_EMAIL",
-        "ascAppId": "REPLACE_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "REPLACE_APPLE_TEAM_ID"
       }
     }
   }
