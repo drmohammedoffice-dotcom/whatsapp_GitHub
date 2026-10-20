@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AutomationActionType, AutomationTriggerType, ConversationEventType } from '@watsapp/database';
+import { AiTrainingPlatform, AutomationActionType, AutomationTriggerType, ConversationEventType } from '@watsapp/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiSettingsService } from './ai-settings.service';
 
@@ -9,6 +9,7 @@ export type InboundContext = {
   contactId: string;
   messageText?: string | null;
   isNewConversation?: boolean;
+  platform?: AiTrainingPlatform;
 };
 
 @Injectable()
@@ -42,7 +43,7 @@ export class AutomationService {
   async evaluateInbound(ctx: InboundContext): Promise<Array<{ action: AutomationActionType; message?: string; labelId?: string; assigneeUserId?: string }>> {
     const [rules, aiSettings] = await Promise.all([
       this.prisma.automationRule.findMany({ where: { teamId: ctx.teamId, enabled: true }, orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }] }),
-      this.settings.ensure(ctx.teamId),
+      this.settings.ensure(ctx.teamId, ctx.platform),
     ]);
 
     const results: Array<{ action: AutomationActionType; message?: string; labelId?: string; assigneeUserId?: string }> = [];

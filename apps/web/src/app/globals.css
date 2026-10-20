@@ -36,33 +36,47 @@
   --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 8px 24px -4px rgb(0 0 0 / 0.08);
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+.dir-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+.landing-root {
+  font-feature-settings: "ss01" on, "cv01" on;
+}
+
 @layer base {
   :root {
-    --background: 220 20% 98%;
-    --foreground: 224 71% 4%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
-    --primary: 243 75% 59%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 224 71% 4%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 243 75% 97%;
-    --accent-foreground: 243 75% 40%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 199 89% 94%;
+    --accent-foreground: 199 89% 28%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 243 75% 59%;
-    --radius: 0.625rem;
-    --sidebar: 0 0% 100%;
-    --sidebar-foreground: 224 71% 4%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-accent: 243 75% 97%;
-    --sidebar-accent-foreground: 243 75% 40%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 262 83% 58%;
+    --radius: 0.9rem;
+    --sidebar: 250 42% 14%;
+    --sidebar-foreground: 250 40% 98%;
+    --sidebar-border: 250 30% 22%;
+    --sidebar-accent: 262 72% 52%;
+    --sidebar-accent-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -108,6 +122,31 @@
   html[dir='rtl'] body {
     font-family: var(--font-arabic), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.45) hsl(var(--muted));
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.45);
+    border-radius: 999px;
+    border: 2px solid hsl(var(--muted));
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.7);
+  }
 }
 
 @layer utilities {
@@ -121,5 +160,24 @@
 
   html[dir='rtl'] .rtl-flip {
     transform: scaleX(-1);
+  }
+}
+
+@layer components {
+  button:not(:disabled),
+  a[href],
+  [role='button']:not([aria-disabled='true']) {
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 180ms ease,
+      background-color 180ms ease,
+      opacity 180ms ease,
+      filter 180ms ease;
+  }
+
+  button:active:not(:disabled),
+  a[href]:active,
+  [role='button']:active:not([aria-disabled='true']) {
+    transform: scale(0.97);
   }
 }

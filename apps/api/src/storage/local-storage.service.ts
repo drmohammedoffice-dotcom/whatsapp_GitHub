@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
-import { extname, join, normalize } from 'path';
+import { mkdir, unlink, writeFile, readFile } from 'fs/promises';
+import { resolve, sep, extname, join, normalize } from 'path';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
 
 @Injectable()
@@ -34,8 +34,25 @@ export class LocalStorageService {
   }
 
   resolvePath(storageKey: string) {
-    const safeKey = normalize(storageKey).replace(/^(\.\.(\/|\\|$))+/, '');
-    return join(this.root, safeKey);
+    const root = resolve(this.root);
+    const cleaned = normalize(storageKey).replace(/^([.]{2,}[/\\])+/, '').replace(/^[/\\]+/, '');
+    const resolved = resolve(root, cleaned);
+    if (resolved !== root && !resolved.startsWith(root + sep)) {
+      throw new Error('Invalid storage key');
+    }
+    return resolved;
+  }
+
+  async remove(storageKey: string) {
+    try {
+      await unlink(this.resolvePath(storageKey));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+
+  async readBuffer(storageKey: string) {
+    return readFile(this.resolvePath(storageKey));
   }
 
   private extensionFromMime(mime: string) {
@@ -45,6 +62,7 @@ export class LocalStorageService {
     if (mime === 'image/gif') return '.gif';
     if (mime === 'application/pdf') return '.pdf';
     if (mime === 'audio/ogg' || mime.startsWith('audio/ogg')) return '.ogg';
+    if (mime === 'audio/webm' || mime.startsWith('audio/webm')) return '.webm';
     if (mime === 'audio/mpeg') return '.mp3';
     if (mime === 'audio/mp4' || mime === 'audio/m4a') return '.m4a';
     if (mime === 'video/mp4') return '.mp4';

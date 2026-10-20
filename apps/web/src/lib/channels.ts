@@ -2,7 +2,13 @@ import { Camera, MessageCircle, MessageSquare, Send, type LucideIcon } from 'luc
 
 export type ChannelSlug = 'whatsapp' | 'messenger' | 'instagram' | 'telegram';
 
-export type ChannelProvider = 'WHATSAPP_BAILEYS' | 'META_MESSENGER' | 'META_INSTAGRAM' | 'TELEGRAM';
+export type ChannelProvider =
+  | 'WHATSAPP_BAILEYS'
+  | 'WHATSAPP_CLOUD'
+  | 'META_MESSENGER'
+  | 'META_INSTAGRAM'
+  | 'TELEGRAM'
+  | 'TELEGRAM_USER';
 
 export type ChannelDefinition = {
   slug: ChannelSlug;
@@ -64,7 +70,7 @@ export const channelDefinitions: ChannelDefinition[] = [
   },
   {
     slug: 'telegram',
-    provider: 'TELEGRAM',
+    provider: 'TELEGRAM_USER',
     connectHref: '/telegram',
     inboxHref: '/inbox/telegram',
     icon: Send,

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TikTokEventType } from '@watsapp/database';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
 
 export class TikTokConnectDto {
   @ApiPropertyOptional({ description: 'Optional advertiser ID to pre-select after OAuth' })
@@ -133,4 +133,21 @@ export class TikTokEventsQueryDto {
   @Min(1)
   @Max(500)
   limit?: number;
+}
+
+export class TikTokAppCredentialsDto {
+  @ApiProperty({ description: 'TikTok Developer App Client Key (App ID)' })
+  @IsString()
+  @MinLength(4)
+  clientKey!: string;
+
+  @ApiPropertyOptional({ description: 'Leave empty to keep existing secret when updating' })
+  @IsOptional()
+  @IsString()
+  clientSecret?: string;
+
+  @ApiPropertyOptional({ description: 'OAuth redirect URI registered in TikTok Developer portal' })
+  @IsOptional()
+  @IsString()
+  redirectUri?: string;
 }

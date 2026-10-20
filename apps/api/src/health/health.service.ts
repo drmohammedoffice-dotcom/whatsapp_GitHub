@@ -8,7 +8,7 @@ export class HealthService {
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
   live() {
-    return { status: 'ok', service: 'api', uptime: process.uptime(), timestamp: new Date().toISOString() };
+    return { status: 'ok' };
   }
 
   async ready() {

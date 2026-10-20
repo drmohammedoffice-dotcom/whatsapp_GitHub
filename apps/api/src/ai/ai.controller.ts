@@ -1,4 +1,4 @@
-﻿import { Body, Controller, Get, Param, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -17,6 +17,7 @@ import { AiMediaService } from './ai-media.service';
 import { AiMemoryService } from './ai-memory.service';
 import { AiProviderConfigService } from './ai-provider-config.service';
 import { AiSettingsService } from './ai-settings.service';
+import { parseAiTrainingPlatform } from './ai-platform';
 import { AiTrainingMediaService } from './ai-training-media.service';
 import { AiToolsService } from './ai-tools.service';
 import { AiTransferService } from './ai-transfer.service';
@@ -108,6 +109,12 @@ export class AiController {
   @RequirePermissions(Permission.AI_MANAGE_KNOWLEDGE)
   document(@CurrentPrincipal() principal: AuthenticatedPrincipal, @UploadedFile() file: UploadedMediaFile) { return this.knowledge.ingestUpload(principal.teamId, file); }
 
+  @Delete('knowledge/:id')
+  @RequirePermissions(Permission.AI_MANAGE_KNOWLEDGE)
+  deleteKnowledge(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('id') id: string) {
+    return this.knowledge.remove(principal.teamId, id);
+  }
+
   @Post('search')
   @RequirePermissions(Permission.AI_ACCESS)
   search(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: SearchDto) { return this.knowledge.search(principal.teamId, dto.query); }
@@ -156,11 +163,18 @@ export class AiController {
 
   @Get('settings')
   @RequirePermissions(Permission.AI_ACCESS)
-  getSettings(@CurrentPrincipal() principal: AuthenticatedPrincipal) { return this.settings.get(principal.teamId); }
+  getSettings(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Query('platform') platform?: string,
+  ) {
+    return this.settings.get(principal.teamId, parseAiTrainingPlatform(platform));
+  }
 
   @Post('settings')
   @RequirePermissions(Permission.AI_MANAGE_TOOLS)
-  updateSettings(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: AiSettingsDto) { return this.settings.update(principal.teamId, dto); }
+  updateSettings(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: AiSettingsDto) {
+    return this.settings.update(principal.teamId, dto);
+  }
 
   @Get('providers')
   @RequirePermissions(Permission.AI_MANAGE_TOOLS)
@@ -228,8 +242,20 @@ export class AiController {
 
   @Get('training-media')
   @RequirePermissions(Permission.AI_MANAGE_KNOWLEDGE)
-  listTrainingMedia(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
-    return this.trainingMedia.list(principal.teamId);
+  listTrainingMedia(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Query('platform') platform?: string,
+    @Query('voiceNotes') voiceNotes?: string,
+  ) {
+    const voiceNotesOnly =
+      voiceNotes === '1' || voiceNotes === 'true'
+        ? true
+        : voiceNotes === '0' || voiceNotes === 'false'
+          ? false
+          : undefined;
+    return this.trainingMedia.list(principal.teamId, parseAiTrainingPlatform(platform), {
+      voiceNotesOnly,
+    });
   }
 
   @Post('training-media')
@@ -242,8 +268,25 @@ export class AiController {
     @Body('productName') productName?: string,
     @Body('description') description?: string,
     @Body('tags') tags?: string,
+    @Body('platform') platform?: string,
+    @Body('isVoiceNote') isVoiceNote?: string,
+    @Body('voiceLibraryType') voiceLibraryType?: string,
+    @Body('category') category?: string,
+    @Body('language') language?: string,
+    @Body('durationSeconds') durationSeconds?: string,
   ) {
-    return this.trainingMedia.upload(principal.teamId, file, { title: title || file.originalname, productName, description, tags });
+    return this.trainingMedia.upload(principal.teamId, file, {
+      title: title || file.originalname,
+      productName,
+      description,
+      tags,
+      platform: parseAiTrainingPlatform(platform),
+      isVoiceNote: isVoiceNote === '1' || isVoiceNote === 'true' || isVoiceNote === 'yes',
+      voiceLibraryType: voiceLibraryType === 'PROFILE' ? 'PROFILE' : 'LIBRARY',
+      category,
+      language,
+      durationSeconds: durationSeconds ? Number(durationSeconds) : undefined,
+    });
   }
 
   @Get('training-media/:id/file')
@@ -264,5 +307,15 @@ export class AiController {
   @RequirePermissions(Permission.AI_MANAGE_KNOWLEDGE)
   deleteTrainingMedia(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('id') id: string) {
     return this.trainingMedia.remove(principal.teamId, id);
+  }
+
+  @Get('agents')
+  @RequirePermissions(Permission.AI_ACCESS)
+  listAgents(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.prisma.aiAgent.findMany({
+      where: { teamId: principal.teamId, enabled: true },
+      select: { id: true, name: true, type: true, model: true },
+      orderBy: { name: 'asc' },
+    });
   }
 }

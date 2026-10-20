@@ -16,6 +16,11 @@
   "devDependencies": {
     "@types/node": "latest",
     "prettier": "latest",
-    "typescript": "latest"
+    "typescript": "6.0.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "typescript": "6.0.3"
+    }
   }
 }

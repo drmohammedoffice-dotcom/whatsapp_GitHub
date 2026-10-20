@@ -14,13 +14,14 @@ type LocaleContextValue = {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 function readStoredLocale(): Locale {
-  if (typeof window === 'undefined') return 'en';
+  if (typeof window === 'undefined') return 'ar';
   const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return stored === 'ar' ? 'ar' : 'en';
+  if (stored === 'en' || stored === 'ar') return stored;
+  return 'ar';
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('en');
+  const [locale, setLocaleState] = useState<Locale>('ar');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

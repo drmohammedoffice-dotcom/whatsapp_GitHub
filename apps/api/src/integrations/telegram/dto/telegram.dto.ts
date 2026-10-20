@@ -18,3 +18,10 @@ export class TelegramDisconnectDto {
   @IsString()
   channelId!: string;
 }
+
+export class TelegramValidateDto {
+  @ApiProperty({ description: 'Bot token from @BotFather' })
+  @IsString()
+  @MinLength(20)
+  botToken!: string;
+}

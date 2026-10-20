@@ -1,13 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { WhatsAppConnectionLogEvent, WhatsAppSessionStatus } from '@watsapp/database';
+import { ChannelPurpose, WhatsAppConnectionLogEvent, WhatsAppSessionStatus } from '@watsapp/database';
 import { AuditService } from '../../audit/audit.service';
+import { fromPrismaPurpose, isTrackingChannel, toPrismaPurpose } from '../../channels/channel-purpose';
 import { ChannelsService } from '../../channels/channels.service';
 import { BaileysCredentialStore } from './baileys-credential.store';
 import { BaileysProvider } from './baileys.provider';
@@ -15,7 +17,7 @@ import { WhatsAppEventsService } from './events.service';
 import { SessionContext } from './interfaces/session.interface';
 import { QrGateway } from './qr.gateway';
 import { SessionManager } from './session.manager';
-import { phoneFromJid, toWhatsAppJid } from './utils/disconnect.util';
+import { phoneFromJid, resolveStoredPhone, toWhatsAppJid } from './utils/disconnect.util';
 import { WhatsAppRepository } from './whatsapp.repository';
 
 @Injectable()
@@ -46,43 +48,84 @@ export class WhatsAppService implements OnModuleInit {
 
   private async restoreAllSessions() {
     const sessions = await this.repository.findRestorableSessions();
-    this.logger.log(`Restoring ${sessions.length} WhatsApp session(s)`);
-    await Promise.allSettled(
-      sessions.map((session) =>
-        this.startSocket({ teamId: session.teamId, sessionId: session.id, userId: session.createdByUserId ?? undefined }, true),
-      ),
+    // Inbox must come online before TikTok tracking for the same phone, otherwise
+    // Baileys "conflict: replaced" steals the Inbox socket and new chats never appear.
+    const inbox = sessions.filter((s) => s.purpose === ChannelPurpose.INBOX);
+    const tracking = sessions.filter((s) => s.purpose === ChannelPurpose.TRACKING);
+    const ordered = [...inbox, ...tracking];
+    this.logger.log(
+      `Restoring ${ordered.length} WhatsApp session(s) (inbox=${inbox.length}, tracking=${tracking.length}) staggered`,
     );
+
+    for (let i = 0; i < ordered.length; i += 1) {
+      const session = ordered[i]!;
+      try {
+        await this.startSocket(
+          { teamId: session.teamId, sessionId: session.id, userId: session.createdByUserId ?? undefined },
+          true,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to restore session ${session.id} (${session.purpose}): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      // Give WhatsApp time to settle before opening the next linked device.
+      if (i < ordered.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, session.purpose === ChannelPurpose.INBOX ? 2000 : 3500));
+      }
+    }
   }
 
+  /** Inbox / Integrations → WhatsApp only. */
   list(teamId: string, userId?: string) {
-    return this.repository.listSessions(teamId, userId);
+    return this.repository.listSessions(teamId, userId, ChannelPurpose.INBOX);
   }
 
-  async connect(teamId: string, userId?: string, displayName?: string, sessionId?: string) {
+  listTracking(teamId: string, userId?: string) {
+    return this.repository.listSessions(teamId, userId, ChannelPurpose.TRACKING);
+  }
+
+  async connect(
+    teamId: string,
+    userId?: string,
+    displayName?: string,
+    sessionId?: string,
+    options?: { purpose?: 'inbox' | 'tracking'; integrationId?: string },
+  ) {
+    const purpose = toPrismaPurpose(options?.purpose ?? 'inbox');
     if (sessionId) {
-      const session = await this.ensureSession(teamId, sessionId);
+      const session = await this.ensureSession(teamId, sessionId, purpose);
       if (session.status === WhatsAppSessionStatus.CONNECTED && this.sessionManager.hasSocket(sessionId)) {
         throw new ConflictException('Already connected');
       }
       await this.startSocket({ teamId, sessionId, userId }, false);
-      return this.getStatus(teamId, sessionId);
+      return this.getStatus(teamId, sessionId, purpose);
     }
 
-    const session = await this.repository.createSession(teamId, userId, displayName);
-    await this.channels.ensureWhatsAppChannel(teamId, session.id);
-    await this.audit.log({ teamId, actorUserId: userId, action: 'whatsapp.connect', resource: 'WhatsAppSession', resourceId: session.id });
+    const session = await this.repository.createSession(teamId, userId, displayName, purpose);
+    await this.channels.ensureWhatsAppChannel(teamId, session.id, {
+      purpose: fromPrismaPurpose(purpose),
+      integrationId: options?.integrationId,
+    });
+    await this.audit.log({
+      teamId,
+      actorUserId: userId,
+      action: purpose === ChannelPurpose.TRACKING ? 'whatsapp.tracking.connect' : 'whatsapp.connect',
+      resource: 'WhatsAppSession',
+      resourceId: session.id,
+    });
     await this.repository.logConnection({
       teamId,
       sessionId: session.id,
       event: WhatsAppConnectionLogEvent.CONNECTING,
-      message: 'Connection initiated',
+      message: purpose === ChannelPurpose.TRACKING ? 'TikTok tracking connection initiated' : 'Connection initiated',
     });
     await this.startSocket({ teamId, sessionId: session.id, userId }, false);
-    return this.getStatus(teamId, session.id);
+    return this.getStatus(teamId, session.id, purpose);
   }
 
-  async getQr(teamId: string, sessionId: string) {
-    const session = await this.ensureSession(teamId, sessionId);
+  async getQr(teamId: string, sessionId: string, purpose?: ChannelPurpose) {
+    const session = await this.ensureSession(teamId, sessionId, purpose);
     if (session.status === WhatsAppSessionStatus.CONNECTED) {
       throw new BadRequestException('Session already connected');
     }
@@ -95,10 +138,11 @@ export class WhatsAppService implements OnModuleInit {
     return { sessionId, qrCode: session.qrCode, status: session.status, expiresAt: session.qrCodeUpdatedAt };
   }
 
-  async getStatus(teamId: string, sessionId: string) {
-    const session = await this.ensureSession(teamId, sessionId);
+  async getStatus(teamId: string, sessionId: string, purpose?: ChannelPurpose) {
+    const session = await this.ensureSession(teamId, sessionId, purpose);
     return {
       sessionId: session.id,
+      purpose: fromPrismaPurpose(session.purpose),
       status: session.status,
       displayName: session.displayName,
       phoneNumber: session.phoneNumber,
@@ -110,8 +154,8 @@ export class WhatsAppService implements OnModuleInit {
     };
   }
 
-  async getProfile(teamId: string, sessionId: string) {
-    const session = await this.ensureSession(teamId, sessionId);
+  async getProfile(teamId: string, sessionId: string, purpose?: ChannelPurpose) {
+    const session = await this.ensureSession(teamId, sessionId, purpose);
     return {
       sessionId: session.id,
       displayName: session.displayName,
@@ -124,8 +168,8 @@ export class WhatsAppService implements OnModuleInit {
     };
   }
 
-  async disconnect(teamId: string, sessionId: string, userId?: string) {
-    await this.ensureSession(teamId, sessionId);
+  async disconnect(teamId: string, sessionId: string, userId?: string, purpose?: ChannelPurpose) {
+    await this.ensureSession(teamId, sessionId, purpose);
     await this.stopSocket(sessionId, true);
     await this.repository.updateSession(sessionId, {
       status: WhatsAppSessionStatus.DISCONNECTED,
@@ -144,16 +188,18 @@ export class WhatsAppService implements OnModuleInit {
     return this.getStatus(teamId, sessionId);
   }
 
-  async reconnect(teamId: string, sessionId: string, userId?: string) {
+  async reconnect(teamId: string, sessionId: string, userId?: string, purpose?: ChannelPurpose) {
+    await this.ensureSession(teamId, sessionId, purpose);
     await this.stopSocket(sessionId, false);
     await this.repository.updateSession(sessionId, { failureReason: null, qrCode: null });
     await this.startSocket({ teamId, sessionId, userId }, false);
     await this.audit.log({ teamId, actorUserId: userId, action: 'whatsapp.reconnect', resource: 'WhatsAppSession', resourceId: sessionId });
-    return this.getStatus(teamId, sessionId);
+    return this.getStatus(teamId, sessionId, purpose);
   }
 
-  async deleteSession(teamId: string, sessionId: string, userId?: string) {
-    await this.ensureSession(teamId, sessionId);
+  async deleteSession(teamId: string, sessionId: string, userId?: string, purpose?: ChannelPurpose) {
+    await this.ensureSession(teamId, sessionId, purpose);
+    await this.channels.deleteByWhatsAppSessionId(teamId, sessionId);
     await this.stopSocket(sessionId, true);
     try {
       await this.credentials.purge(sessionId);
@@ -166,26 +212,81 @@ export class WhatsAppService implements OnModuleInit {
   }
 
   getChats(teamId: string, sessionId: string) {
-    return this.ensureSession(teamId, sessionId).then(() => this.repository.listChats(teamId, sessionId));
+    return this.ensureSession(teamId, sessionId, ChannelPurpose.INBOX).then(() => this.repository.listChats(teamId, sessionId));
   }
 
   getMessages(teamId: string, sessionId: string, chatId?: string) {
-    return this.ensureSession(teamId, sessionId).then(() => this.repository.listMessages(teamId, sessionId, chatId));
+    return this.ensureSession(teamId, sessionId, ChannelPurpose.INBOX).then(() => this.repository.listMessages(teamId, sessionId, chatId));
   }
 
   getConnectionLogs(teamId: string, sessionId: string) {
     return this.ensureSession(teamId, sessionId).then(() => this.repository.listConnectionLogs(teamId, sessionId));
   }
 
-  // Legacy API compatibility
+  // Legacy API compatibility — Inbox only
   create(teamId: string, displayName?: string, userId?: string) {
-    return this.connect(teamId, userId, displayName);
+    return this.connect(teamId, userId, displayName, undefined, { purpose: 'inbox' });
   }
 
   async send(teamId: string, sessionId: string, jid: string, content: Record<string, unknown>) {
-    await this.ensureSession(teamId, sessionId);
-    const socket = this.sessionManager.getSocket(sessionId) ?? (await this.startSocket({ teamId, sessionId }, false));
-    return socket.sendMessage(toWhatsAppJid(jid), content) as Promise<{ key?: { id?: string } }>;
+    await this.ensureSession(teamId, sessionId, ChannelPurpose.INBOX);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const socket = await this.ensureLiveSocket({ teamId, sessionId }, attempt > 0);
+        return (await socket.sendMessage(toWhatsAppJid(jid), content)) as { key?: { id?: string } };
+      } catch (error) {
+        if (attempt === 0 && this.isSendConnectionError(error)) {
+          await this.stopSocket(sessionId, false);
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new BadRequestException('WhatsApp is not connected. Close other WhatsApp Web sessions and retry.');
+  }
+
+  isSessionLive(sessionId: string) {
+    return Boolean(this.sessionManager.getSocket(sessionId)?.user?.id);
+  }
+
+  async resolveSessionPhoneNumber(teamId: string, sessionId: string): Promise<string | null> {
+    const session = await this.repository.findSessionForTeam(teamId, sessionId);
+    if (!session) return null;
+
+    const stored = resolveStoredPhone({
+      phoneNumber: session.phoneNumber,
+      jid: session.jid,
+    });
+    if (stored) return stored;
+
+    const socket = this.sessionManager.getSocket(sessionId);
+    const jid = socket?.user?.id ?? session.jid;
+    if (!jid) return null;
+
+    let phone = phoneFromJid(jid);
+    if (!phone && jid.includes('@lid')) {
+      phone = await this.resolvePhoneNumber(teamId, sessionId, jid);
+    }
+    if (phone) {
+      await this.repository.clearPhoneForOtherSessions(teamId, sessionId, phone, session.purpose);
+      await this.repository.updateSession(sessionId, { phoneNumber: phone, jid });
+      const channel = await this.channels.ensureWhatsAppChannel(teamId, sessionId, {
+        purpose: fromPrismaPurpose(session.purpose),
+      });
+      if (session.purpose === ChannelPurpose.TRACKING || isTrackingChannel(channel)) {
+        await this.channels.updateTrackingPhoneLabel(channel.id, phone);
+      }
+    }
+    return phone;
+  }
+
+  async ensureLiveSocket(context: SessionContext, force = false) {
+    if (!force) {
+      const existing = this.sessionManager.getSocket(context.sessionId);
+      if (existing?.user?.id) return existing;
+    }
+    await this.stopSocket(context.sessionId, false);
+    return this.startSocket(context, true);
   }
 
   /**
@@ -222,10 +323,23 @@ export class WhatsAppService implements OnModuleInit {
 
   private async startSocket(context: SessionContext, restored: boolean) {
     const { teamId, sessionId } = context;
-    if (this.sessionManager.hasSocket(sessionId)) return this.sessionManager.getSocket(sessionId)!;
+
+    const live = this.sessionManager.getSocket(sessionId);
+    if (live?.user?.id) return live;
+
     if (this.starting.has(sessionId)) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      return this.sessionManager.getSocket(sessionId)!;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const socket = this.sessionManager.getSocket(sessionId);
+        if (socket?.user?.id) return socket;
+        if (!this.starting.has(sessionId)) break;
+      }
+      const socket = this.sessionManager.getSocket(sessionId);
+      if (socket?.user?.id) return socket;
+    }
+
+    if (this.sessionManager.hasSocket(sessionId)) {
+      await this.stopSocket(sessionId, false);
     }
 
     this.starting.add(sessionId);
@@ -259,9 +373,19 @@ export class WhatsAppService implements OnModuleInit {
     this.sessionManager.removeSocket(sessionId);
   }
 
-  private async ensureSession(teamId: string, sessionId: string) {
+  private async ensureSession(teamId: string, sessionId: string, purpose?: ChannelPurpose) {
     const session = await this.repository.findSessionForTeam(teamId, sessionId);
     if (!session) throw new NotFoundException('WhatsApp session not found');
+    if (purpose && session.purpose !== purpose) {
+      throw new ForbiddenException(
+        `This WhatsApp session belongs to ${fromPrismaPurpose(session.purpose)} and cannot be managed from ${fromPrismaPurpose(purpose)}`,
+      );
+    }
     return session;
+  }
+
+  private isSendConnectionError(error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return /connection closed|precondition required|conflict|not connected|stream errored/i.test(msg);
   }
 }

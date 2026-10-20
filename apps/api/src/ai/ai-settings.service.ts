@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { AiTrainingPlatform } from '@watsapp/database';
+import { PlanEntitlementsService } from '../billing/plan-entitlements.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiKnowledgeService } from './ai-knowledge.service';
-
-export const AI_TRAINING_DOC_TITLE = '__ai_training_instructions__';
+import { parseAiTrainingPlatform, trainingDocTitle } from './ai-platform';
 
 export type BusinessHoursConfig = {
   timezone?: string;
@@ -16,43 +17,68 @@ export class AiSettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly knowledge: AiKnowledgeService,
+    private readonly entitlements: PlanEntitlementsService,
   ) {}
 
-  get(teamId: string) {
-    return this.ensure(teamId);
+  get(teamId: string, platform: AiTrainingPlatform = AiTrainingPlatform.WHATSAPP) {
+    return this.ensure(teamId, platform);
   }
 
-  async update(teamId: string, data: Partial<{
-    enabled: boolean;
-    autoReplyEnabled: boolean;
-    confidenceThreshold: number;
-    greetingMessage: string | null;
-    outOfOfficeMessage: string | null;
-    businessHours: BusinessHoursConfig | null;
-    holidayReplies: HolidayReply[] | null;
-    transferOnLowConfidence: boolean;
-    transferOnComplaint: boolean;
-    transferOnRefund: boolean;
-    transferOnSensitive: boolean;
-    transferOnHumanRequest: boolean;
-    customTransferRules: unknown;
-    pauseAiOnHumanReply: boolean;
-    pauseAiOnAssignment: boolean;
-    monthlyBudgetCents: number | null;
-    systemPromptOverride: string | null;
-  }>) {
-    await this.ensure(teamId);
-    const updated = await this.prisma.aiSettings.update({ where: { teamId }, data: data as never });
+  async update(
+    teamId: string,
+    data: Partial<{
+      enabled: boolean;
+      autoReplyEnabled: boolean;
+      confidenceThreshold: number;
+      greetingMessage: string | null;
+      outOfOfficeMessage: string | null;
+      businessHours: BusinessHoursConfig | null;
+      holidayReplies: HolidayReply[] | null;
+      transferOnLowConfidence: boolean;
+      transferOnComplaint: boolean;
+      transferOnRefund: boolean;
+      transferOnSensitive: boolean;
+      transferOnHumanRequest: boolean;
+      customTransferRules: unknown;
+      pauseAiOnHumanReply: boolean;
+      pauseAiOnAssignment: boolean;
+      monthlyBudgetCents: number | null;
+      systemPromptOverride: string | null;
+    }> & { platform?: AiTrainingPlatform },
+  ) {
+    const platform = parseAiTrainingPlatform(data.platform);
+    const { platform: _ignored, ...patch } = data;
+    // Inbox toggles often flip only autoReplyEnabled — keep `enabled` in sync so
+    // the orchestrator gate (!enabled || !autoReply) does not silently block replies.
+    if (patch.autoReplyEnabled === true && patch.enabled === undefined) {
+      patch.enabled = true;
+    }
+    if (patch.enabled === false && patch.autoReplyEnabled === undefined) {
+      patch.autoReplyEnabled = false;
+    }
+    if (patch.enabled === true || patch.autoReplyEnabled === true) {
+      await this.entitlements.assertAiEnabled(teamId);
+    }
+    await this.ensure(teamId, platform);
+    const updated = await this.prisma.aiSettings.update({
+      where: { teamId_platform: { teamId, platform } },
+      data: patch as never,
+    });
     if (data.systemPromptOverride !== undefined) {
-      await this.syncTrainingKnowledge(teamId, data.systemPromptOverride);
+      await this.syncTrainingKnowledge(teamId, platform, data.systemPromptOverride);
     }
     return updated;
   }
 
-  private async syncTrainingKnowledge(teamId: string, instructions?: string | null) {
+  private async syncTrainingKnowledge(
+    teamId: string,
+    platform: AiTrainingPlatform,
+    instructions?: string | null,
+  ) {
+    const title = trainingDocTitle(platform);
     const content = instructions?.trim();
     const existing = await this.prisma.aiKnowledgeDocument.findFirst({
-      where: { teamId, title: AI_TRAINING_DOC_TITLE },
+      where: { teamId, title },
       select: { id: true },
     });
     if (existing) {
@@ -60,15 +86,15 @@ export class AiSettingsService {
       await this.prisma.aiKnowledgeDocument.delete({ where: { id: existing.id } });
     }
     if (content) {
-      await this.knowledge.ingestText(teamId, { title: AI_TRAINING_DOC_TITLE, content });
+      await this.knowledge.ingestText(teamId, { title, content });
     }
   }
 
-  async ensure(teamId: string) {
+  async ensure(teamId: string, platform: AiTrainingPlatform = AiTrainingPlatform.WHATSAPP) {
     return this.prisma.aiSettings.upsert({
-      where: { teamId },
+      where: { teamId_platform: { teamId, platform } },
       update: {},
-      create: { teamId },
+      create: { teamId, platform },
     });
   }
 

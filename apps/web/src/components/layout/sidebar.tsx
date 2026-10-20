@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
-import { navGroups } from '@/components/layout/nav-config';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChatLooraLogoMark } from '@/components/brand/chatloora-brand';
+import { ChannelBrandIcon } from '@/components/channels/channel-brand-icon';
+import { useIsPlatformAdmin } from '@/components/layout/subscriber-access';
+import { isNavActive, visibleNavGroups } from '@/components/layout/nav-config';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,24 +17,24 @@ import { cn } from '@/lib/utils';
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const { t, dir } = useTranslation();
+  const isPlatformAdmin = useIsPlatformAdmin();
+  const groups = visibleNavGroups(isPlatformAdmin);
 
   return (
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          'flex h-full flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300',
-          collapsed ? 'w-[72px]' : 'w-[260px]',
+          'flex h-full w-full flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200',
+          collapsed ? 'lg:w-[72px]' : 'lg:w-[268px]',
         )}
       >
         <div className={cn('flex h-16 shrink-0 items-center border-b border-sidebar-border px-4', collapsed ? 'justify-center' : '')}>
-          <Link href="/inbox/whatsapp" className={cn('flex items-center gap-2.5', collapsed && 'justify-center')}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-5 w-5" />
-            </div>
+          <Link href="/tiktok/ads/create" prefetch className={cn('flex items-center gap-2.5', collapsed && 'justify-center')}>
+            <ChatLooraLogoMark size={40} />
             {!collapsed && (
               <div>
-                <p className="text-sm font-bold leading-none">Watsapp</p>
-                <p className="text-[10px] text-muted-foreground">{t('auth.platformTagline')}</p>
+                <p className="text-sm font-bold leading-none tracking-tight">ChatLoora</p>
+                <p className="text-[10px] text-sidebar-foreground/60">{t('auth.platformTagline')}</p>
               </div>
             )}
           </Link>
@@ -40,31 +42,42 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
         <ScrollArea className="flex-1 px-3 py-4">
           <nav className="space-y-5">
-            {navGroups.map((group) => (
+            {groups.map((group) => (
               <div key={group.labelKey}>
                 {!collapsed && (
-                  <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
                     {t(group.labelKey)}
                   </p>
                 )}
                 <div className="grid gap-1">
                   {group.items.map((item) => {
                     const Icon = item.icon;
-                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const active = isNavActive(pathname, item.href);
                     const label = t(item.labelKey);
                     const link = (
                       <Link
                         key={item.href}
                         href={item.href}
+                        prefetch
                         className={cn(
-                          'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                          'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
                           active
                             ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-soft'
-                            : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
+                            : 'text-sidebar-foreground/75 hover:bg-white/10 hover:text-sidebar-foreground',
+                          item.featured && !active && 'bg-white/8',
                           collapsed && 'justify-center px-2',
                         )}
                       >
-                        <Icon className={cn('h-4 w-4 shrink-0', active && 'text-primary')} />
+                        {item.brand ? (
+                          <ChannelBrandIcon
+                            brand={item.brand}
+                            size="sm"
+                            featured={item.featured}
+                            className="rounded-xl ring-2"
+                          />
+                        ) : Icon ? (
+                          <Icon className={cn('h-4 w-4 shrink-0', active && 'text-white')} />
+                        ) : null}
                         {!collapsed && (
                           <>
                             <span className="flex-1">{label}</span>
@@ -76,11 +89,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                           </>
                         )}
                         {active && !collapsed && (
-                          <motion.div
-                            layoutId="sidebar-active"
-                            className="absolute inset-y-1 start-0 w-1 rounded-full bg-primary"
-                            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                          />
+                          <span className="absolute inset-y-1 start-0 w-1 rounded-full bg-white" />
                         )}
                       </Link>
                     );
@@ -101,11 +110,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           </nav>
         </ScrollArea>
 
-        <div className="shrink-0 border-t border-sidebar-border p-3">
+        <div className="hidden shrink-0 border-t border-sidebar-border p-3 lg:block">
           <Button
             variant="ghost"
             size={collapsed ? 'icon' : 'default'}
-            className={cn('w-full', collapsed && 'h-10 w-10')}
+            className={cn('w-full text-sidebar-foreground/80 hover:bg-white/10 hover:text-sidebar-foreground', collapsed && 'h-10 w-10')}
             onClick={onToggle}
           >
             {collapsed ? (

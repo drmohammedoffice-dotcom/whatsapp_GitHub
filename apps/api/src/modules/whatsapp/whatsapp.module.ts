@@ -1,6 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuditModule } from '../../audit/audit.module';
+import { BillingModule } from '../../billing/billing.module';
 import { ChannelsModule } from '../../channels/channels.module';
+import { PlatformModule } from '../../platform/platform.module';
+import { TikTokIntegrationModule } from '../../tiktok-integration/tiktok-integration.module';
 import { SecurityModule } from '../../security/security.module';
 import { StorageModule } from '../../storage/storage.module';
 import { WebhooksModule } from '../../webhooks/webhooks.module';
@@ -15,7 +18,7 @@ import { WhatsAppRepository } from './whatsapp.repository';
 import { WhatsAppService } from './whatsapp.service';
 
 @Module({
-  imports: [ChannelsModule, SecurityModule, WebhooksModule, AuditModule, StorageModule],
+  imports: [forwardRef(() => BillingModule), forwardRef(() => ChannelsModule), forwardRef(() => TikTokIntegrationModule), PlatformModule, SecurityModule, WebhooksModule, AuditModule, StorageModule],
   controllers: [WhatsAppController, WhatsAppSessionsController],
   providers: [
     WhatsAppService,
@@ -27,6 +30,6 @@ import { WhatsAppService } from './whatsapp.service';
     WhatsAppEventsService,
     WhatsAppWebhookService,
   ],
-  exports: [WhatsAppService],
+  exports: [WhatsAppService, SessionManager],
 })
 export class WhatsAppModule {}

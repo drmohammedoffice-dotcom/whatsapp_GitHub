@@ -3,6 +3,7 @@ import { TikTokConnectionStatus } from '@watsapp/database';
 import { EncryptionService } from '../security/encryption.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TikTokApiClient, TikTokTokenResponse } from './tiktok-api.client';
+import { TikTokAppCredentialsService } from './tiktok-app-credentials.service';
 import { TikTokLogService } from './tiktok-log.service';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TikTokTokenService {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly api: TikTokApiClient,
+    private readonly appCredentials: TikTokAppCredentialsService,
     private readonly logs: TikTokLogService,
   ) {}
 
@@ -64,8 +66,13 @@ export class TikTokTokenService {
     }
 
     try {
+      const creds = await this.appCredentials.resolve(teamId);
+      if (!creds) {
+        await this.markExpired(teamId, account.id);
+        return null;
+      }
       const refreshToken = this.encryption.decryptJson<string>(account.token.encryptedRefreshToken);
-      const refreshed = await this.api.refreshAccessToken(refreshToken);
+      const refreshed = await this.api.refreshAccessToken(creds, refreshToken);
       await this.storeTokens(account.id, refreshed);
       await this.logs.info(teamId, 'oauth.refresh', 'TikTok access token refreshed');
       return refreshed.access_token;

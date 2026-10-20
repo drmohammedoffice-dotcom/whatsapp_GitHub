@@ -1,11 +1,9 @@
-﻿import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConversationEventType, ConversationStatus, MessageStatus, MessageType, NotificationType, Permission } from '@watsapp/database';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConversationEventType, ConversationStatus, MessageStatus, MessageType, NotificationType, Permission, ChannelProvider, ConversationKind } from '@watsapp/database';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { SOCKET_EVENTS } from '@watsapp/shared';
 import { AuditService } from '../audit/audit.service';
-import { AiSettingsService } from '../ai/ai-settings.service';
-import { AiTransferService } from '../ai/ai-transfer.service';
 import { ChannelMessageService } from '../channels/channel-message.service';
 import { OutboundChannelService } from '../channels/outbound-channel.service';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
@@ -24,13 +22,35 @@ export class ConversationsService {
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeGateway,
-    private readonly aiSettings: AiSettingsService,
-    private readonly aiTransfer: AiTransferService,
     private readonly storage: LocalStorageService,
   ) {}
 
   list(teamId: string, query: ConversationQueryDto) {
     const archived = query.archived;
+    const channelFilter = {
+      purpose: 'INBOX' as const,
+      ...(query.provider
+        ? {
+            // WhatsApp inbox covers both QR (Baileys) and official Cloud API channels.
+            provider:
+              query.provider === ChannelProvider.WHATSAPP_BAILEYS
+                ? { in: [ChannelProvider.WHATSAPP_BAILEYS, ChannelProvider.WHATSAPP_CLOUD] }
+                : query.provider,
+          }
+        : {}),
+      ...(query.social
+        ? {
+            provider: {
+              in: [
+                ChannelProvider.META_MESSENGER,
+                ChannelProvider.META_INSTAGRAM,
+                ChannelProvider.TELEGRAM,
+                ChannelProvider.TELEGRAM_USER,
+              ],
+            },
+          }
+        : {}),
+    };
     return this.prisma.conversation.findMany({
       where: {
         teamId,
@@ -41,10 +61,30 @@ export class ConversationsService {
         ...(query.unread ? { unreadCount: { gt: 0 } } : {}),
         ...(query.read ? { unreadCount: 0 } : {}),
         ...(query.labelId ? { tags: { some: { labelId: query.labelId } } } : {}),
-        ...(query.provider ? { channel: { provider: query.provider } } : {}),
-        ...(query.search ? { OR: [{ subject: { contains: query.search, mode: 'insensitive' } }, { contact: { displayName: { contains: query.search, mode: 'insensitive' } } }, { messages: { some: { text: { contains: query.search, mode: 'insensitive' } } } }] } : {}),
+        kind: query.kind ?? ConversationKind.DIRECT_MESSAGE,
+        // Keep post-comment threads out of the DM inbox even if a reply was
+        // historically ingested without kind=COMMENT.
+        ...((query.kind ?? ConversationKind.DIRECT_MESSAGE) === ConversationKind.DIRECT_MESSAGE
+          ? { identity: { externalId: { not: { startsWith: 'comment:' } } } }
+          : {}),
+        channel: channelFilter,
+        ...(query.search
+          ? {
+              OR: [
+                { subject: { contains: query.search, mode: 'insensitive' } },
+                { contact: { displayName: { contains: query.search, mode: 'insensitive' } } },
+                { messages: { some: { text: { contains: query.search, mode: 'insensitive' } } } },
+              ],
+            }
+          : {}),
       },
-      include: { contact: true, channel: true, assignee: { select: { id: true, name: true, email: true } }, tags: { include: { label: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: {
+        contact: true,
+        channel: true,
+        assignee: { select: { id: true, name: true, email: true } },
+        tags: { include: { label: true } },
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
       orderBy: [{ isPinned: 'desc' }, { lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
       take: query.limit ?? 200,
     });
@@ -98,6 +138,11 @@ export class ConversationsService {
     const identity = conversation.contact.identities.find((item) => item.channelId === conversation.channelId) ?? conversation.contact.identities[0];
     if (!identity) throw new NotFoundException('No sendable channel identity found');
     const response = await this.outbound.sendText(teamId, conversationId, dto.text);
+    const kind = conversation.kind ?? ConversationKind.DIRECT_MESSAGE;
+    const meta =
+      conversation.metadata && typeof conversation.metadata === 'object' && !Array.isArray(conversation.metadata)
+        ? (conversation.metadata as Record<string, unknown>)
+        : undefined;
     const result = await this.channelMessages.ingest({
       teamId,
       channelId: conversation.channelId,
@@ -110,12 +155,11 @@ export class ConversationsService {
       text: dto.text,
       payload: response ?? {},
       occurredAt: new Date(),
+      humanReply: true,
+      kind,
+      conversationMetadata: meta,
     });
     await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0, lastReadAt: new Date() } });
-    const settings = await this.aiSettings.ensure(teamId);
-    if (settings.pauseAiOnHumanReply) {
-      await this.aiTransfer.pauseAi(teamId, conversationId);
-    }
     return result.message;
   }
 
@@ -155,12 +199,14 @@ export class ConversationsService {
       mediaFileName: file.originalname,
       mediaSizeBytes: stored.sizeBytes,
       occurredAt: new Date(),
+      humanReply: true,
+      kind: conversation.kind ?? ConversationKind.DIRECT_MESSAGE,
+      conversationMetadata:
+        conversation.metadata && typeof conversation.metadata === 'object' && !Array.isArray(conversation.metadata)
+          ? (conversation.metadata as Record<string, unknown>)
+          : undefined,
     });
     await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0, lastReadAt: new Date() } });
-    const settings = await this.aiSettings.ensure(teamId);
-    if (settings.pauseAiOnHumanReply) {
-      await this.aiTransfer.pauseAi(teamId, conversationId);
-    }
     return result.message;
   }
 

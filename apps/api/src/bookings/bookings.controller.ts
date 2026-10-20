@@ -1,4 +1,14 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BookingStatus, Permission } from '@watsapp/database';
 import type { Response } from 'express';
@@ -8,6 +18,7 @@ import { CurrentPrincipal } from '../common/current-principal.decorator';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { AuthenticatedPrincipal } from '../common/principal';
 import { BookingsService } from './bookings.service';
+import { UpdateBookingDto } from './dto/booking.dto';
 
 @ApiTags('Bookings')
 @ApiBearerAuth()
@@ -26,21 +37,62 @@ export class BookingsController {
     return this.bookings.list(principal.teamId, { status, search });
   }
 
+  @Get('export/meta')
+  @RequirePermissions(Permission.INBOX_READ)
+  exportMeta(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.bookings.getExportMeta(principal.teamId);
+  }
+
   @Get('export/excel')
   @RequirePermissions(Permission.INBOX_READ)
-  async exportExcel(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Res() res: Response) {
-    const buffer = await this.bookings.exportExcel(principal.teamId);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="bookings.xlsx"');
-    res.send(buffer);
+  async exportExcel(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Res() res?: Response,
+  ) {
+    const buffer = await this.bookings.exportExcel(principal.teamId, this.parseRange(from, to));
+    res!.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res!.setHeader('Content-Disposition', 'attachment; filename="orders.xlsx"');
+    res!.send(buffer);
   }
 
   @Get('export/pdf')
   @RequirePermissions(Permission.INBOX_READ)
-  async exportPdf(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Res() res: Response) {
-    const buffer = await this.bookings.exportPdf(principal.teamId);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="bookings.pdf"');
-    res.send(buffer);
+  async exportPdf(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Res() res?: Response,
+  ) {
+    const buffer = await this.bookings.exportPdf(principal.teamId, this.parseRange(from, to));
+    res!.setHeader('Content-Type', 'application/pdf');
+    res!.setHeader('Content-Disposition', 'attachment; filename="orders.pdf"');
+    res!.send(buffer);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(Permission.INBOX_WRITE)
+  update(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id') id: string,
+    @Body() dto: UpdateBookingDto,
+  ) {
+    return this.bookings.update(principal.teamId, id, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(Permission.INBOX_WRITE)
+  remove(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('id') id: string) {
+    return this.bookings.remove(principal.teamId, id);
+  }
+
+  private parseRange(from?: string, to?: string) {
+    const fromSeq = from ? Number(from) : undefined;
+    const toSeq = to ? Number(to) : undefined;
+    return {
+      fromSeq: Number.isFinite(fromSeq) && fromSeq! > 0 ? Math.floor(fromSeq!) : undefined,
+      toSeq: Number.isFinite(toSeq) && toSeq! > 0 ? Math.floor(toSeq!) : undefined,
+    };
   }
 }

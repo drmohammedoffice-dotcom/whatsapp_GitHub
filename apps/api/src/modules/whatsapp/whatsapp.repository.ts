@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MessageStatus, MessageType, WhatsAppConnectionLogEvent, WhatsAppSessionStatus } from '@watsapp/database';
+import { ChannelPurpose, MessageStatus, MessageType, WhatsAppSessionStatus } from '@watsapp/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConnectionLogInput } from './interfaces/events.interface';
 
@@ -7,11 +7,17 @@ import { ConnectionLogInput } from './interfaces/events.interface';
 export class WhatsAppRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  listSessions(teamId: string, userId?: string) {
+  /** Integrations → WhatsApp / Inbox only. Never returns TikTok tracking sessions. */
+  listSessions(teamId: string, userId?: string, purpose: ChannelPurpose = ChannelPurpose.INBOX) {
     return this.prisma.whatsAppSession.findMany({
-      where: { teamId, ...(userId ? { createdByUserId: userId } : {}) },
+      where: {
+        teamId,
+        purpose,
+        ...(userId ? { createdByUserId: userId } : {}),
+      },
       select: {
         id: true,
+        purpose: true,
         displayName: true,
         phoneNumber: true,
         jid: true,
@@ -35,12 +41,18 @@ export class WhatsAppRepository {
     return this.prisma.whatsAppSession.findFirst({ where: { id: sessionId, teamId } });
   }
 
-  createSession(teamId: string, userId?: string, displayName?: string) {
+  createSession(
+    teamId: string,
+    userId?: string,
+    displayName?: string,
+    purpose: ChannelPurpose = ChannelPurpose.INBOX,
+  ) {
     return this.prisma.whatsAppSession.create({
       data: {
         teamId,
         createdByUserId: userId,
         displayName,
+        purpose,
         status: WhatsAppSessionStatus.PENDING_QR,
       },
     });
@@ -52,6 +64,14 @@ export class WhatsAppRepository {
 
   deleteSession(sessionId: string) {
     return this.prisma.whatsAppSession.delete({ where: { id: sessionId } });
+  }
+
+  /** Only clear phone on other sessions with the SAME purpose (Inbox ≠ Tracking). */
+  clearPhoneForOtherSessions(teamId: string, sessionId: string, phoneNumber: string, purpose: ChannelPurpose) {
+    return this.prisma.whatsAppSession.updateMany({
+      where: { teamId, phoneNumber, purpose, id: { not: sessionId } },
+      data: { phoneNumber: null },
+    });
   }
 
   purgeCredentials(sessionId: string) {
@@ -161,11 +181,33 @@ export class WhatsAppRepository {
   findRestorableSessions() {
     return this.prisma.whatsAppSession.findMany({
       where: {
-        status: {
-          in: [WhatsAppSessionStatus.CONNECTED, WhatsAppSessionStatus.CONNECTING, WhatsAppSessionStatus.DISCONNECTED],
-        },
+        channel: { isNot: null },
+        OR: [
+          { status: WhatsAppSessionStatus.CONNECTED },
+          // Crash/restart mid-reconnect leaves paired sessions stuck in CONNECTING —
+          // restore them too, otherwise tracking WhatsApp stays offline forever.
+          { status: WhatsAppSessionStatus.CONNECTING, phoneNumber: { not: null } },
+        ],
       },
-      select: { id: true, teamId: true, createdByUserId: true },
+      select: { id: true, teamId: true, createdByUserId: true, purpose: true },
+    });
+  }
+
+  findSiblingSessionByPhone(
+    teamId: string,
+    sessionId: string,
+    phoneNumber: string,
+    siblingPurpose: ChannelPurpose,
+  ) {
+    return this.prisma.whatsAppSession.findFirst({
+      where: {
+        teamId,
+        phoneNumber,
+        id: { not: sessionId },
+        purpose: siblingPurpose,
+        status: { in: [WhatsAppSessionStatus.CONNECTED, WhatsAppSessionStatus.CONNECTING] },
+      },
+      select: { id: true, purpose: true, status: true },
     });
   }
 

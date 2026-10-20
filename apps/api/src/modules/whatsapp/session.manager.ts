@@ -59,15 +59,30 @@ export class SessionManager implements OnModuleDestroy {
     this.reconnectAttempts.delete(sessionId);
   }
 
-  scheduleReconnect(context: SessionContext) {
+  scheduleReconnect(
+    context: SessionContext,
+    options?: { connectionReplaced?: boolean; preferFast?: boolean; preferSlow?: boolean },
+  ) {
+    if (this.reconnectTimers.has(context.sessionId)) return;
+
     const attempt = (this.reconnectAttempts.get(context.sessionId) ?? 0) + 1;
     if (attempt > 12) {
       this.logger.error(`Max reconnect attempts reached for session ${context.sessionId}`);
       return;
     }
     this.reconnectAttempts.set(context.sessionId, attempt);
-    const delay = reconnectDelayMs(attempt);
-    this.logger.log(`Scheduling reconnect for ${context.sessionId} in ${delay}ms (attempt ${attempt})`);
+
+    let delay = reconnectDelayMs(attempt);
+    if (options?.connectionReplaced) {
+      // Inbox should reclaim the socket quickly; tracking should wait so it doesn't
+      // keep kicking Inbox offline (dual-session same phone).
+      delay = options.preferFast ? Math.max(12_000, delay) : Math.max(90_000, delay * 2);
+      if (options.preferSlow) delay = Math.max(180_000, delay);
+    }
+
+    this.logger.log(
+      `Scheduling reconnect for ${context.sessionId} in ${delay}ms (attempt ${attempt}${options?.connectionReplaced ? ', replaced conflict' : ''}${options?.preferFast ? ', inbox-priority' : ''}${options?.preferSlow ? ', tracking-deferred' : ''})`,
+    );
     const timer = setTimeout(async () => {
       this.reconnectTimers.delete(context.sessionId);
       if (this.reconnectHandler) await this.reconnectHandler(context);

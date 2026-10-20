@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class ConnectWhatsAppDto {
   @ApiPropertyOptional({ description: 'Optional display name for the session' })
@@ -11,4 +11,14 @@ export class ConnectWhatsAppDto {
   @IsString()
   @IsOptional()
   sessionId?: string;
+
+  @ApiPropertyOptional({ description: 'Channel purpose: inbox (default) or tracking-only for TikTok pixels' })
+  @IsIn(['inbox', 'tracking'])
+  @IsOptional()
+  purpose?: 'inbox' | 'tracking';
+
+  @ApiPropertyOptional({ description: 'TikTok integration ID when purpose is tracking' })
+  @IsString()
+  @IsOptional()
+  integrationId?: string;
 }

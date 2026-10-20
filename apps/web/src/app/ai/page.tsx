@@ -1,11 +1,11 @@
-﻿'use client';
+'use client';
 
+import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
-import { BookOpen, Brain, Bot, DollarSign, GraduationCap, Loader2, Search, Settings2, Sparkles, Wrench, Zap } from 'lucide-react';
-import { TrainingMediaPanel } from '@/components/ai/training-media-panel';
+import { ArrowRight, BookOpen, Brain, Bot, DollarSign, GraduationCap, Search, Settings2, Sparkles, Store, Wrench, Zap } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
+import { PlanGate } from '@/components/billing/plan-gate';
 import { useTranslation } from '@/components/providers/locale-provider';
-import { AlertBanner } from '@/components/shared/alert-banner';
 import { PageHeader } from '@/components/shared/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api, parseApiError } from '@/lib/utils';
+import { aiPlatformDefinitions } from '@/lib/ai-platforms';
+import { api } from '@/lib/utils';
 
 type KnowledgeDocument = { id: string; title: string; status: string; mimeType?: string; _count?: { chunks: number } };
 type MemoryItem = { id: string; scope: string; key: string; value: string };
@@ -48,8 +49,6 @@ export default function AiPage() {
   const [costs, setCosts] = useState<Cost[]>([]);
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [rules, setRules] = useState<AutomationRule[]>([]);
-  const [trainingSaving, setTrainingSaving] = useState(false);
-  const [trainingNotice, setTrainingNotice] = useState<string | null>(null);
 
   async function load() {
     const [docs, memory, toolData, costData, settingsData, rulesData] = await Promise.all([
@@ -60,7 +59,12 @@ export default function AiPage() {
       api<AiSettings>('/ai/settings'),
       api<AutomationRule[]>('/ai/automation'),
     ]);
-    setDocuments(docs.filter((doc) => doc.title !== '__ai_training_instructions__')); setMemories(memory); setTools(toolData); setCosts(costData); setSettings(settingsData); setRules(rulesData);
+    setDocuments(docs.filter((doc) => !doc.title.startsWith('__ai_training_instructions__')));
+    setMemories(memory);
+    setTools(toolData);
+    setCosts(costData);
+    setSettings(settingsData);
+    setRules(rulesData);
   }
   useEffect(() => { load().catch(console.error); }, []);
 
@@ -93,40 +97,7 @@ export default function AiPage() {
     });
     setSettings(updated);
   }
-  async function saveTraining(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!settings) return;
-    setTrainingSaving(true);
-    setTrainingNotice(null);
-    try {
-      const form = new FormData(event.currentTarget);
-      const systemPromptOverride = String(form.get('trainingInstructions') ?? '').trim() || null;
-      const updated = await api<AiSettings>('/ai/settings', {
-        method: 'POST',
-        body: JSON.stringify({
-          enabled: true,
-          autoReplyEnabled: true,
-          confidenceThreshold: settings.confidenceThreshold,
-          greetingMessage: settings.greetingMessage ?? null,
-          outOfOfficeMessage: settings.outOfOfficeMessage ?? null,
-          transferOnLowConfidence: settings.transferOnLowConfidence,
-          transferOnComplaint: settings.transferOnComplaint,
-          transferOnRefund: settings.transferOnRefund,
-          transferOnSensitive: settings.transferOnSensitive,
-          transferOnHumanRequest: settings.transferOnHumanRequest,
-          pauseAiOnHumanReply: settings.pauseAiOnHumanReply,
-          pauseAiOnAssignment: settings.pauseAiOnAssignment,
-          systemPromptOverride,
-        }),
-      });
-      setSettings(updated);
-      setTrainingNotice(t('ai.trainingSaved'));
-    } catch (err) {
-      setTrainingNotice(parseApiError(err));
-    } finally {
-      setTrainingSaving(false);
-    }
-  }
+
   async function createRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -137,6 +108,7 @@ export default function AiPage() {
 
   return (
     <AppShell>
+      <PlanGate feature="ai">
       <PageHeader title={t('ai.title')} description={t('ai.description')} />
 
       <Tabs defaultValue="training" className="mt-6">
@@ -154,40 +126,64 @@ export default function AiPage() {
         <TabsContent value="training">
           <Card className="border-0 shadow-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><GraduationCap className="h-5 w-5" />{t('ai.trainingTitle')}</CardTitle>
-              <CardDescription>{t('ai.trainingDesc')}</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5" />
+                {t('ai.platformTrainingHubTitle')}
+              </CardTitle>
+              <CardDescription>{t('ai.platformTrainingHubDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              {trainingNotice && (
-                <AlertBanner className="mb-4" variant={trainingNotice === t('ai.trainingSaved') ? 'success' : 'error'}>
-                  {trainingNotice}
-                </AlertBanner>
-              )}
-              {settings && (
-                <form onSubmit={saveTraining} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="trainingInstructions">{t('ai.tabTraining')}</Label>
-                    <Textarea
-                      id="trainingInstructions"
-                      name="trainingInstructions"
-                      defaultValue={settings.systemPromptOverride ?? ''}
-                      placeholder={t('ai.trainingPlaceholder')}
-                      rows={16}
-                      className="font-mono text-sm leading-relaxed"
-                    />
-                  </div>
-                  <p className="text-sm text-muted-foreground">{t('ai.trainingHint')}</p>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button type="submit" disabled={trainingSaving}>
-                      {trainingSaving ? <><Loader2 className="me-2 h-4 w-4 animate-spin" />{t('ai.savingTraining')}</> : t('ai.saveTraining')}
-                    </Button>
-                    {settings.enabled && settings.autoReplyEnabled && (
-                      <Badge variant="success">{t('common.enabled')}</Badge>
-                    )}
-                  </div>
-                </form>
-              )}
-              <TrainingMediaPanel />
+              <Link
+                href="/ai/creative"
+                className="mb-4 flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 shadow-soft transition hover:border-primary/50 hover:shadow-card"
+              >
+                <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold">{t('creative.title')}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{t('creative.description')}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
+              <Link
+                href="/ai/store"
+                className="mb-4 flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 shadow-soft transition hover:border-primary/50 hover:shadow-card"
+              >
+                <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                  <Store className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold">{t('store.hubTitle')}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{t('store.hubDesc')}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {aiPlatformDefinitions.map((platform) => {
+                  const Icon = platform.icon;
+                  return (
+                    <Link
+                      key={platform.slug}
+                      href={platform.trainingHref}
+                      className="group rounded-xl border bg-card p-5 shadow-soft transition hover:border-primary/40 hover:shadow-card"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-semibold">{t(platform.labelKey)}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{t(platform.descKey)}</p>
+                          </div>
+                        </div>
+                        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -506,6 +502,7 @@ export default function AiPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      </PlanGate>
     </AppShell>
   );
 }

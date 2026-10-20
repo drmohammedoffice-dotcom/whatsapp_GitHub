@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ChannelProvider, ChannelStatus, MessageStatus, MessageType } from '@watsapp/database';
+import { ChannelProvider, ChannelStatus, MessageStatus, MessageType, Prisma } from '@watsapp/database';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { ChannelMessageService } from '../../channels/channel-message.service';
+import { PlanEntitlementsService } from '../../billing/plan-entitlements.service';
 import { ChannelSecretsService } from '../../channels/channel-secrets.service';
+import { ChannelTokenService } from '../../channels/channel-token.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramConnectDto } from './dto/telegram.dto';
 
@@ -15,39 +17,105 @@ export class TelegramService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly secrets: ChannelSecretsService,
+    private readonly channelTokens: ChannelTokenService,
     private readonly channelMessages: ChannelMessageService,
+    private readonly entitlements: PlanEntitlementsService,
     config: ConfigService,
   ) {
     this.apiPublicUrl = config.getOrThrow<string>('API_PUBLIC_URL');
   }
 
-  async connect(teamId: string, dto: TelegramConnectDto) {
-    const me = await axios.get(`https://api.telegram.org/bot${dto.botToken}/getMe`);
+  async validateBotToken(botToken: string) {
+    const me = await axios.get(`https://api.telegram.org/bot${botToken}/getMe`);
     const bot = me.data?.result as { id?: number; username?: string; first_name?: string } | undefined;
     if (!bot?.id) throw new BadRequestException('Invalid Telegram bot token');
-    const externalId = String(bot.id);
-    const name = dto.name ?? bot.username ?? bot.first_name ?? 'Telegram Bot';
+    return {
+      botId: String(bot.id),
+      username: bot.username,
+      name: bot.username ?? bot.first_name ?? 'Telegram Bot',
+    };
+  }
+
+  async connect(teamId: string, dto: TelegramConnectDto) {
+    await this.entitlements.assertTelegram(teamId);
+    const bot = await this.validateBotToken(dto.botToken);
+    const externalId = bot.botId;
+    const name = dto.name ?? bot.name;
     const channel = await this.prisma.channel.upsert({
       where: { teamId_provider_externalId: { teamId, provider: ChannelProvider.TELEGRAM, externalId } },
-      update: { name, status: ChannelStatus.CONNECTED, lastSeenAt: new Date(), metadata: { botId: externalId, botUsername: bot.username } },
+      update: {
+        name,
+        status: ChannelStatus.CONNECTING,
+        lastSeenAt: new Date(),
+        metadata: { botId: externalId, botUsername: bot.username, connectionSource: 'wizard' },
+      },
       create: {
         teamId,
         provider: ChannelProvider.TELEGRAM,
         name,
-        status: ChannelStatus.CONNECTED,
+        status: ChannelStatus.CONNECTING,
         externalId,
         lastSeenAt: new Date(),
-        metadata: { botId: externalId, botUsername: bot.username },
+        metadata: { botId: externalId, botUsername: bot.username, connectionSource: 'wizard' },
       },
     });
+
+    await this.channelTokens.storeTokens(channel.id, { accessToken: dto.botToken });
     await this.secrets.setAccessToken(channel.id, dto.botToken, { botId: externalId, botUsername: bot.username });
+
     const webhookUrl = `${this.apiPublicUrl}/api/v1/telegram/webhook/${channel.id}`;
+    let webhookVerified = false;
     try {
-      await axios.post(`https://api.telegram.org/bot${dto.botToken}/setWebhook`, { url: webhookUrl });
+      await axios.post(`https://api.telegram.org/bot${dto.botToken}/setWebhook`, {
+        url: webhookUrl,
+        allowed_updates: ['message', 'edited_message'],
+      });
+      const info = await axios.get(`https://api.telegram.org/bot${dto.botToken}/getWebhookInfo`);
+      webhookVerified = info.data?.result?.url === webhookUrl;
     } catch (error) {
       this.logger.warn(`Telegram webhook registration failed: ${error instanceof Error ? error.message : String(error)}`);
+      await this.prisma.channel.update({
+        where: { id: channel.id },
+        data: { status: ChannelStatus.FAILED },
+      });
+      throw new BadRequestException('Failed to configure Telegram webhook. Ensure API_PUBLIC_URL is HTTPS and reachable.');
     }
-    return { channelId: channel.id, name: channel.name, botUsername: bot.username, webhookUrl };
+
+    const metadata = this.secrets.readMetadata(channel.metadata);
+    await this.prisma.channel.update({
+      where: { id: channel.id },
+      data: {
+        status: ChannelStatus.CONNECTED,
+        metadata: { ...metadata, webhookVerified } as Prisma.InputJsonValue,
+      },
+    });
+
+    return {
+      channelId: channel.id,
+      name,
+      botUsername: bot.username,
+      webhookUrl,
+      webhookVerified,
+      status: ChannelStatus.CONNECTED,
+    };
+  }
+
+  async verifyWebhook(teamId: string, channelId: string) {
+    const channel = await this.prisma.channel.findFirst({
+      where: { id: channelId, teamId, provider: ChannelProvider.TELEGRAM },
+    });
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    const token = await this.secrets.getAccessToken(channelId);
+    if (!token) throw new BadRequestException('No bot token stored');
+    const webhookUrl = `${this.apiPublicUrl}/api/v1/telegram/webhook/${channelId}`;
+    const info = await axios.get(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+    const verified = info.data?.result?.url === webhookUrl;
+    const metadata = this.secrets.readMetadata(channel.metadata);
+    await this.prisma.channel.update({
+      where: { id: channelId },
+      data: { metadata: { ...metadata, webhookVerified: verified } as Prisma.InputJsonValue },
+    });
+    return { webhookUrl, verified, pendingUpdateCount: info.data?.result?.pending_update_count ?? 0 };
   }
 
   async disconnect(teamId: string, channelId: string) {
@@ -57,6 +125,7 @@ export class TelegramService {
     if (token) {
       await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`).catch(() => undefined);
     }
+    await this.channelTokens.deleteTokens(channelId);
     await this.secrets.clearSecrets(channelId);
     await this.prisma.channel.update({ where: { id: channelId }, data: { status: ChannelStatus.DISCONNECTED } });
     return { disconnected: true };
