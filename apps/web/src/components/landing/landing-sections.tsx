@@ -35,6 +35,8 @@ import { useLocale } from '@/components/providers/locale-provider';
 import { Button } from '@/components/ui/button';
 import { CHATLOORA_WINDOWS_DOWNLOAD_FILENAME, CHATLOORA_WINDOWS_DOWNLOAD_URL } from '@/lib/chatloora-downloads';
 import { WHATSAPP_SALES_NUMBER } from '@/lib/billing';
+import { COMPANY_LEGAL, LEGAL_ROUTES } from '@/lib/company-info';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { cn } from '@/lib/utils';
 import { LandingReveal, LandingSectionHeader } from './landing-ui';
 import { useLandingCopy } from './use-landing-copy';
@@ -688,7 +690,7 @@ export function LandingFaq() {
 export function LandingContact() {
   const copy = useLandingCopy();
   const waNumber = copy.contact.whatsappNumber || WHATSAPP_SALES_NUMBER;
-  const supportEmail = copy.contact.supportEmail || 'noreply@chatloora.com';
+  const supportEmail = COMPANY_LEGAL.supportEmail;
   const wa = `https://wa.me/${waNumber}`;
   return (
     <section id="contact" className="px-4 py-20 sm:px-6 lg:px-8">
@@ -723,7 +725,10 @@ export function LandingContact() {
 
 export function LandingFooter() {
   const copy = useLandingCopy();
+  const { locale } = useLocale();
+  const isMobileApp = useIsMobileApp();
   const year = new Date().getFullYear();
+  const ar = locale === 'ar';
   return (
     <footer className="border-t border-slate-200/80 bg-white/70 px-4 py-14 backdrop-blur sm:px-6 lg:px-8">
       <div className="mx-auto grid max-w-7xl gap-10 md:grid-cols-4">
@@ -737,13 +742,15 @@ export function LandingFooter() {
         <div>
           <p className="text-sm font-semibold text-slate-900">{copy.footer.product}</p>
           <div className="mt-3 space-y-2 text-sm text-slate-600">
-            <a href="#features" className="block hover:text-violet-600">
+            <a href="/#features" className="block hover:text-violet-600">
               {copy.nav.features}
             </a>
-            <a href="#pricing" className="block hover:text-violet-600">
-              {copy.nav.pricing}
-            </a>
-            <a href="#how-it-works" className="block hover:text-violet-600">
+            {!isMobileApp && (
+              <a href="/#pricing" className="block hover:text-violet-600">
+                {copy.nav.pricing}
+              </a>
+            )}
+            <a href="/#how-it-works" className="block hover:text-violet-600">
               {copy.nav.howItWorks}
             </a>
           </div>
@@ -751,22 +758,26 @@ export function LandingFooter() {
         <div>
           <p className="text-sm font-semibold text-slate-900">{copy.footer.resources}</p>
           <div className="mt-3 space-y-2 text-sm text-slate-600">
-            <a href="#faq" className="block hover:text-violet-600">
+            <a href="/#faq" className="block hover:text-violet-600">
               {copy.nav.faq}
             </a>
-            <Link href="/pricing" className="block hover:text-violet-600">
-              {copy.nav.pricing}
-            </Link>
+            {!isMobileApp && (
+              <Link href="/pricing" className="block hover:text-violet-600">
+                {copy.nav.pricing}
+              </Link>
+            )}
             <Link href="/register" className="block hover:text-violet-600">
-              {copy.nav.startTrial}
+              {isMobileApp ? (ar ? 'إنشاء حساب' : 'Create account') : copy.nav.startTrial}
             </Link>
-            <a
-              href={CHATLOORA_WINDOWS_DOWNLOAD_URL}
-              download={CHATLOORA_WINDOWS_DOWNLOAD_FILENAME}
-              className="block hover:text-violet-600"
-            >
-              {copy.footer.windowsApp}
-            </a>
+            {!isMobileApp && (
+              <a
+                href={CHATLOORA_WINDOWS_DOWNLOAD_URL}
+                download={CHATLOORA_WINDOWS_DOWNLOAD_FILENAME}
+                className="block hover:text-violet-600"
+              >
+                {copy.footer.windowsApp}
+              </a>
+            )}
           </div>
         </div>
         <div>
@@ -775,8 +786,18 @@ export function LandingFooter() {
             <Link href="/company" className="block hover:text-violet-600">
               {copy.footer.companyInfo}
             </Link>
-            <span className="block">{copy.footer.privacy}</span>
-            <span className="block">{copy.footer.terms}</span>
+            <Link href={LEGAL_ROUTES.privacy} className="block hover:text-violet-600">
+              {ar ? 'سياسة الخصوصية' : 'Privacy Policy'}
+            </Link>
+            <Link href={LEGAL_ROUTES.terms} className="block hover:text-violet-600">
+              {ar ? 'شروط الخدمة' : 'Terms of Service'}
+            </Link>
+            <Link href={LEGAL_ROUTES.accountDeletion} className="block hover:text-violet-600">
+              {ar ? 'حذف الحساب' : 'Delete account'}
+            </Link>
+            <a href={`mailto:${COMPANY_LEGAL.supportEmail}`} dir="ltr" className="block hover:text-violet-600">
+              {COMPANY_LEGAL.supportEmail}
+            </a>
           </div>
         </div>
       </div>

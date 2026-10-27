@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { OtpVerificationModal } from '@/components/auth/otp-verification-modal';
 import { PasswordInput } from '@/components/auth/password-input';
 import { AuthLayout } from '@/components/layout/auth-layout';
+import { LegalConsentNote } from '@/components/legal/legal-consent-note';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
 import { Button } from '@/components/ui/button';
@@ -186,6 +187,7 @@ export default function RegisterPage() {
               {t('auth.signInLink')}
             </Link>
           </p>
+          <LegalConsentNote />
         </CardContent>
       </Card>
 

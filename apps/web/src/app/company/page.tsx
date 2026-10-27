@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { LandingFooter } from '@/components/landing/landing-sections';
 import { LandingNavbar } from '@/components/landing/landing-navbar';
 import { LandingShell } from '@/components/landing/landing-ui';
+import { LegalLinks } from '@/components/legal/legal-layout';
 import { COMPANY_LEGAL, companyFullAddress, companyJsonLd } from '@/lib/company-info';
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.chatloora.com';
@@ -59,6 +60,8 @@ export default function CompanyPage() {
               <InfoRow label="Date of incorporation" value={COMPANY_LEGAL.dateOfIncorporationDisplay} />
               <InfoRow label="Registered business address" value={companyFullAddress()} />
               <InfoRow label="Designated officer title" value={COMPANY_LEGAL.officerTitle} />
+              <InfoRow label="Support email" value={COMPANY_LEGAL.supportEmail} />
+              <InfoRow label="Privacy contact" value={COMPANY_LEGAL.privacyEmail} />
             </dl>
           </section>
 
@@ -73,6 +76,8 @@ export default function CompanyPage() {
               are operated by <strong>{COMPANY_LEGAL.legalName}</strong>.
             </p>
           </section>
+
+          <LegalLinks />
 
           <p className="mt-8 text-sm text-slate-500">
             <Link href="/" className="font-medium text-violet-700 hover:underline">

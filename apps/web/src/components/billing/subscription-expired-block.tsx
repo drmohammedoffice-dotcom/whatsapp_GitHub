@@ -6,13 +6,16 @@ import { usePathname } from 'next/navigation';
 import { Lock } from 'lucide-react';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { useSubscription } from '@/components/providers/subscription-provider';
+import { MOBILE_APP_UNAVAILABLE_MESSAGE } from '@/lib/app-mode';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { isAdminImpersonation } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 export function SubscriptionExpiredBlock() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const pathname = usePathname();
+  const isMobileApp = useIsMobileApp();
   const { status, loading } = useSubscription();
 
   const payPath =
@@ -50,7 +53,9 @@ export function SubscriptionExpiredBlock() {
     (status.graceHoursRemaining != null ? Math.max(1, Math.ceil(status.graceHoursRemaining / 24)) : null);
 
   const trialEnded = Boolean(status.freeTrialEnded);
-  const body = trialEnded
+  const body = isMobileApp
+    ? MOBILE_APP_UNAVAILABLE_MESSAGE[locale === 'ar' ? 'ar' : 'en']
+    : trialEnded
     ? t('billing.trialEndedBody')
     : status.isInGracePeriod && graceDays !== null
       ? t('billing.subscriptionExpiredGraceBody').replace('{days}', String(graceDays))
@@ -74,15 +79,27 @@ export function SubscriptionExpiredBlock() {
           </div>
           <div className="space-y-2">
             <h2 id="subscription-expired-title" className="text-xl font-semibold">
-              {trialEnded ? t('billing.trialEndedTitle') : t('billing.subscriptionExpiredTitle')}
+              {isMobileApp
+                ? locale === 'ar'
+                  ? 'الميزة غير متاحة'
+                  : 'Feature unavailable'
+                : trialEnded
+                  ? t('billing.trialEndedTitle')
+                  : t('billing.subscriptionExpiredTitle')}
             </h2>
             <p id="subscription-expired-desc" className="text-sm text-muted-foreground">
               {body}
             </p>
           </div>
-          <Button asChild className="w-full sm:w-auto">
-            <Link href="/plans">{trialEnded ? t('billing.activateSubscription') : t('billing.viewPlans')}</Link>
-          </Button>
+          {isMobileApp ? (
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/account">{t('nav.account')}</Link>
+            </Button>
+          ) : (
+            <Button asChild className="w-full sm:w-auto">
+              <Link href="/plans">{trialEnded ? t('billing.activateSubscription') : t('billing.viewPlans')}</Link>
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

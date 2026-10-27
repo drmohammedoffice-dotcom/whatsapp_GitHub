@@ -5,6 +5,7 @@ import { ArrowRight, Download, Play, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale } from '@/components/providers/locale-provider';
 import { Button } from '@/components/ui/button';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { cn } from '@/lib/utils';
 import { LandingReveal } from './landing-ui';
 import { CHATLOORA_WINDOWS_DOWNLOAD_FILENAME, CHATLOORA_WINDOWS_DOWNLOAD_URL } from '@/lib/chatloora-downloads';
@@ -90,7 +91,8 @@ function DashboardPreview() {
 
 export function LandingHero() {
   const copy = useLandingCopy();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
+  const isMobileApp = useIsMobileApp();
 
   return (
     <section id="home" className="relative overflow-hidden px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16 lg:px-8">
@@ -131,7 +133,7 @@ export function LandingHero() {
                 size="lg"
                 className="h-12 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-7 text-base shadow-lg shadow-violet-500/30 hover:from-violet-500 hover:to-indigo-500"
               >
-                {copy.hero.ctaPrimary}
+                {isMobileApp ? (locale === 'ar' ? 'إنشاء حساب' : 'Create account') : copy.hero.ctaPrimary}
                 <ArrowRight className={cn('h-4 w-4', dir === 'rtl' && 'rotate-180')} />
               </Button>
             </Link>
@@ -145,6 +147,7 @@ export function LandingHero() {
                 {copy.hero.ctaSecondary}
               </Button>
             </a>
+            {!isMobileApp && (
             <a href={CHATLOORA_WINDOWS_DOWNLOAD_URL} download={CHATLOORA_WINDOWS_DOWNLOAD_FILENAME}>
               <Button
                 size="lg"
@@ -155,8 +158,9 @@ export function LandingHero() {
                 {copy.hero.downloadWindows}
               </Button>
             </a>
+            )}
           </div>
-          <p className="mt-3 text-center text-xs text-slate-500">{copy.hero.downloadWindowsHint}</p>
+          {!isMobileApp && <p className="mt-3 text-center text-xs text-slate-500">{copy.hero.downloadWindowsHint}</p>}
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-600">
             <div className="flex items-center gap-0.5 text-amber-400">

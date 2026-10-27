@@ -21,6 +21,7 @@ import {
   START_PATH,
   deepLinkToAppUrl,
   isAllowedNavigation,
+  isBlockedInApp,
   requiresSystemBrowser,
 } from '../config';
 
@@ -78,6 +79,10 @@ export function ChatLooraWebShell({ initialPath = START_PATH }: Props) {
   const onShouldStartLoadWithRequest = useCallback((req: { url: string }) => {
     const { url } = req;
     if (!url || url === 'about:blank' || url.startsWith('blob:') || url.startsWith('data:')) return true;
+    if (isBlockedInApp(url)) {
+      setSourceUrl(`${APP_URL}/dashboard`);
+      return false;
+    }
     if (isAllowedNavigation(url)) return true;
     openOutside(url);
     return false;
@@ -122,6 +127,7 @@ export function ChatLooraWebShell({ initialPath = START_PATH }: Props) {
           setSupportMultipleWindows
           onOpenWindow={(e) => {
             const url = e.nativeEvent.targetUrl;
+            if (isBlockedInApp(url)) return;
             if (isAllowedNavigation(url)) setSourceUrl(url);
             else openOutside(url);
           }}

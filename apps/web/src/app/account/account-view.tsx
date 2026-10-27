@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
+import { DeleteAccountCard } from '@/components/account/delete-account-card';
 import { AppShell } from '@/components/layout/app-shell';
 import { useSubscription } from '@/components/providers/subscription-provider';
 import { useTranslation } from '@/components/providers/locale-provider';
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import type { SubscriptionState } from '@/lib/billing';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { api, parseApiError } from '@/lib/utils';
 
 type AccountUser = { id: string; name: string; email: string; createdAt: string };
@@ -27,6 +29,7 @@ export function AccountView() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const isMobileApp = useIsMobileApp();
 
   useEffect(() => {
     api<AccountUser>('/auth/me')
@@ -155,7 +158,10 @@ export function AccountView() {
           </CardContent>
         </Card>
 
-        <AccountBillingCard onError={setError} />
+        {/* Billing / plan / renewal is website-only — hidden inside the native app. */}
+        {!isMobileApp && <AccountBillingCard onError={setError} />}
+
+        <DeleteAccountCard />
       </div>
     </AppShell>
   );

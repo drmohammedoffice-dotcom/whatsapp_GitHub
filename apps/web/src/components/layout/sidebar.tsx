@@ -11,12 +11,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { cn } from '@/lib/utils';
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const { t, dir } = useTranslation();
-  const groups = visibleNavGroups();
+  const isMobileApp = useIsMobileApp();
+  const groups = visibleNavGroups({ mobileApp: isMobileApp });
 
   return (
     <TooltipProvider delayDuration={0}>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { useSubscription } from '@/components/providers/subscription-provider';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { isAdminImpersonation } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,14 +23,16 @@ export function SubscriptionWarningModal() {
   const { t } = useTranslation();
   const { status } = useSubscription();
   const [open, setOpen] = useState(false);
+  const isMobileApp = useIsMobileApp();
 
   useEffect(() => {
+    if (isMobileApp) return;
     if (isAdminImpersonation()) return;
     if (!status?.showExpiryWarning || status.daysRemaining === null) return;
     const key = `${DISMISS_KEY}-${status.currentPeriodEnd}`;
     if (sessionStorage.getItem(key)) return;
     setOpen(true);
-  }, [status]);
+  }, [status, isMobileApp]);
 
   function dismiss() {
     if (status?.currentPeriodEnd) {
@@ -38,6 +41,7 @@ export function SubscriptionWarningModal() {
     setOpen(false);
   }
 
+  if (isMobileApp) return null;
   if (isAdminImpersonation()) return null;
   if (!status?.showExpiryWarning || status.daysRemaining === null) return null;
 

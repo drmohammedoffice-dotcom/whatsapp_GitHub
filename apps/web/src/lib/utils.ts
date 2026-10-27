@@ -275,6 +275,10 @@ function isLoginRedirectExempt(pathname: string) {
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/admin') ||
     pathname.startsWith('/pricing') ||
+    pathname.startsWith('/company') ||
+    pathname.startsWith('/privacy') ||
+    pathname.startsWith('/terms') ||
+    pathname.startsWith('/account-deletion') ||
     pathname.startsWith('/r/') ||
     pathname.startsWith('/f/') ||
     pathname.startsWith('/s/') ||

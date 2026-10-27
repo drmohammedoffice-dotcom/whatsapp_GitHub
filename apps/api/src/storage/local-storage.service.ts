@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
-import { access, mkdir, unlink, writeFile, readFile } from 'fs/promises';
+import { access, mkdir, rm, unlink, writeFile, readFile } from 'fs/promises';
 import { resolve, sep, extname, join, normalize } from 'path';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
 
@@ -58,6 +58,12 @@ export class LocalStorageService {
     } catch {
       return false;
     }
+  }
+
+  /** Deletes every uploaded file of a team (account deletion). */
+  async removeTeamMedia(teamId: string) {
+    if (!/^[a-z0-9]+$/i.test(teamId)) throw new Error('Invalid team id');
+    await rm(this.resolvePath(`media/${teamId}`), { recursive: true, force: true });
   }
 
   async readBuffer(storageKey: string) {

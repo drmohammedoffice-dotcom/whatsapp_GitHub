@@ -22,6 +22,10 @@ export const SUBSCRIPTION_EXEMPT_PREFIXES = [
   '/reset-password',
   '/admin',
   '/r',
+  '/company',
+  '/privacy',
+  '/terms',
+  '/account-deletion',
 ] as const;
 
 export function isSubscriptionExemptPath(pathname: string) {

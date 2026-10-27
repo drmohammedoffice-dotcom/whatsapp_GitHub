@@ -25,6 +25,7 @@ import {
   updateTikTokAdBudget,
   type TikTokCampaignStat,
 } from '@/lib/tiktok-business';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { parseApiError } from '@/lib/utils';
 import { useTranslation } from '@/components/providers/locale-provider';
 
@@ -131,6 +132,7 @@ export default function TikTokCampaignsPage() {
 
 function TikTokCampaignsInner() {
   const { t } = useTranslation();
+  const isMobileApp = useIsMobileApp();
   const [advertisers, setAdvertisers] = useState<Array<{ advertiserId: string; name: string | null; currency: string | null }>>([]);
   const [accountQuery, setAccountQuery] = useState('');
   const [advertiserId, setAdvertiserId] = useState('');
@@ -600,9 +602,11 @@ function TikTokCampaignsInner() {
               <Button type="button" asChild className="flex-1 sm:flex-none">
                 <Link href={`/tiktok/ads/new?advertiserId=${encodeURIComponent(advertiserId)}`}><Plus className="h-4 w-4" /> {t('tiktokAdsCreate.createCampaign')}</Link>
               </Button>
-              <Button type="button" variant="outline" asChild className="flex-1 sm:flex-none">
-                <Link href="/tiktok/ads/balance"><Wallet className="h-4 w-4" /> {t('tiktokAdsCreate.topup')}</Link>
-              </Button>
+              {!isMobileApp && (
+                <Button type="button" variant="outline" asChild className="flex-1 sm:flex-none">
+                  <Link href="/tiktok/ads/balance"><Wallet className="h-4 w-4" /> {t('tiktokAdsCreate.topup')}</Link>
+                </Button>
+              )}
             </div>
           </div>
         }

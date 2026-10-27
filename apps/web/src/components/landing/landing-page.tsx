@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useLocale } from '@/components/providers/locale-provider';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { LandingHero } from './landing-hero';
 import { LandingNavbar } from './landing-navbar';
 import {
@@ -25,6 +26,7 @@ import { useLandingCopy, useLandingVisibility } from './use-landing-copy';
 function LandingJsonLd() {
   const copy = useLandingCopy();
   const { locale } = useLocale();
+  const isMobileApp = useIsMobileApp();
 
   useEffect(() => {
     const id = 'chatloora-landing-jsonld';
@@ -38,13 +40,17 @@ function LandingJsonLd() {
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
       description: copy.seo.description,
-      offers: {
-        '@type': 'AggregateOffer',
-        lowPrice: '15',
-        highPrice: '49',
-        priceCurrency: 'USD',
-        offerCount: 3,
-      },
+      ...(isMobileApp
+        ? {}
+        : {
+            offers: {
+              '@type': 'AggregateOffer',
+              lowPrice: '15',
+              highPrice: '49',
+              priceCurrency: 'USD',
+              offerCount: 3,
+            },
+          }),
       inLanguage: locale === 'ar' ? 'ar' : 'en',
     };
 
@@ -56,7 +62,7 @@ function LandingJsonLd() {
     return () => {
       document.getElementById(id)?.remove();
     };
-  }, [copy.seo.description, locale]);
+  }, [copy.seo.description, locale, isMobileApp]);
 
   useEffect(() => {
     document.title = copy.seo.title;
@@ -73,6 +79,8 @@ function LandingJsonLd() {
 
 function LandingPageInner() {
   const visibility = useLandingVisibility();
+  // Native app (App Store / Google Play): no prices, plans, trials or subscribe CTAs.
+  const isMobileApp = useIsMobileApp();
 
   return (
     <LandingShell>
@@ -87,9 +95,9 @@ function LandingPageInner() {
         {visibility.video ? <LandingVideo /> : null}
         {visibility.testimonials ? <LandingTestimonials /> : null}
         {visibility.stats ? <LandingStats /> : null}
-        {visibility.trial ? <LandingTrial /> : null}
-        {visibility.pricing ? <LandingPricing /> : null}
-        {visibility.faq ? <LandingFaq /> : null}
+        {visibility.trial && !isMobileApp ? <LandingTrial /> : null}
+        {visibility.pricing && !isMobileApp ? <LandingPricing /> : null}
+        {visibility.faq && !isMobileApp ? <LandingFaq /> : null}
         {visibility.contact ? <LandingContact /> : null}
       </main>
       <LandingFooter />

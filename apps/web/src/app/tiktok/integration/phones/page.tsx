@@ -26,6 +26,8 @@ import {
   type TikTokTrackingPhoneStatus,
 } from '@/lib/tiktok-integration';
 import { createSocket } from '@/lib/socket';
+import { MOBILE_APP_UNAVAILABLE_MESSAGE } from '@/lib/app-mode';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { parseApiError } from '@/lib/utils';
 
 function phoneLabel(phone: TikTokTrackingPhone, pendingLabel: string) {
@@ -46,7 +48,8 @@ function pixelLabel(pixel: TikTokIntegrationView) {
 }
 
 export default function TikTokTrackingPhonesPage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const isMobileApp = useIsMobileApp();
   const subscription = useSubscriptionOptional();
   const status = subscription?.status;
   const [phones, setPhones] = useState<TikTokTrackingPhone[]>([]);
@@ -288,7 +291,7 @@ export default function TikTokTrackingPhonesPage() {
         </CardContent>
       </Card>
 
-      {status?.limits && (
+      {status?.limits && !isMobileApp && (
         <AlertBanner variant="info" className="mt-4">
           {t('billing.trackingPhoneLimit').replace('{count}', String(status.limits.maxTrackingPhones))}
         </AlertBanner>
@@ -297,13 +300,19 @@ export default function TikTokTrackingPhonesPage() {
       {atPhoneLimit && (
         <AlertBanner variant="warning" className="mt-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span>{t('billing.upgradeTrackingBody')}</span>
-            <Link
-              href="/pricing?upgrade=1"
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              {t('billing.upgradeViaWhatsApp')}
-            </Link>
+            {isMobileApp ? (
+              <span>{MOBILE_APP_UNAVAILABLE_MESSAGE[locale === 'ar' ? 'ar' : 'en']}</span>
+            ) : (
+              <>
+                <span>{t('billing.upgradeTrackingBody')}</span>
+                <Link
+                  href="/pricing?upgrade=1"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {t('billing.upgradeViaWhatsApp')}
+                </Link>
+              </>
+            )}
           </div>
         </AlertBanner>
       )}

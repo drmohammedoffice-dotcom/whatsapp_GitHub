@@ -15,7 +15,23 @@ export const COMPANY_LEGAL = {
     countryCode: 'US',
   },
   officerTitle: 'President',
+  /** Customer support contact (single place to change). */
+  supportEmail: 'support@chatloora.com',
+  /** Privacy / data-protection requests (single place to change). */
+  privacyEmail: 'support@chatloora.com',
 } as const;
+
+export const SUPPORT_EMAIL = COMPANY_LEGAL.supportEmail;
+export const PRIVACY_EMAIL = COMPANY_LEGAL.privacyEmail;
+
+/** Public legal pages (no auth). */
+export const LEGAL_ROUTES = {
+  privacy: '/privacy',
+  terms: '/terms',
+  accountDeletion: '/account-deletion',
+} as const;
+
+export const LEGAL_LAST_UPDATED = '2026-10-27';
 
 export function companyFullAddress() {
   const { street, city, state, postalCode, country } = COMPANY_LEGAL.address;
@@ -32,6 +48,7 @@ export function companyJsonLd(baseUrl: string) {
     alternateName: tradeName,
     url: baseUrl,
     taxID: ein,
+    email: COMPANY_LEGAL.supportEmail,
     foundingDate: dateOfIncorporation,
     address: {
       '@type': 'PostalAddress',

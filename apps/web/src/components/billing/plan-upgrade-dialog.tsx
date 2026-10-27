@@ -6,6 +6,8 @@ import { useTranslation } from '@/components/providers/locale-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { PlanFeature } from '@/lib/plan-limits';
+import { MOBILE_APP_UNAVAILABLE_MESSAGE } from '@/lib/app-mode';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 
 type PlanUpgradeDialogProps = {
   feature: PlanFeature;
@@ -54,7 +56,23 @@ const BODY_KEYS: Record<PlanFeature, string> = {
 };
 
 export function PlanUpgradeDialog({ feature, title, description }: PlanUpgradeDialogProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const isMobileApp = useIsMobileApp();
+
+  if (isMobileApp) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center p-4">
+        <Card className="w-full max-w-md border-primary/20 shadow-lg">
+          <CardContent className="flex flex-col items-center gap-4 pt-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Lock className="h-7 w-7 text-primary" />
+            </div>
+            <p className="text-sm text-muted-foreground">{MOBILE_APP_UNAVAILABLE_MESSAGE[locale === 'ar' ? 'ar' : 'en']}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-4">

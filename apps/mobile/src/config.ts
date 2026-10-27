@@ -11,16 +11,12 @@ export const START_PATH = '/login';
 
 const APP_HOSTS = ['chatloora.com', 'localhost', '127.0.0.1'];
 
-/** Third-party pages that may load inside the WebView (OAuth, payments, WhatsApp). */
+/** Third-party pages that may load inside the WebView (TikTok/Meta OAuth, WhatsApp). */
 const IN_APP_HOST_SUFFIXES = [
   ...APP_HOSTS,
   'tiktok.com',
   'facebook.com',
-  'instagram.com',
-  'wayl.io',
-  'wayl.com',
   'whatsapp.com',
-  'resend.com',
 ];
 
 /**
@@ -52,6 +48,22 @@ export function isAllowedNavigation(urlString: string): boolean {
 export function requiresSystemBrowser(urlString: string): boolean {
   const u = parseHttpUrl(urlString);
   return !!u && hostMatches(u.hostname.toLowerCase(), SYSTEM_BROWSER_HOST_SUFFIXES);
+}
+
+/**
+ * Store policy: the app is for managing the account only. Subscriptions are bought on
+ * the website, so payment providers and pricing/checkout pages never open in the app
+ * (not even in the system browser).
+ */
+const BLOCKED_HOST_SUFFIXES = ['wayl.io', 'wayl.com'];
+const BLOCKED_APP_PATHS = [/^\/plans(\/|$)/, /^\/pricing(\/|$)/, /^\/tiktok\/ads\/topup(\/|$)/, /^\/tiktok\/ads\/balance(\/|$)/];
+
+export function isBlockedInApp(urlString: string): boolean {
+  const u = parseHttpUrl(urlString);
+  if (!u) return false;
+  const host = u.hostname.toLowerCase();
+  if (hostMatches(host, BLOCKED_HOST_SUFFIXES)) return true;
+  return hostMatches(host, APP_HOSTS) && BLOCKED_APP_PATHS.some((re) => re.test(u.pathname));
 }
 
 /**

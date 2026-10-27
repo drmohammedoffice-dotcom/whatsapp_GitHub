@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { BrandKey } from '@/components/channels/channel-brand-icon';
+import { MOBILE_APP_HIDDEN_NAV_HREFS } from '@/lib/app-mode';
 
 export type NavItem = {
   href: string;
@@ -70,11 +71,15 @@ export const allNavItems = navGroups.flatMap((group) => group.items);
 
 const HIDDEN_NAV_HREFS = new Set(['/inbox/whatsapp', '/settings/integrations']);
 
-export function visibleNavGroups() {
+/** `mobileApp`: inside the native app, hide plans / pricing / billing / ad-balance top-up entries. */
+export function visibleNavGroups(options?: { mobileApp?: boolean }) {
+  const mobileApp = options?.mobileApp ?? false;
   return navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !HIDDEN_NAV_HREFS.has(item.href)),
+      items: group.items.filter(
+        (item) => !HIDDEN_NAV_HREFS.has(item.href) && !(mobileApp && MOBILE_APP_HIDDEN_NAV_HREFS.has(item.href)),
+      ),
     }))
     .filter((group) => group.items.length > 0);
 }

@@ -9,6 +9,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { MulterModule } from '@nestjs/platform-express';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { AccountModule } from './account/account.module';
 import { ChannelsModule } from './channels/channels.module';
 import { envSchema } from './config/env';
 import { ContactsModule } from './contacts/contacts.module';
@@ -93,6 +94,7 @@ function resolveEnvFilePath(): string {
     StorageModule,
     HealthModule,
     AuthModule,
+    AccountModule,
     ChannelsModule,
     ContactsModule,
     NotificationsModule,

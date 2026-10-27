@@ -5,10 +5,12 @@ import { AlertTriangle } from 'lucide-react';
 import { useSubscriptionOptional } from '@/components/providers/subscription-provider';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { Button } from '@/components/ui/button';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 
 export function PlanOverLimitBanner() {
   const { t } = useTranslation();
   const subscription = useSubscriptionOptional();
+  const isMobileApp = useIsMobileApp();
   const over = subscription?.status?.overLimit;
   if (!over) return null;
   const exceeded = Object.values(over).some(Boolean);
@@ -24,9 +26,11 @@ export function PlanOverLimitBanner() {
             <p className="text-xs text-muted-foreground">{t('billing.overLimitBody')}</p>
           </div>
         </div>
-        <Button asChild size="sm" variant="outline">
-          <Link href="/pricing?upgrade=1">{t('billing.upgradeViaWhatsApp')}</Link>
-        </Button>
+        {!isMobileApp && (
+          <Button asChild size="sm" variant="outline">
+            <Link href="/pricing?upgrade=1">{t('billing.upgradeViaWhatsApp')}</Link>
+          </Button>
+        )}
       </div>
     </div>
   );

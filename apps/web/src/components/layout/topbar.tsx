@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { API_URL, clearSession, cn, getRefreshToken } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -42,6 +43,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const { t, dir } = useTranslation();
   const pathname = usePathname();
   const current = getNavItem(pathname);
+  const isMobileApp = useIsMobileApp();
 
   return (
     <header className="z-40 flex h-14 shrink-0 items-center gap-2 border-b border-violet-100/80 bg-white/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-4 lg:px-6">
@@ -72,7 +74,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       </div>
 
       <div className="flex items-center gap-1">
-        <SubscriptionDaysBadge className="hidden sm:inline-flex" />
+        {!isMobileApp && <SubscriptionDaysBadge className="hidden sm:inline-flex" />}
         <LanguageToggle />
 
         <Button variant="ghost" size="icon" asChild>

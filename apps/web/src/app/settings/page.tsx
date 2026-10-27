@@ -3,7 +3,7 @@
 import { SOCKET_EVENTS } from '@watsapp/shared';
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
-import { ArrowRight, Bell, Link2, MessageCircle, Share2 } from 'lucide-react';
+import { ArrowRight, Bell, Link2, MessageCircle, Share2, UserRound } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
@@ -30,7 +30,7 @@ type ChannelRow = {
 };
 
 export default function SettingsPage() {
-  const { t, dir } = useTranslation();
+  const { t, dir, locale } = useTranslation();
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [channels, setChannels] = useState<ChannelRow[]>([]);
@@ -126,6 +126,34 @@ export default function SettingsPage() {
               {t('settings.integrationsLink')} <ArrowRight className={cn('h-4 w-4', dir === 'rtl' && 'rotate-180')} />
             </Link>
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4 border-0 shadow-card">
+        <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-muted text-foreground">
+              <UserRound className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-semibold">{t('nav.account')}</p>
+              <p className="text-sm text-muted-foreground">
+                {locale === 'ar'
+                  ? 'الملف الشخصي، كلمة المرور، وحذف الحساب.'
+                  : 'Profile, password and account deletion.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/account">
+                {t('nav.account')} <ArrowRight className={cn('h-4 w-4', dir === 'rtl' && 'rotate-180')} />
+              </Link>
+            </Button>
+            <Button variant="ghost" className="text-destructive hover:text-destructive" asChild>
+              <Link href="/account#delete-account">{locale === 'ar' ? 'حذف الحساب' : 'Delete account'}</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
