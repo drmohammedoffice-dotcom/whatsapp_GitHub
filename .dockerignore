@@ -32,3 +32,15 @@
 **/sessions
 **/baileys_auth
 **/uploads
+
+# Uploaded media / runtime data (mounted as a volume at runtime). Listed explicitly:
+# apps/api/src/storage is source code and must stay in the build context.
+/storage
+/apps/api/storage
+
+# Not part of the server images
+/apps/mobile
+/apps/desktop
+/android
+/marketing
+/docs

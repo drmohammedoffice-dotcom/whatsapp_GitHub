@@ -31,7 +31,7 @@ COPY . .
 
 # Install all workspace dependencies. Fall back to a non-frozen install if the
 # committed lockfile is slightly out of sync, so deploys never hard-fail here.
-RUN pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Build the shared workspace package first (web imports its compiled dist),
 # then build only the web application.

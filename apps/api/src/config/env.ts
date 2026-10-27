@@ -147,3 +147,12 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+
+/**
+ * Docker Compose / Coolify pass unset `${VAR}` references as empty strings. Treat those
+ * as missing so schema defaults apply instead of failing validation (e.g. min length).
+ */
+export function parseEnv(env: Record<string, unknown>) {
+  const cleaned = Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ''));
+  return envSchema.parse(cleaned);
+}

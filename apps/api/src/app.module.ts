@@ -11,7 +11,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountModule } from './account/account.module';
 import { ChannelsModule } from './channels/channels.module';
-import { envSchema } from './config/env';
+import { parseEnv } from './config/env';
 import { ContactsModule } from './contacts/contacts.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { HealthModule } from './health/health.module';
@@ -53,7 +53,7 @@ function resolveEnvFilePath(): string {
       isGlobal: true,
       envFilePath: resolveEnvFilePath(),
       validate: (env) => {
-        const parsed = envSchema.parse(env);
+        const parsed = parseEnv(env);
 
         const extras: Record<string, string> = {};
         for (const [key, value] of Object.entries(env)) {

@@ -1,0 +1,155 @@
+# ChatLoora production stack for Coolify (Docker Compose build pack).
+#
+# In Coolify: New Resource → Docker Compose → this repo, branch main,
+# compose file `/docker-compose.coolify.yml`. Assign the domains to the
+# `gateway` service only (port 80):
+#   https://www.chatloora.com,https://chatloora.com,https://almutamayiziq.com,https://www.almutamayiziq.com
+# Fill the environment variables listed in deploy/coolify/README.md.
+#
+#   Traefik (Coolify, TLS) → gateway (nginx) ─┬─► web    (Next.js :3000)
+#                                              └─► api    (NestJS  :4000)
+#   api / worker ──► postgres (pgvector) + redis
+
+services:
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./deploy/coolify/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - web
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment: &app-env
+      NODE_ENV: production
+      API_PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chatloora}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-chatloora}?schema=public
+      REDIS_URL: redis://redis:6379
+      LOCAL_STORAGE_ROOT: /app/storage
+      API_PUBLIC_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+      WEB_PUBLIC_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+      PUBLIC_APP_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://www.chatloora.com,https://chatloora.com}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-2h}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      API_KEY_PEPPER: ${API_KEY_PEPPER}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+      AUTH_OTP_ENABLED: ${AUTH_OTP_ENABLED:-true}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
+      RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET}
+      WAYL_API_KEY: ${WAYL_API_KEY}
+      WAYL_API_BASE_URL: ${WAYL_API_BASE_URL}
+      WAYL_WEBHOOK_SECRET: ${WAYL_WEBHOOK_SECRET}
+      WAYL_ENV: ${WAYL_ENV}
+      USD_TO_IQD_RATE: ${USD_TO_IQD_RATE}
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET}
+      TIKTOK_REDIRECT_URI: ${TIKTOK_REDIRECT_URI}
+      TIKTOK_BUSINESS_APP_ID: ${TIKTOK_BUSINESS_APP_ID}
+      TIKTOK_BUSINESS_APP_SECRET: ${TIKTOK_BUSINESS_APP_SECRET}
+      TIKTOK_BUSINESS_SECRET: ${TIKTOK_BUSINESS_SECRET}
+      TIKTOK_BUSINESS_REDIRECT_URI: ${TIKTOK_BUSINESS_REDIRECT_URI}
+      META_APP_ID: ${META_APP_ID}
+      META_APP_SECRET: ${META_APP_SECRET}
+      META_AUTH_REDIRECT_URI: ${META_AUTH_REDIRECT_URI}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN}
+      META_OAUTH_INCLUDE_COMMENT_SCOPES: ${META_OAUTH_INCLUDE_COMMENT_SCOPES}
+      INSTAGRAM_API_APP_ID: ${INSTAGRAM_API_APP_ID}
+      META_WA_PHONE_NUMBER_ID: ${META_WA_PHONE_NUMBER_ID}
+      META_WA_WABA_ID: ${META_WA_WABA_ID}
+      META_WA_DISPLAY_PHONE: ${META_WA_DISPLAY_PHONE}
+      META_WA_ACCESS_TOKEN: ${META_WA_ACCESS_TOKEN}
+      META_WA_EMBEDDED_CONFIG_ID: ${META_WA_EMBEDDED_CONFIG_ID}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+    volumes:
+      - /data/chatloora/storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/api/v1/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment: *app-env
+    volumes:
+      - /data/chatloora/storage:/app/storage
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the browser bundle at build time.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+        NEXT_PUBLIC_SOCKET_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+        NEXT_PUBLIC_META_APP_ID: ${META_APP_ID}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_INTERNAL_URL: http://api:4000
+      API_PUBLIC_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+      WEB_PUBLIC_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+      NEXT_PUBLIC_APP_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+    depends_on:
+      - api
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chatloora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-chatloora}
+    volumes:
+      - chatloora-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - chatloora-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  chatloora-postgres:
+  chatloora-redis:

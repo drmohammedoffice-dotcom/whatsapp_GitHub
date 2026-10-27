@@ -14,7 +14,7 @@ FROM base AS build
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 RUN pnpm --filter @watsapp/database prisma:generate \
  && pnpm --filter @watsapp/shared build \
