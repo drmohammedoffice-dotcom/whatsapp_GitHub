@@ -11,6 +11,11 @@ export type FeatureDefinitionMeta = {
   descriptionAr: string;
   descriptionEn: string;
   sortOrder: number;
+  /**
+   * Feature removed from the product. Kept so stored plan values and limit parsing keep
+   * working, but never shown to customers (pricing, comparison) or in the plan editor.
+   */
+  retired?: boolean;
 };
 
 export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
@@ -86,6 +91,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'facebook_integration_enabled',
+    retired: true,
     category: 'social',
     valueType: 'BOOLEAN',
     nameAr: 'فيسبوك',
@@ -96,6 +102,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'instagram_integration_enabled',
+    retired: true,
     category: 'social',
     valueType: 'BOOLEAN',
     nameAr: 'إنستغرام',
@@ -106,6 +113,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'telegram_integration_enabled',
+    retired: true,
     category: 'social',
     valueType: 'BOOLEAN',
     nameAr: 'تيليغرام',
@@ -116,6 +124,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'ai_reply_enabled',
+    retired: true,
     category: 'ai',
     valueType: 'BOOLEAN',
     nameAr: 'الرد الذكي بالذكاء الاصطناعي',
@@ -126,6 +135,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'voice_ai_enabled',
+    retired: true,
     category: 'ai',
     valueType: 'BOOLEAN',
     nameAr: 'المساعد الصوتي الهاتفي',
@@ -136,6 +146,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'voice_minutes_limit',
+    retired: true,
     category: 'ai',
     valueType: 'LIMIT',
     nameAr: 'دقائق المكالمات الصوتية شهرياً',
@@ -146,6 +157,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'voice_calls_limit',
+    retired: true,
     category: 'ai',
     valueType: 'LIMIT',
     nameAr: 'حد مكالمات المساعد الصوتي شهرياً',
@@ -156,6 +168,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'creative_studio_enabled',
+    retired: true,
     category: 'ai',
     valueType: 'BOOLEAN',
     nameAr: 'الاستوديو الإبداعي',
@@ -166,6 +179,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'creative_images_limit',
+    retired: true,
     category: 'ai',
     valueType: 'LIMIT',
     nameAr: 'حد صور الاستوديو الإبداعي شهرياً',
@@ -176,6 +190,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'creative_video_seconds_limit',
+    retired: true,
     category: 'ai',
     valueType: 'LIMIT',
     nameAr: 'حد ثواني فيديو الاستوديو شهرياً',
@@ -186,6 +201,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'creative_4k_enabled',
+    retired: true,
     category: 'ai',
     valueType: 'BOOLEAN',
     nameAr: 'فيديو 4K في الاستوديو الإبداعي',
@@ -216,6 +232,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'ai_campaign_review_enabled',
+    retired: true,
     category: 'ai',
     valueType: 'BOOLEAN',
     nameAr: 'تحليل الحملات بالذكاء الاصطناعي',
@@ -226,6 +243,7 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
   },
   {
     key: 'appointments_enabled',
+    retired: true,
     category: 'other',
     valueType: 'BOOLEAN',
     nameAr: 'نظام المواعيد',
@@ -245,6 +263,10 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
     sortOrder: 120,
   },
 ];
+
+/** Features customers can actually use; drives pricing, comparison and the plan editor. */
+export const ACTIVE_FEATURES = FEATURE_REGISTRY.filter((feature) => !feature.retired);
+export const RETIRED_FEATURE_KEYS = FEATURE_REGISTRY.filter((feature) => feature.retired).map((feature) => feature.key);
 
 export type PlanLimits = {
   maxTrackingPhones: number;

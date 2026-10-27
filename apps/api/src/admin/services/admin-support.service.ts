@@ -10,26 +10,28 @@ export class AdminSupportService {
     private readonly audit: AdminAuditService,
   ) {}
 
-  list(params: { status?: SupportTicketStatus; skip?: number; take?: number }) {
-    return this.prisma.supportTicket.findMany({
+  /** The ticket's author relation is `user`; the admin UI reads it as `reporter`. */
+  async list(params: { status?: SupportTicketStatus; skip?: number; take?: number }) {
+    const rows = await this.prisma.supportTicket.findMany({
       where: params.status ? { status: params.status } : undefined,
       skip: params.skip ?? 0,
       take: Math.min(params.take ?? 50, 100),
       orderBy: { updatedAt: 'desc' },
       include: {
-        reporter: { select: { id: true, email: true, name: true } },
+        user: { select: { id: true, email: true, name: true } },
         assignee: { include: { user: { select: { email: true, name: true } } } },
         team: { select: { id: true, name: true } },
         _count: { select: { messages: true } },
       },
     });
+    return rows.map(({ user, ...row }) => ({ ...row, reporter: user }));
   }
 
   async getById(id: string) {
     const ticket = await this.prisma.supportTicket.findUnique({
       where: { id },
       include: {
-        reporter: true,
+        user: { select: { id: true, email: true, name: true } },
         assignee: { include: { user: true } },
         team: true,
         messages: {
@@ -39,7 +41,8 @@ export class AdminSupportService {
       },
     });
     if (!ticket) throw new NotFoundException('Ticket not found');
-    return ticket;
+    const { user, ...rest } = ticket;
+    return { ...rest, reporter: user };
   }
 
   create(adminUserId: string, input: {

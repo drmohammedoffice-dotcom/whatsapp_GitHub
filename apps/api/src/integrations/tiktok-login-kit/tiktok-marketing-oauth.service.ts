@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { TikTokConnectionStatus } from '@watsapp/database';
@@ -175,11 +175,32 @@ export class TikTokMarketingOAuthService {
     return allowed.includes(candidate) ? candidate : undefined;
   }
 
+  /**
+   * Valid TikTok Marketing token for the user. A token that cannot be decrypted or
+   * refreshed means the connection is broken: ask the user to reconnect instead of
+   * failing with a 500.
+   */
   async getValidMarketingAccessToken(userId: string): Promise<string> {
     const row = await this.prisma.tikTokMarketingConnection.findUnique({ where: { userId } });
     if (!row) {
-      throw new BadRequestException('TikTok Marketing account not connected');
+      throw new BadRequestException('حساب تيك توك غير مربوط. اربط حسابك من صفحة تكامل TikTok.');
     }
+    try {
+      return await this.resolveMarketingAccessToken(userId, row);
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.warn(`[Marketing OAuth] token unusable userId=${userId}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new ConflictException({
+        code: 'TIKTOK_RECONNECT_REQUIRED',
+        message: 'انتهى ربط حسابك في تيك توك أو أصبح غير صالح. أعد ربط حسابك من صفحة تكامل TikTok.',
+      });
+    }
+  }
+
+  private async resolveMarketingAccessToken(
+    userId: string,
+    row: NonNullable<Awaited<ReturnType<PrismaService['tikTokMarketingConnection']['findUnique']>>>,
+  ): Promise<string> {
 
     if (row.marketingExpiresAt.getTime() - Date.now() > TOKEN_REFRESH_BUFFER_MS) {
       return this.encryption.decryptJson<string>(row.encryptedMarketingAccessToken);

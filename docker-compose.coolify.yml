@@ -77,6 +77,9 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      # Mobile push via Expo (optional access token if enhanced push security is enabled).
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN}
+      PUSH_INCLUDE_MESSAGE_PREVIEW: ${PUSH_INCLUDE_MESSAGE_PREVIEW:-true}
     volumes:
       - /data/chatloora/storage:/app/storage
     depends_on:
@@ -120,6 +123,9 @@ services:
       API_PUBLIC_URL: ${PUBLIC_URL:-https://www.chatloora.com}
       WEB_PUBLIC_URL: ${PUBLIC_URL:-https://www.chatloora.com}
       NEXT_PUBLIC_APP_URL: ${PUBLIC_URL:-https://www.chatloora.com}
+      # App Links / Universal Links verification (/.well-known/*).
+      ANDROID_SHA256_CERT_FINGERPRINTS: ${ANDROID_SHA256_CERT_FINGERPRINTS}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID}
     depends_on:
       - api
 

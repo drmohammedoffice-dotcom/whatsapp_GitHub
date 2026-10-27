@@ -27,6 +27,12 @@ Traefik (Coolify + SSL) → gateway (nginx) ─┬─► web  (Next.js)
 > ⚠️ `ENCRYPTION_KEY` يجب أن يبقى **نفس القيمة الحالية** وإلا لن تُفك جلسات واتساب ورموز TikTok المحفوظة.
 
 باقي المتغيرات (TikTok, Meta, Wayl, Resend, Google, `USD_TO_IQD_RATE`) تُنسخ كما هي.
+
+متغيرات جديدة:
+- `ANDROID_SHA256_CERT_FINGERPRINTS`: بصمات SHA-256 (مفصولة بفاصلة) لمفتاح Play App Signing ومفتاح EAS — للروابط العميقة في أندرويد.
+- `APPLE_TEAM_ID`: معرّف الفريق من حساب Apple Developer — للروابط العميقة في iOS.
+- `EXPO_ACCESS_TOKEN` (اختياري): إذا فعّلت Enhanced Push Security في Expo.
+- `PUSH_INCLUDE_MESSAGE_PREVIEW`: `true` لإظهار نص الرسالة في الإشعار، `false` لإخفائه.
 `TIKTOK_REDIRECT_URI` و`TIKTOK_BUSINESS_REDIRECT_URI` تبقى على `almutamayiziq.com` لأنها مسجّلة في تطبيق TikTok.
 
 ## 3. الملفات المرفوعة
@@ -52,12 +58,21 @@ rsync -a /root/whatsapp_GitHub/apps/api/storage/ /data/chatloora/storage/
 4. أوقف nginx: `systemctl stop nginx && systemctl disable nginx`.
 5. شغّل Proxy في Coolify: **Servers → localhost → Proxy → Start**.
 6. اضغط **Deploy** في Coolify وانتظر بناء الخدمات.
-7. استعد القاعدة داخل حاوية postgres:
+7. استعد القاعدة داخل حاوية postgres (امسح المخطط أولاً، لأن الـ API ربما أنشأ جداول فارغة عند أول تشغيل):
    ```bash
    C=$(docker ps --format '{{.Names}}' | grep postgres | grep -v coolify | head -1)
+   docker exec $C sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
    docker cp /root/backups/cutover.dump $C:/tmp/cutover.dump
-   docker exec $C sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges --clean --if-exists /tmp/cutover.dump'
+   docker exec $C sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges /tmp/cutover.dump'
    ```
+   **Migration baseline (مرة واحدة فقط):** القاعدة المستعادة تحمل سجل الـ 60 migration القديمة (مؤرشفة في
+   `packages/database/prisma/migrations-archive`). استبدله بالـ baseline دون لمس أي بيانات:
+   ```bash
+   docker exec $C sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DELETE FROM _prisma_migrations;"'
+   A=$(docker ps --format '{{.Names}}' | grep -- '-api-' | head -1)
+   docker exec $A sh -c 'cd /app/packages/database && npx prisma migrate resolve --applied 20261027000000_baseline'
+   ```
+   عند إعادة تشغيل `api` يطبّق `migrate deploy` الـ migrations الجديدة فقط (`normalize_production_drift`, `device_tokens`)، وكلها إضافية وآمنة.
 8. أعد تشغيل `api` و`worker` من Coolify، وافتح https://www.chatloora.com وتأكد:
    - تسجيل الدخول، صفحة الحملات، `/api/v1/health/ready`.
    - رابط تتبع بكسل `/r/<slug>` ونموذج `/f/<slug>` ومتجر `/s/<slug>`.

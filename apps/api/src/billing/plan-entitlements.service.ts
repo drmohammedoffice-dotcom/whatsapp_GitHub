@@ -5,7 +5,9 @@ import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { GRACE_PERIOD_MS } from './plan-limits';
 import {
+  ACTIVE_FEATURES,
   FEATURE_REGISTRY,
+  RETIRED_FEATURE_KEYS,
   canCreateWithLimit,
   entitlementsFromLimits,
   isOverLimit,
@@ -189,9 +191,10 @@ export class PlanEntitlementsService implements OnModuleDestroy {
 
   async replacePlanEntitlements(planId: string, rows: StoredEntitlement[]) {
     await this.syncFeatureCatalog();
-    const known = new Set(FEATURE_REGISTRY.map((f) => f.key));
+    // Retired features are not edited any more: keep their stored rows untouched.
+    const known = new Set(ACTIVE_FEATURES.map((f) => f.key));
     await this.prisma.$transaction(async (tx) => {
-      await tx.planEntitlement.deleteMany({ where: { planId } });
+      await tx.planEntitlement.deleteMany({ where: { planId, featureKey: { notIn: RETIRED_FEATURE_KEYS } } });
       await tx.planEntitlement.createMany({
         data: rows
           .filter((row) => known.has(row.featureKey))
@@ -437,7 +440,7 @@ export class PlanEntitlementsService implements OnModuleDestroy {
   }
 
   listFeatureDefinitions() {
-    return FEATURE_REGISTRY;
+    return ACTIVE_FEATURES;
   }
 
   hasFeature(limits: PlanLimits, feature: PlanFeature) {

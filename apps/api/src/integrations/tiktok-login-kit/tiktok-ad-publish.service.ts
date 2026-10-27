@@ -2621,6 +2621,7 @@ export class TikTokAdPublishService {
   }
 
   private async tokenForAdvertiser(userId: string, advertiserId: string) {
+    if (!advertiserId) throw new BadRequestException('اختر الحساب الإعلاني أولاً.');
     const advertiser = await this.prisma.tikTokMarketingAdvertiser.findUnique({
       where: { userId_advertiserId: { userId, advertiserId } },
     });

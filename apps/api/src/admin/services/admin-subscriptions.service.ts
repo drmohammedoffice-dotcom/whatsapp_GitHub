@@ -7,7 +7,7 @@ import {
 } from '@watsapp/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BillingAccessService } from '../../billing/billing-access.service';
-import { FEATURE_REGISTRY, entitlementsFromLimits, seedLimitsForSlug, type StoredEntitlement } from '../../billing/feature-registry';
+import { ACTIVE_FEATURES, FEATURE_REGISTRY, entitlementsFromLimits, seedLimitsForSlug, type StoredEntitlement } from '../../billing/feature-registry';
 import { PlanEntitlementsService } from '../../billing/plan-entitlements.service';
 import { AdminAuditService } from './admin-audit.service';
 
@@ -43,7 +43,7 @@ export class AdminSubscriptionsService {
       result.push({
         ...plan,
         limits,
-        entitlements: FEATURE_REGISTRY.map((feature) => {
+        entitlements: ACTIVE_FEATURES.map((feature) => {
           const row = rows.find((item) => item.featureKey === feature.key);
           return {
             ...feature,

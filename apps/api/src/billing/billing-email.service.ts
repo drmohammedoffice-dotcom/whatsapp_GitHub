@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 
+const SUPPORT_EMAIL = 'support@chatloora.com';
+
 export interface InvoiceEmailParams {
   to: string;
   customerName: string;
@@ -29,46 +31,9 @@ export class BillingEmailService {
   }
 
   async sendInvoiceEmail(params: InvoiceEmailParams) {
-    const { to, customerName, invoiceNumber, planName, billingCycle, amountCents, currency, paidAt, periodStart, periodEnd, paymentMethod } = params;
-
-    const subject = `Your ChatLoora invoice ${invoiceNumber} — ${planName}`;
-    const html = this.invoiceTemplate({
-      customerName,
-      invoiceNumber,
-      planName,
-      billingCycle,
-      amountCents,
-      currency,
-      paidAt,
-      periodStart,
-      periodEnd,
-      paymentMethod,
-    });
-
-    if (!this.resend) {
-      this.logger.warn(`RESEND_API_KEY not set — invoice ${invoiceNumber} for ${to} not sent`);
-      return { id: 'dev-mode' };
-    }
-
-    try {
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to,
-        subject,
-        html,
-      });
-
-      if (result.error) {
-        this.logger.error(`Resend invoice error for ${to}: ${result.error.message}`);
-        return { id: null, error: result.error.message };
-      }
-
-      this.logger.log(`Invoice ${invoiceNumber} sent to ${to}`);
-      return result.data;
-    } catch (err) {
-      this.logger.error(`Failed to send invoice ${invoiceNumber} to ${to}: ${err instanceof Error ? err.message : String(err)}`);
-      return { id: null, error: err instanceof Error ? err.message : String(err) };
-    }
+    const { to, invoiceNumber, planName } = params;
+    const subject = `فاتورة جات لورا رقم ${invoiceNumber} — ${planName}`;
+    return this.deliver(to, subject, this.invoiceTemplate(params), `invoice ${invoiceNumber}`);
   }
 
   async sendRenewalEmail(params: {
@@ -79,175 +44,145 @@ export class BillingEmailService {
     payUrl: string;
     periodEnd: Date;
   }) {
-    if (!this.resend) {
-      this.logger.warn(`RESEND_API_KEY not set — renewal email for ${params.to} not sent`);
-      return { id: 'dev-mode' };
-    }
-    const dateFmt = params.periodEnd.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    try {
-      const result = await this.resend.emails.send({
-        from: this.fromEmail,
-        to: params.to,
-        subject: `تجديد اشتراك ChatLoora — ${params.planName}`,
-        html: `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
-<p>سيتم تجديد باقة <strong>${this.escapeHtml(params.planName)}</strong> (${this.escapeHtml(params.amountLabel)}) بتاريخ ${dateFmt}.</p>
-<p><a href="${this.escapeHtml(params.payUrl)}">ادفع الآن لتجديد الاشتراك</a></p>
-<p>يمكنك إيقاف التجديد التلقائي من صفحة الحساب في ChatLoora.</p>`,
-      });
-      return result.data;
-    } catch (err) {
-      this.logger.error(`Renewal email failed: ${err instanceof Error ? err.message : String(err)}`);
-      return { id: null };
-    }
+    const html = this.layout({
+      preheader: `موعد تجديد باقة ${params.planName}`,
+      title: 'موعد تجديد اشتراكك',
+      body: `<p>مرحباً ${this.escapeHtml(params.customerName)}،</p>
+<p>يحين موعد تجديد باقة <strong>${this.escapeHtml(params.planName)}</strong> (${this.escapeHtml(params.amountLabel)}) بتاريخ <strong>${this.arabicDate(params.periodEnd, false)}</strong>.</p>
+<p>ادفع قبل هذا التاريخ حتى تستمر روابط البكسل والحملات دون توقف. يمكنك إيقاف التجديد التلقائي من صفحة الحساب.</p>`,
+      action: { label: 'تجديد الاشتراك', url: params.payUrl },
+    });
+    return this.deliver(params.to, `تجديد اشتراك جات لورا — ${params.planName}`, html, 'renewal');
   }
 
-  private invoiceTemplate(params: {
-    customerName: string;
-    invoiceNumber: string;
-    planName: string;
-    billingCycle: 'MONTHLY' | 'YEARLY';
-    amountCents: number;
-    currency: string;
-    paidAt: Date;
-    periodStart: Date;
-    periodEnd: Date;
-    paymentMethod?: string;
-  }) {
+  async sendTrialStarted(params: { to: string; customerName: string; endsAt: Date; plansUrl: string }) {
+    const html = this.layout({
+      preheader: 'تجربتك المجانية مفعّلة لمدة 3 أيام',
+      title: 'أهلاً بك في جات لورا',
+      body: `<p>مرحباً ${this.escapeHtml(params.customerName)}،</p>
+<p>فعّلنا لحسابك تجربة مجانية لمدة <strong>3 أيام</strong> بدون أي دفع.</p>
+<p>تنتهي التجربة في <strong>${this.arabicDate(params.endsAt)}</strong>. بعدها تتوقف روابط البكسل والحملات حتى تفعّل الاشتراك، وتبقى بياناتك محفوظة.</p>`,
+      action: { label: 'عرض الباقات', url: params.plansUrl },
+    });
+    return this.sendTrialMail(params.to, 'تم تفعيل تجربتك المجانية لمدة 3 أيام', html);
+  }
+
+  async sendTrialReminder(params: { to: string; customerName: string; endsAt: Date; plansUrl: string }) {
+    const html = this.layout({
+      preheader: 'تبقّى أقل من يوم على انتهاء تجربتك',
+      title: 'تجربتك تنتهي قريباً',
+      body: `<p>مرحباً ${this.escapeHtml(params.customerName)}،</p>
+<p>تنتهي تجربتك المجانية في <strong>${this.arabicDate(params.endsAt)}</strong>.</p>
+<p>فعّل الاشتراك قبل انتهاء المدة حتى تستمر روابط البكسل والحملات الإعلانية دون توقف.</p>`,
+      action: { label: 'تفعيل الاشتراك', url: params.plansUrl },
+    });
+    return this.sendTrialMail(params.to, 'تبقّى أقل من يوم على انتهاء تجربتك المجانية', html);
+  }
+
+  async sendTrialEnded(params: { to: string; customerName: string; plansUrl: string }) {
+    const html = this.layout({
+      preheader: 'انتهت التجربة المجانية',
+      title: 'انتهت الفترة المجانية',
+      body: `<p>مرحباً ${this.escapeHtml(params.customerName)}،</p>
+<p>انتهت تجربتك المجانية. روابط البكسل والحملات متوقفة حتى تفعّل الاشتراك، وبياناتك محفوظة وتعود للعمل فور التفعيل.</p>`,
+      action: { label: 'تفعيل الاشتراك الآن', url: params.plansUrl },
+    });
+    return this.sendTrialMail(params.to, 'انتهت الفترة المجانية — فعّل الاشتراك', html);
+  }
+
+  private invoiceTemplate(params: InvoiceEmailParams) {
     const { customerName, invoiceNumber, planName, billingCycle, amountCents, currency, paidAt, periodStart, periodEnd, paymentMethod } = params;
     const amount =
       currency === 'IQD'
-        ? `${amountCents.toLocaleString('en-US')} IQD`
-        : (amountCents / 100).toLocaleString('en-US', { style: 'currency', currency, minimumFractionDigits: 0 });
-    const cycleLabel = billingCycle === 'YEARLY' ? 'Yearly' : 'Monthly';
-    const dateFmt = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const methodLabel = paymentMethod ? this.escapeHtml(paymentMethod) : 'Online payment';
+        ? `${amountCents.toLocaleString('ar-IQ')} د.ع`
+        : (amountCents / 100).toLocaleString('ar-IQ', { style: 'currency', currency, minimumFractionDigits: 0 });
+    const cycleLabel = billingCycle === 'YEARLY' ? 'سنوي' : 'شهري';
+    const method = paymentMethod ? this.escapeHtml(paymentMethod) : 'دفع إلكتروني';
+    const row = (label: string, value: string, strong = false) =>
+      `<tr><td style="padding:12px 0;color:#6B6880;font-size:14px;border-bottom:1px solid #E7E4F0;">${label}</td>` +
+      `<td style="padding:12px 0;color:#0F0A1F;font-size:14px;border-bottom:1px solid #E7E4F0;text-align:left;${strong ? 'font-weight:700;' : ''}">${value}</td></tr>`;
+    return this.layout({
+      preheader: `فاتورة رقم ${invoiceNumber} — تم الدفع`,
+      title: 'تم استلام دفعتك ✅',
+      body: `<p>مرحباً ${this.escapeHtml(customerName)}،</p>
+<p>شكراً لك. اشتراكك في باقة <strong>${this.escapeHtml(planName)}</strong> فعّال حتى <strong>${this.arabicDate(periodEnd, false)}</strong>.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:20px 0;">
+${row('رقم الفاتورة', this.escapeHtml(invoiceNumber))}
+${row('تاريخ الدفع', this.arabicDate(paidAt, false))}
+${row('الباقة', `${this.escapeHtml(planName)} — ${cycleLabel}`)}
+${row('مدة الاشتراك', `${this.arabicDate(periodStart, false)} ← ${this.arabicDate(periodEnd, false)}`)}
+${row('طريقة الدفع', method)}
+${row('المبلغ المدفوع', amount, true)}
+</table>
+<p style="color:#6B6880;font-size:13px;">احتفظ بهذه الرسالة كإيصال. لأي استفسار عن الفاتورة راسلنا على ${SUPPORT_EMAIL}.</p>`,
+    });
+  }
 
-    return `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f4f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:560px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-        <tr><td style="background:linear-gradient(135deg,#7c3aed,#06b6d4);padding:32px;text-align:center;">
-          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">ChatLoora</h1>
-          <p style="margin:8px 0 0;color:rgba(255,255,255,.85);font-size:14px;">Payment Invoice</p>
-        </td></tr>
-        <tr><td style="padding:32px;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
-            <div>
-              <p style="margin:0;color:#374151;font-size:15px;font-weight:600;">${this.escapeHtml(customerName)}</p>
-              <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">Invoice #${this.escapeHtml(invoiceNumber)}</p>
-            </div>
-            <div style="text-align:right;">
-              <p style="margin:0;color:#6b7280;font-size:13px;">Date: ${dateFmt(paidAt)}</p>
-              <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">Status: <span style="color:#059669;font-weight:600;">PAID</span></p>
-            </div>
-          </div>
-
-          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;">
-            <tr style="background:#f9fafb;">
-              <td style="padding:12px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Description</td>
-              <td style="padding:12px 16px;color:#6b7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;text-align:right;">Amount</td>
-            </tr>
-            <tr style="border-bottom:1px solid #e5e7eb;">
-              <td style="padding:16px;color:#374151;font-size:14px;">
-                <strong>${this.escapeHtml(planName)}</strong> — ${cycleLabel} subscription
-                <div style="color:#6b7280;font-size:12px;margin-top:4px;">${dateFmt(periodStart)} → ${dateFmt(periodEnd)}</div>
-              </td>
-              <td style="padding:16px;color:#374151;font-size:14px;text-align:right;font-weight:600;">${amount}</td>
-            </tr>
-            <tr>
-              <td style="padding:16px;color:#6b7280;font-size:13px;">Payment method</td>
-              <td style="padding:16px;color:#374151;font-size:13px;text-align:right;">${methodLabel}</td>
-            </tr>
-            <tr style="background:#f0fdf4;">
-              <td style="padding:16px;color:#059669;font-size:15px;font-weight:700;">Total Paid</td>
-              <td style="padding:16px;color:#059669;font-size:18px;font-weight:700;text-align:right;">${amount}</td>
-            </tr>
-          </table>
-
-          <div style="background:#f3f0ff;border-radius:12px;padding:20px;margin-bottom:24px;">
-            <p style="margin:0;color:#7c3aed;font-size:14px;font-weight:600;">✅ Your subscription is now active</p>
-            <p style="margin:8px 0 0;color:#6b7280;font-size:13px;line-height:1.6;">
-              Your <strong>${this.escapeHtml(planName)}</strong> plan is active until <strong>${dateFmt(periodEnd)}</strong>.
-              You can manage your subscription from your dashboard.
-            </p>
-          </div>
-
-          <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">
-            If you have any questions about this invoice, please contact our support team.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
+  /** Shared Arabic RTL email layout in the brand colours (inline styles for mail clients). */
+  private layout(input: { preheader: string; title: string; body: string; action?: { label: string; url: string } }) {
+    const button = input.action
+      ? `<p style="margin:28px 0 8px;text-align:center;"><a href="${this.escapeHtml(input.action.url)}" style="display:inline-block;background:#7C3AED;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 28px;border-radius:10px;">${this.escapeHtml(input.action.label)}</a></p>`
+      : '';
+    return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"></head>
+<body style="margin:0;padding:0;background:#F8F7FC;font-family:Tahoma,'Segoe UI',Arial,sans-serif;direction:rtl;text-align:right;">
+<span style="display:none;max-height:0;overflow:hidden;opacity:0;">${this.escapeHtml(input.preheader)}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E7E4F0;">
+<tr><td style="background:#7C3AED;background-image:linear-gradient(135deg,#7C3AED,#22D3EE);padding:24px 28px;color:#ffffff;">
+<div style="font-size:20px;font-weight:700;">جات لورا · ChatLoora</div>
+<div style="font-size:13px;opacity:.9;margin-top:4px;">إعلانات تيك توك وتتبع واتساب</div>
+</td></tr>
+<tr><td style="padding:28px;color:#0F0A1F;font-size:15px;line-height:1.8;">
+<h1 style="margin:0 0 16px;font-size:20px;color:#0F0A1F;">${this.escapeHtml(input.title)}</h1>
+${input.body}
+${button}
+</td></tr>
+<tr><td style="padding:18px 28px;background:#F8F7FC;color:#6B6880;font-size:12px;line-height:1.7;">
+وصلتك هذه الرسالة لأن لديك حساباً في جات لورا. للمساعدة: ${SUPPORT_EMAIL}
+</td></tr>
+</table>
+</td></tr>
+</table>
 </body>
 </html>`;
   }
 
-  async sendTrialStarted(params: { to: string; customerName: string; endsAt: Date; plansUrl: string }) {
-    return this.sendTrialMail(
-      params.to,
-      'تم تفعيل تجربتك المجانية لمدة 3 أيام',
-      `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
-<p>تم منح حسابك تجربة مجانية لمدة <strong>3 أيام</strong> بدون طلب تفعيل أو دفع الآن.</p>
-<p>تنتهي التجربة في <strong>${this.arabicDate(params.endsAt)}</strong>.</p>
-<p>بعد انتهاء المدة يجب تفعيل الاشتراك. إذا لم يتم التفعيل تتوقف روابط البكسل والحملات الإعلانية وبقية ميزات المنصة، وتُحفظ بياناتك لتعود بعد التفعيل.</p>
-<p><a href="${this.escapeHtml(params.plansUrl)}">صفحة الباقات</a></p>`,
-    );
-  }
-
-  async sendTrialReminder(params: { to: string; customerName: string; endsAt: Date; plansUrl: string }) {
-    return this.sendTrialMail(
-      params.to,
-      'تبقّى أقل من يوم على انتهاء تجربتك المجانية',
-      `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
-<p>تنتهي تجربتك المجانية في <strong>${this.arabicDate(params.endsAt)}</strong>.</p>
-<p>فعّل الاشتراك قبل انتهاء المدة حتى تستمر روابط البكسل والحملات الإعلانية دون توقف.</p>
-<p><a href="${this.escapeHtml(params.plansUrl)}">تفعيل الاشتراك</a></p>`,
-    );
-  }
-
-  async sendTrialEnded(params: { to: string; customerName: string; plansUrl: string }) {
-    return this.sendTrialMail(
-      params.to,
-      'انتهت الفترة المجانية — فعّل الاشتراك',
-      `<p>مرحباً ${this.escapeHtml(params.customerName)}</p>
-<p>انتهت تجربتك المجانية لمدة 3 أيام.</p>
-<p>روابط البكسل والحملات الإعلانية وبقية ميزات المنصة متوقفة إلى أن تفعّل الاشتراك. بياناتك محفوظة وتعود للعمل بعد التفعيل.</p>
-<p><a href="${this.escapeHtml(params.plansUrl)}">تفعيل الاشتراك الآن</a></p>`,
-    );
-  }
-
-  private arabicDate(value: Date) {
+  /** Arabic date in Baghdad time (the server runs in UTC). */
+  private arabicDate(value: Date, withTime = true) {
     return value.toLocaleString('ar-IQ', {
+      timeZone: 'Asia/Baghdad',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
     });
   }
 
-  private async sendTrialMail(to: string, subject: string, html: string) {
+  private async deliver(to: string, subject: string, html: string, label: string) {
     if (!this.resend) {
-      this.logger.warn(`RESEND_API_KEY not set — trial email for ${to} not sent`);
-      return false;
+      this.logger.warn(`RESEND_API_KEY not set — ${label} email for ${to} not sent`);
+      return { id: 'dev-mode' };
     }
     try {
       const result = await this.resend.emails.send({ from: this.fromEmail, to, subject, html });
       if (result.error) {
-        this.logger.error(`Trial email error for ${to}: ${result.error.message}`);
-        return false;
+        this.logger.error(`Resend ${label} error for ${to}: ${result.error.message}`);
+        return { id: null, error: result.error.message };
       }
-      this.logger.log(`Trial email sent to ${to}: ${subject}`);
-      return true;
+      this.logger.log(`${label} email sent to ${to}`);
+      return result.data;
     } catch (err) {
-      this.logger.error(`Trial email failed for ${to}: ${err instanceof Error ? err.message : String(err)}`);
-      return false;
+      this.logger.error(`${label} email failed for ${to}: ${err instanceof Error ? err.message : String(err)}`);
+      return { id: null, error: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  private async sendTrialMail(to: string, subject: string, html: string) {
+    const result = await this.deliver(to, subject, html, 'trial');
+    return Boolean(result && 'id' in result && result.id && result.id !== 'dev-mode');
   }
 
   private escapeHtml(value: string) {

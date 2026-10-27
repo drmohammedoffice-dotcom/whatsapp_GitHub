@@ -9,6 +9,7 @@ import { QUEUES } from '../queues/queues.constants';
 import { TikTokEventsService } from '../tiktok/tiktok-events.service';
 import { TikTokIntegrationTrackingService } from '../tiktok-integration/tiktok-integration-tracking.service';
 import { isTrackingChannel } from './channel-purpose';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class ChannelMessageService {
@@ -19,6 +20,7 @@ export class ChannelMessageService {
     private readonly realtime: RealtimeGateway,
     @Optional() private readonly _tiktokIntegrationTracking: TikTokIntegrationTrackingService,
     @Optional() @Inject(TikTokEventsService) private readonly tiktokEvents?: TikTokEventsService,
+    @Optional() private readonly push?: PushService,
   ) {}
 
   async ingest(input: {
@@ -174,6 +176,16 @@ export class ChannelMessageService {
       this.realtime.emitTeam(input.teamId, SOCKET_EVENTS.CONVERSATION_MESSAGE_CREATED, payload);
       this.realtime.emitConversation(conversation.id, SOCKET_EVENTS.CONVERSATION_MESSAGE_CREATED, payload);
       this.realtime.emitTeam(input.teamId, SOCKET_EVENTS.CONVERSATION_UPDATED, conversation);
+    }
+
+    // Mobile push for genuinely new customer messages (not history sync, not echoes).
+    if (!isHistory && !existedBefore && input.direction === MessageDirection.INBOUND && this.push) {
+      void this.push.notifyInboxMessage({
+        teamId: input.teamId,
+        conversationId: conversation.id,
+        senderName: contact.contact.displayName,
+        preview: normalizedText,
+      });
     }
 
     if (!isHistory && this.tiktokEvents && input.direction === MessageDirection.INBOUND && isNewConversation) {

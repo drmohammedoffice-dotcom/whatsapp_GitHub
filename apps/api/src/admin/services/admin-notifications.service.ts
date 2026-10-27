@@ -241,7 +241,8 @@ export class AdminNotificationsService {
 
   private async emailUser(to: string, title: string, body: string) {
     const apiKey = this.config.get<string>('RESEND_API_KEY');
-    if (!apiKey || !to) return;
+    // Anonymized (deleted) accounts use a non-deliverable .invalid address.
+    if (!apiKey || !to || to.endsWith('.invalid')) return;
     try {
       const resend = new Resend(apiKey);
       const from = this.config.get<string>('RESEND_FROM_EMAIL', 'ChatLoora <onboarding@resend.dev>');
@@ -249,10 +250,14 @@ export class AdminNotificationsService {
         from,
         to,
         subject: title,
-        html: `<div style="font-family:sans-serif;padding:24px"><h2>${title}</h2><p>${body}</p></div>`,
+        html: `<div dir="rtl" lang="ar" style="font-family:Tahoma,'Segoe UI',Arial,sans-serif;padding:24px;direction:rtl;text-align:right;line-height:1.8;color:#0F0A1F"><h2 style="color:#7C3AED;margin:0 0 12px">${escapeHtml(title)}</h2><p style="white-space:pre-line;margin:0">${escapeHtml(body)}</p><p style="color:#6B6880;font-size:12px;margin-top:24px">جات لورا · ChatLoora — support@chatloora.com</p></div>`,
       });
     } catch (error) {
       this.logger.warn(`Notice email failed: ${error instanceof Error ? error.message : 'unknown'}`);
     }
   }
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

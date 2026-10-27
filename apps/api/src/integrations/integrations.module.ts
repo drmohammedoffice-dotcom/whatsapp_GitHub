@@ -16,7 +16,6 @@ import { MetaController, MetaOAuthCallbackController, MetaWebhookController } fr
 import { MetaMediaService } from './meta/meta-media.service';
 import { MetaOAuthService } from './meta/meta-oauth.service';
 import { MetaService } from './meta/meta.service';
-import { MetaCommentPollService } from './meta/meta-comment-poll.service';
 import { MetaWebhookLogService } from './meta/meta-webhook-log.service';
 import { TikTokLoginKitModule } from './tiktok-login-kit/tiktok-login-kit.module';
 import { PlatformModule } from '../platform/platform.module';
@@ -42,7 +41,6 @@ import { PlatformModule } from '../platform/platform.module';
   ],
   providers: [
     MetaService,
-    MetaCommentPollService,
     MetaOAuthService,
     MetaWebhookLogService,
     MetaMediaService,

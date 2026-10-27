@@ -3,7 +3,7 @@ import { ModuleRef } from '@nestjs/core';
 import { BillingInterval, InvoiceStatus, OfficialNotificationType, PaymentStatus, SubscriptionStatus } from '@watsapp/database';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PlanSlug } from './dto/billing.dto';
-import { FEATURE_REGISTRY, formatLimitLabel, type PlanLimits } from './feature-registry';
+import { ACTIVE_FEATURES, formatLimitLabel, type PlanLimits } from './feature-registry';
 import { BillingAccessService } from './billing-access.service';
 import { carryOverPeriodEnd, planDurationDays } from './billing-carryover';
 import { PlanEntitlementsService } from './plan-entitlements.service';
@@ -150,23 +150,23 @@ export class BillingService {
       },
       3: {
         ar: {
-          description: '5 أرقام واتساب و20 بكسل، مع تحليل الحملات بالذكاء الاصطناعي والمتجر والاستمارات ودعم فوري.',
+          description: '5 أرقام واتساب و20 بكسل، مع تقارير أداء الحملات والمتجر والاستمارات ودعم فوري.',
           features: [
             '✓ ربط 5 أرقام واتساب',
             '✓ 20 بكسل تتبع',
             '✓ ربط الحساب وإنشاء الحملات',
-            '✓ تحليل نتائج الحملة بالذكاء الاصطناعي',
+            '✓ تقارير أداء الحملات',
             '✓ الاستمارات الفورية والمتجر الإلكتروني',
             '✓ تقارير خاصة ودعم ممتاز وفوري',
           ],
         },
         en: {
-          description: '5 WhatsApp numbers and 20 pixels, with AI campaign analytics, store, forms, and priority support.',
+          description: '5 WhatsApp numbers and 20 pixels, with campaign performance reports, store, forms, and priority support.',
           features: [
             '✓ 5 WhatsApp numbers',
             '✓ 20 tracking pixels',
             '✓ Link account and create campaigns',
-            '✓ AI campaign performance analytics',
+            '✓ Campaign performance reports',
             '✓ Instant forms and online store',
             '✓ Special reports and priority support',
           ],
@@ -179,7 +179,7 @@ export class BillingService {
   private featureBullets(limits: PlanLimits, locale: 'ar' | 'en') {
     const included: string[] = [];
     const excluded: string[] = [];
-    for (const feature of FEATURE_REGISTRY) {
+    for (const feature of ACTIVE_FEATURES) {
       const label = locale === 'ar' ? feature.nameAr : feature.nameEn;
       if (feature.valueType === 'BOOLEAN') {
         const on = this.boolFromLimits(limits, feature.key);
@@ -194,7 +194,7 @@ export class BillingService {
   }
 
   private comparisonRow(limits: PlanLimits) {
-    return FEATURE_REGISTRY.map((feature) => ({
+    return ACTIVE_FEATURES.map((feature) => ({
       key: feature.key,
       category: feature.category,
       nameAr: feature.nameAr,

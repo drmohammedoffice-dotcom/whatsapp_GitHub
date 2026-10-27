@@ -1,11 +1,12 @@
 import { ValidationPipe, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { FriendlyErrorsFilter } from './common/filters/friendly-errors.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
@@ -33,6 +34,7 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useGlobalFilters(new FriendlyErrorsFilter(app.get(HttpAdapterHost).httpAdapter));
   app.setGlobalPrefix('api/v1', {
     exclude: [
       { path: 'api/auth/tiktok/login', method: RequestMethod.GET },
@@ -42,9 +44,6 @@ async function bootstrap() {
       { path: 'api/auth/tiktok-business/callback', method: RequestMethod.GET },
       { path: 'api/webhooks/meta', method: RequestMethod.GET },
       { path: 'api/webhooks/meta', method: RequestMethod.POST },
-      { path: 'api/webhooks/twilio/voice', method: RequestMethod.POST },
-      { path: 'api/webhooks/twilio/gather', method: RequestMethod.POST },
-      { path: 'api/webhooks/twilio/status', method: RequestMethod.POST },
       { path: 'api/auth/meta/login', method: RequestMethod.POST },
       { path: 'api/auth/meta/callback', method: RequestMethod.GET },
       { path: 'api/meta/sdk-config', method: RequestMethod.GET },

@@ -10,6 +10,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountModule } from './account/account.module';
+import { PushModule } from './push/push.module';
 import { ChannelsModule } from './channels/channels.module';
 import { parseEnv } from './config/env';
 import { ContactsModule } from './contacts/contacts.module';
@@ -95,6 +96,7 @@ function resolveEnvFilePath(): string {
     HealthModule,
     AuthModule,
     AccountModule,
+    PushModule,
     ChannelsModule,
     ContactsModule,
     NotificationsModule,
