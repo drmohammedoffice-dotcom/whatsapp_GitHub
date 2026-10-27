@@ -1,0 +1,12 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "جات لورا",
+    "NSCameraUsageDescription": "يستخدم جات لورا الكاميرا عندما تختار التقاط صورة أو فيديو لإرفاقه برسالة أو رفعه.",
+    "NSPhotoLibraryUsageDescription": "يصل جات لورا إلى مكتبة الصور عندما تختار صوراً أو مقاطع فيديو لإرفاقها برسالة أو رفعها.",
+    "NSPhotoLibraryAddUsageDescription": "يحفظ جات لورا الصور في مكتبة الصور عندما تختار حفظ صورة.",
+    "NSMicrophoneUsageDescription": "يستخدم جات لورا الميكروفون لتسجيل الرسائل الصوتية التي ترسلها في المحادثات."
+  },
+  "android": {
+    "app_name": "جات لورا"
+  }
+}

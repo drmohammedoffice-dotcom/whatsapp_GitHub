@@ -9,6 +9,9 @@ export const APP_URL = (
 
 export const START_PATH = '/login';
 
+/** Page opened instead of a blocked (payment/pricing) page. */
+export const FALLBACK_PATH = '/dashboard';
+
 const APP_HOSTS = ['chatloora.com', 'localhost', '127.0.0.1'];
 
 /** Third-party pages that may load inside the WebView (TikTok/Meta OAuth, WhatsApp). */
@@ -29,13 +32,35 @@ function hostMatches(host: string, suffixes: string[]): boolean {
   return suffixes.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
-function parseHttpUrl(urlString: string): URL | null {
-  try {
-    const u = new URL(urlString);
-    return u.protocol === 'https:' || u.protocol === 'http:' ? u : null;
-  } catch {
-    return null;
-  }
+type HttpUrl = {
+  protocol: 'http:' | 'https:';
+  /** Lower-case host without userinfo, port or trailing dot. */
+  hostname: string;
+  pathname: string;
+  search: string;
+  hash: string;
+};
+
+/**
+ * Minimal http(s) URL parser. React Native's built-in `URL` is a regex approximation whose
+ * `hostname` can be spoofed (`https://evil.com/@chatloora.com` reports `chatloora.com`), so the
+ * authority is isolated here first (`/`, `\`, `?` and `#` end it, as in browsers).
+ */
+function parseHttpUrl(urlString: string): HttpUrl | null {
+  const m = /^(https?):\/\/([^/\\?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/i.exec(urlString.trim());
+  if (!m) return null;
+  const authority = m[2] ?? '';
+  let hostname = authority.slice(authority.lastIndexOf('@') + 1);
+  hostname = hostname.startsWith('[') ? hostname.slice(0, hostname.indexOf(']') + 1) : hostname.replace(/:\d*$/, '');
+  hostname = hostname.toLowerCase().replace(/\.$/, '');
+  if (!hostname) return null;
+  return {
+    protocol: (m[1] ?? '').toLowerCase() === 'https' ? 'https:' : 'http:',
+    hostname,
+    pathname: m[3] || '/',
+    search: m[4] ?? '',
+    hash: m[5] ?? '',
+  };
 }
 
 export function isAllowedNavigation(urlString: string): boolean {
@@ -57,6 +82,12 @@ export function requiresSystemBrowser(urlString: string): boolean {
  */
 const BLOCKED_HOST_SUFFIXES = ['wayl.io', 'wayl.com'];
 const BLOCKED_APP_PATHS = [/^\/plans(\/|$)/, /^\/pricing(\/|$)/, /^\/tiktok\/ads\/topup(\/|$)/, /^\/tiktok\/ads\/balance(\/|$)/];
+
+/** Payment providers stay blocked even inside iframes of in-app pages. */
+export function isBlockedHost(urlString: string): boolean {
+  const u = parseHttpUrl(urlString);
+  return !!u && hostMatches(u.hostname.toLowerCase(), BLOCKED_HOST_SUFFIXES);
+}
 
 export function isBlockedInApp(urlString: string): boolean {
   const u = parseHttpUrl(urlString);
@@ -82,4 +113,34 @@ export function deepLinkToAppUrl(link: string | null | undefined): string | null
     return `${APP_URL}${u.pathname}${u.search}${u.hash}`;
   }
   return null;
+}
+
+/** Returns the URL, or the dashboard when the store policy blocks it in the app. */
+export function safeAppTarget(urlString: string): string {
+  return isBlockedInApp(urlString) ? `${APP_URL}${FALLBACK_PATH}` : urlString;
+}
+
+/**
+ * Hosts whose pages may talk to the native bridge: ChatLoora itself (and the configured
+ * APP_URL host, e.g. localhost in development). OAuth/third-party pages never qualify.
+ */
+export const TRUSTED_BRIDGE_HOSTS: string[] = Array.from(
+  new Set(['chatloora.com', parseHttpUrl(APP_URL)?.hostname].filter((h): h is string => !!h)),
+);
+
+export function isTrustedAppUrl(urlString: string | null | undefined): boolean {
+  if (!urlString) return false;
+  const u = parseHttpUrl(urlString);
+  if (!u) return false;
+  const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  if (u.protocol !== 'https:' && !isLocal) return false;
+  return hostMatches(u.hostname, TRUSTED_BRIDGE_HOSTS);
+}
+
+/** Resolves a site-relative path (`/inbox/42`) against APP_URL; anything else is rejected. */
+export function appUrlFromRelativePath(path: unknown): string | null {
+  if (typeof path !== 'string' || path.length > 2048) return null;
+  // Must be `/x`, never `//host` or `/\host` (protocol-relative), and contain no whitespace/control chars.
+  if (!/^\/(?![/\\])/.test(path) || /[\s\\\u0000-\u001f\u007f]/.test(path)) return null;
+  return `${APP_URL}${path}`;
 }

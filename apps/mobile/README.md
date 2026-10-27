@@ -89,21 +89,41 @@ eas submit -p ios --profile production
 
 ```
 apps/mobile/
-  app/                 # شاشات Expo Router
   src/
-    components/        # ChatLooraWebShell (WebView)
-    config.ts          # رابط الموقع + قائمة النطاقات المسموحة
-  assets/              # أيقونة / splash
-  app.config.ts        # إعدادات Expo / المتاجر
+    components/        # ChatLooraWebShell (WebView + شاشة الخطأ/عدم الاتصال)
+    native/            # جسر الويب: bridge.ts / downloads.ts / push.ts
+    config.ts          # رابط الموقع + النطاقات المسموحة/المحظورة
+    theme.ts           # ألوان الهوية (فاتح/داكن)
+  locales/ar.json      # اسم التطبيق ونصوص الأذونات بالعربية
+  assets/              # أيقونة / splash / notification-icon
+  app.config.ts        # إعدادات Expo / المتاجر (privacy manifest، الأذونات، الإشعارات)
   eas.json             # ملفات بناء ورفع المتاجر
 ```
+
+### جسر الويب ↔ التطبيق
+
+- من الويب: `window.ReactNativeWebView.postMessage(JSON.stringify(msg))` (يُقبل فقط من صفحات chatloora.com).
+- إلى الويب: حدث `chatloora:native` على `window` وفيه `detail` = الرسالة.
+- `{type:'download', id, fileName, mimeType, base64}` ← يحفظ الملف مؤقتاً ويفتح نافذة المشاركة، والرد `{type:'download:result', id, ok:true}` أو `ok:false` مع `error`
+  (`invalid_message` / `too_large` (أكثر من 50MB) / `busy` / `sharing_unavailable` / `write_failed` / `share_failed`).
+- `{type:'push:register'}` ← `{type:'push:token', token, platform}` أو `{type:'push:denied', reason:'permission'|'unavailable'}`.
+- عند الضغط على إشعار: إذا كان `data.url` مساراً نسبياً (مثل `/inbox/42`) يُفتح داخل التطبيق.
+
+### متطلبات الإشعارات (Push)
+
+- **Android (FCM):** أنشئ مشروع Firebase لـ `com.chatloora.app` ونزّل `google-services.json` (لا يُرفع للريبو)، ثم:
+  `eas env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret --environment production --environment preview --environment development`
+  وارفع مفتاح FCM V1 (Service Account) عبر `eas credentials` → Android → Push Notifications.
+- **iOS (APNs):** `eas credentials` → iOS → Push Notifications ينشئ/يرفع مفتاح APNs (.p8).
+- الخادم يرسل عبر Expo Push API مع `channelId: 'messages'` و `data: { url: '/inbox/...' }`.
 
 ### ملاحظات مهمة للمتاجر
 
 1. **Privacy Policy / Terms** يجب ربطها في Play Console و App Store Connect (استخدم صفحات الموقع إن وجدت).
 2. **Deep links**: مُعرّفة لـ `https://www.chatloora.com` — أضف ملف Digital Asset Links / apple-app-site-association على السيرفر عند التفعيل.
 3. **OAuth**: TikTok و Meta يعملان داخل WebView. صفحات Google (accounts.google.com) تُفتح في متصفح النظام لأن Google تمنع الـ WebView. ربط واتساب عبر Embedded Signup يعتمد على `window.opener` ويحتاج اختبار.
-5. **الإشعارات (Push)** غير موجودة بعد، وتحتاج expo-notifications + endpoint في الخادم لحفظ رموز الأجهزة.
+5. **الإشعارات (Push)** مفعّلة في التطبيق (انظر "متطلبات الإشعارات" أعلاه)؛ حفظ الرموز والإرسال مسؤولية الخادم.
+6. **expo-dev-client** يضيف `NSBonjourServices` / `NSLocalNetworkUsageDescription` لبناء التطوير فقط؛ SDK 58 يحذفها تلقائياً من بناء Release وكوده الأصلي لا يدخل نسخ الإنتاج.
 4. لا ترفع ملفات التوقيع (`*.jks`, `*.p8`, `play-store-service-account.json`) إلى GitHub.
 
 ### مشروع Android القديم (TWA)
