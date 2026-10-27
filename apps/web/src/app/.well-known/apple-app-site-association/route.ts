@@ -2,7 +2,7 @@
 // APPLE_TEAM_ID: the 10-character Team ID from developer.apple.com → Membership.
 export const dynamic = 'force-dynamic';
 
-const BUNDLE_ID = 'com.chatloora.app';
+const BUNDLE_ID = 'hexdefender.chatloora.app';
 
 export function GET() {
   const teamId = (process.env.APPLE_TEAM_ID ?? '').trim().toUpperCase();

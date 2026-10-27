@@ -80,8 +80,8 @@ eas submit -p ios --profile production
 
 | المنصة | المعرف |
 |--------|--------|
-| Android package | `com.chatloora.app` |
-| iOS bundle id | `com.chatloora.app` |
+| Android package | `hexdefender.chatloora.app` |
+| iOS bundle id | `hexdefender.chatloora.app` |
 | اسم التطبيق | ChatLoora / جات لورا |
 | الإصدار | `1.0.0` |
 
@@ -111,7 +111,7 @@ apps/mobile/
 
 ### متطلبات الإشعارات (Push)
 
-- **Android (FCM):** أنشئ مشروع Firebase لـ `com.chatloora.app` ونزّل `google-services.json` (لا يُرفع للريبو)، ثم:
+- **Android (FCM):** أنشئ مشروع Firebase لـ `hexdefender.chatloora.app` ونزّل `google-services.json` (لا يُرفع للريبو)، ثم:
   `eas env:create --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret --environment production --environment preview --environment development`
   وارفع مفتاح FCM V1 (Service Account) عبر `eas credentials` → Android → Push Notifications.
 - **iOS (APNs):** `eas credentials` → iOS → Push Notifications ينشئ/يرفع مفتاح APNs (.p8).

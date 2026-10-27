@@ -103,7 +103,7 @@ export function isBlockedInApp(urlString: string): boolean {
  */
 export function deepLinkToAppUrl(link: string | null | undefined): string | null {
   if (!link) return null;
-  const custom = link.match(/^(?:chatloora|com\.chatloora\.app):\/\/\/?(.*)$/i);
+  const custom = link.match(/^(?:chatloora|hexdefender\.chatloora\.app):\/\/\/?(.*)$/i);
   if (custom) {
     const path = custom[1] ?? '';
     return path ? `${APP_URL}/${path.replace(/^\/+/, '')}` : null;

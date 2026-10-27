@@ -3,7 +3,7 @@
 // key (Play Console → App integrity) and the EAS upload key (`eas credentials -p android`).
 export const dynamic = 'force-dynamic';
 
-const PACKAGE_NAME = 'com.chatloora.app';
+const PACKAGE_NAME = 'hexdefender.chatloora.app';
 
 export function GET() {
   const fingerprints = (process.env.ANDROID_SHA256_CERT_FINGERPRINTS ?? '')

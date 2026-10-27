@@ -52,7 +52,7 @@ const config: ExpoConfig = {
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.chatloora.app',
+    bundleIdentifier: 'hexdefender.chatloora.app',
     infoPlist: {
       // WebView file inputs ("Take Photo or Video").
       NSCameraUsageDescription:
@@ -94,7 +94,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: 'com.chatloora.app',
+    package: 'hexdefender.chatloora.app',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#ffffff',
