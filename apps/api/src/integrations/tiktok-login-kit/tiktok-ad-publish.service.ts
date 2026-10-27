@@ -8,7 +8,6 @@ import { TikTokMarketingOAuthService } from './tiktok-marketing-oauth.service';
 import { BillingAccessService } from '../../billing/billing-access.service';
 import { PlanEntitlementsService } from '../../billing/plan-entitlements.service';
 import { WaylService } from '../../billing/wayl.service';
-import { AiProviderService, type AiMessage } from '../../ai/ai-provider.service';
 import { buildConversionTrackingUrl, conversionEventName } from '../../tiktok-integration/tiktok-integration.constants';
 
 const OBJECTIVE_SPECS = {
@@ -228,7 +227,6 @@ export class TikTokAdPublishService {
     private readonly wayl: WaylService,
     private readonly entitlements: PlanEntitlementsService,
     private readonly access: BillingAccessService,
-    @Inject(forwardRef(() => AiProviderService)) private readonly ai: AiProviderService,
   ) {}
 
   async options(userId: string, advertiserId: string, teamId?: string) {
@@ -2438,108 +2436,6 @@ export class TikTokAdPublishService {
       throw new BadRequestException(this.message(err));
     }
     return { deleted: ids };
-  }
-
-  async reviewCampaign(
-    userId: string,
-    teamId: string,
-    input: { advertiserId: string; campaignId: string; startDate?: string; endDate?: string; messages?: Array<{ role?: string; content?: string }> },
-  ) {
-    const teamAccess = await this.access.getTeamAccess(teamId);
-    if (!teamAccess.isActive) {
-      throw new ForbiddenException('اشتراكك غير نشط. جدّد الباقة لاستخدام تحليل الحملات.');
-    }
-    await this.entitlements.assertAiCampaignReviewEnabled(teamId);
-    const report = await this.performance(userId, input.advertiserId, input.startDate, input.endDate);
-    const campaign = report.campaigns.find((row) => row.campaignId === input.campaignId);
-    if (!campaign) throw new BadRequestException('الحملة غير موجودة في هذا الحساب');
-    const detail = await this.campaignDetail(userId, input.advertiserId, input.campaignId).catch(() => null);
-    const { videos, ...campaignStats } = campaign;
-    const snapshot = {
-      currency: report.currency,
-      timezone: report.timezone,
-      period: { start: report.startDate, end: report.endDate },
-      campaign: {
-        name: campaignStats.name,
-        status: campaignStats.status,
-        objective: campaignStats.objective,
-        budget: campaignStats.budget,
-        spend: campaignStats.spend,
-        impressions: campaignStats.impressions,
-        reach: campaignStats.reach,
-        clicks: campaignStats.clicks,
-        conversions: campaignStats.conversions,
-        costPerConversion: campaignStats.costPerConversion,
-        conversionRate: campaignStats.conversionRate,
-        ads: (videos ?? []).slice(0, 8).map((video) => ({ name: video.text })),
-      },
-      settings: detail
-        ? {
-            budgetMode: detail.budgetMode,
-            gender: detail.gender,
-            ageGroups: detail.ageGroups,
-            locations: detail.locationIds.length,
-            hasPixel: Boolean(detail.pixelId),
-            optimizationEvent: detail.optimizationEvent,
-            scheduleMode: detail.scheduleMode,
-            scheduleStartDate: detail.scheduleStartDate,
-            scheduleEndDate: detail.scheduleEndDate,
-            destination: detail.destination,
-            hasWhatsapp: Boolean(detail.whatsappNumber),
-            adCount: detail.creatives.length,
-          }
-        : null,
-    };
-    const history = (input.messages ?? [])
-      .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && message.content?.trim())
-      .slice(-12)
-      .map((message) => ({ role: message.role as string, content: String(message.content).slice(0, 4000) }));
-    if (!history.length || history[history.length - 1]?.role !== 'user') {
-      history.push({ role: 'user', content: 'حلّل هذه الحملة: اكتشف الأخطاء، قيّم النتائج، واذكر طرق التحسين.' });
-    }
-    const messages: AiMessage[] = [
-      {
-        role: 'system',
-        content: `أنت خبير إعلانات تيك توك داخل منصة جات لورا، وتتحدث مع صاحب الحساب بالعربية.
-لديك صلاحية الاطلاع على نتائج هذه الحملة فقط، وهذه هي البيانات الحالية:
-${JSON.stringify(snapshot)}
-حلّل الحملة كخبير: اكتشف الأخطاء في الإعداد والميزانية والاستهداف والوجهة، قيّم النتائج بالأرقام الموجودة فقط، ثم اقترح خطوات تحسين عملية.
-لا تخترع أرقاماً أو نتائج غير موجودة في البيانات. إذا نقص تفصيل فقل ذلك. اجعل الرد واضحاً وقصيراً بما يكفي ليُنفَّذ.`,
-      },
-      ...history.map((message) => ({
-        role: message.role as 'user' | 'assistant',
-        content: message.content,
-      })),
-    ];
-    const ask = (model?: string) =>
-      this.ai.chat(teamId, messages, {
-        ...(model ? { model } : {}),
-        temperature: 0.4,
-        maxTokens: model ? 500 : 700,
-        correlationId: `tiktok-review:${input.campaignId}${model ? `:${model}` : ''}`,
-      });
-    let result: { content?: string } | undefined;
-    try {
-      result = await ask();
-    } catch (err) {
-      const detail = this.aiFailureText(err);
-      const status = (err as { response?: { status?: number }; status?: number }).response?.status
-        ?? (err as { status?: number }).status;
-      this.logger.error(`TikTok campaign review failed: ${detail}`);
-      if (status === 400 || /model|valid model|not found|bad request/i.test(detail)) {
-        for (const model of ['gpt-4o-mini', 'openai/gpt-4o-mini']) {
-          result = await ask(model).catch((retryErr) => {
-            this.logger.error(`TikTok campaign review retry failed: ${this.aiFailureText(retryErr)}`);
-            return undefined;
-          });
-          if (result?.content?.trim()) break;
-        }
-      }
-      if (!result?.content?.trim()) throw new BadRequestException('تعذر تقييم الحملة الآن. أعد المحاولة بعد قليل.');
-    }
-    const reply = result.content?.trim();
-    if (!reply) throw new BadRequestException('لم يصل رد من الذكاء الاصطناعي. حاول مرة أخرى.');
-    return { reply };
   }
 
   async topupQuote(userId: string, advertiserId: string) {

@@ -88,11 +88,6 @@ export function LandingNavbar() {
               {copy.nav.login}
             </Button>
           </Link>
-          <Link href="/become-a-partner">
-            <Button variant="ghost" className="font-medium text-slate-700">
-              {copy.nav.becomePartner}
-            </Button>
-          </Link>
           <Link href="/register">
             <Button className="rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-5 shadow-lg shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500">
               {copy.nav.startTrial}
@@ -124,11 +119,6 @@ export function LandingNavbar() {
                 <Link href="/login" onClick={() => setOpen(false)}>
                   <Button variant="outline" className="w-full">
                     {copy.nav.login}
-                  </Button>
-                </Link>
-                <Link href="/become-a-partner" onClick={() => setOpen(false)}>
-                  <Button variant="outline" className="w-full">
-                    {copy.nav.becomePartner}
                   </Button>
                 </Link>
                 <Link href="/register" onClick={() => setOpen(false)}>

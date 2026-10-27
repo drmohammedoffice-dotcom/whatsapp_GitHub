@@ -262,15 +262,6 @@ export class TikTokBusinessPublicController {
     return this.publishAds.setCampaignDelivery(principal.userId!, body.advertiserId, body.campaignId, Boolean(body.enabled));
   }
 
-  @Post('ads/review')
-  @ApiOperation({ summary: 'Chat with an ads expert about one campaign' })
-  reviewCampaign(
-    @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Body() body: { advertiserId: string; campaignId: string; startDate?: string; endDate?: string; messages?: Array<{ role?: string; content?: string }> },
-  ) {
-    return this.publishAds.reviewCampaign(principal.userId!, principal.teamId!, body);
-  }
-
   @Post('ads/budget')
   @ApiOperation({ summary: 'Update an ad group daily or total budget' })
   updateBudget(

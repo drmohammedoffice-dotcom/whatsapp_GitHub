@@ -7,19 +7,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { MulterModule } from '@nestjs/platform-express';
-import { ApiKeysModule } from './api-keys/api-keys.module';
-import { AgentsModule } from './agents/agents.module';
-import { AiModule } from './ai/ai.module';
-import { AnalyticsModule } from './analytics/analytics.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { ChannelsModule } from './channels/channels.module';
 import { envSchema } from './config/env';
 import { ContactsModule } from './contacts/contacts.module';
 import { ConversationsModule } from './conversations/conversations.module';
-import { DepartmentsModule } from './departments/departments.module';
 import { HealthModule } from './health/health.module';
-import { MessagingModule } from './messaging/messaging.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RealtimeModule } from './realtime/realtime.module';
@@ -29,7 +23,6 @@ import { StorageModule } from './storage/storage.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { ProductsModule } from './products/products.module';
 import { BookingsModule } from './bookings/bookings.module';
-import { AppointmentsModule } from './appointments/appointments.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { TikTokModule } from './tiktok/tiktok.module';
 import { TikTokIntegrationModule } from './tiktok-integration/tiktok-integration.module';
@@ -40,10 +33,6 @@ import { AdminModule } from './admin/admin.module';
 import { BillingModule } from './billing/billing.module';
 import { LandingModule } from './landing/landing.module';
 import { InstantFormsModule } from './instant-forms/instant-forms.module';
-import { SalesPartnersModule } from './sales-partners/sales-partners.module';
-import { AssistantModule } from './assistant/assistant.module';
-import { VoiceAiModule } from './voice-ai/voice-ai.module';
-import { CreativeStudioModule } from './creative-studio/creative-studio.module';
 import { OfficialWhatsAppModule } from './official-whatsapp/official-whatsapp.module';
 import { WebmailModule } from './webmail/webmail.module';
 
@@ -64,7 +53,7 @@ function resolveEnvFilePath(): string {
       envFilePath: resolveEnvFilePath(),
       validate: (env) => {
         const parsed = envSchema.parse(env);
-        // Preserve any AI_API_KEY_N / weights / OPENROUTER_KEYS beyond the schema (dynamic key pool).
+
         const extras: Record<string, string> = {};
         for (const [key, value] of Object.entries(env)) {
           if (
@@ -104,20 +93,13 @@ function resolveEnvFilePath(): string {
     StorageModule,
     HealthModule,
     AuthModule,
-    ApiKeysModule,
     ChannelsModule,
     ContactsModule,
     NotificationsModule,
     WhatsAppModule,
     ConversationsModule,
-    MessagingModule,
-    AgentsModule,
-    AiModule,
     ProductsModule,
     BookingsModule,
-    AppointmentsModule,
-    DepartmentsModule,
-    AnalyticsModule,
     SettingsModule,
     WebhooksModule,
     TikTokModule,
@@ -129,10 +111,6 @@ function resolveEnvFilePath(): string {
     BillingModule,
     LandingModule,
     InstantFormsModule,
-    SalesPartnersModule,
-    AssistantModule,
-    VoiceAiModule,
-    CreativeStudioModule,
     OfficialWhatsAppModule,
     WebmailModule,
   ],

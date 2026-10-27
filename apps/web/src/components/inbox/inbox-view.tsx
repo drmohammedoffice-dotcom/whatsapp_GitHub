@@ -7,7 +7,6 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  Bot,
   Link2,
   Mic,
   PanelRight,
@@ -17,7 +16,6 @@ import {
   Send,
   Smile,
   Trash2,
-  UserRound,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -35,7 +33,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import type { ChannelDefinition } from '@/lib/channels';
@@ -105,22 +102,8 @@ function contactPrimaryLabel(contact: ContactSummary) {
   return phone || name || 'WhatsApp';
 }
 
-function isConversationAiActive(aiMode?: string | null) {
-  return (aiMode ?? 'AI_ACTIVE') === 'AI_ACTIVE';
-}
-
-function channelProviderToAiPlatform(provider: string): string {
-  if (provider.startsWith('WHATSAPP')) return 'WHATSAPP';
-  if (provider.includes('TELEGRAM')) return 'TELEGRAM';
-  if (provider.includes('MESSENGER')) return 'MESSENGER';
-  if (provider.includes('INSTAGRAM')) return 'INSTAGRAM';
-  if (provider.includes('TIKTOK')) return 'TIKTOK';
-  return 'WHATSAPP';
-}
-
 type InboxViewProps = {
   channel: ChannelDefinition;
-  socialMode?: boolean;
 };
 
 type PendingAttachment = { id: string; file: File; previewUrl: string; asSticker: boolean };
@@ -149,48 +132,7 @@ async function emojiToStickerFile(emoji: string): Promise<File | null> {
   return new File([blob], `sticker-${Date.now()}.webp`, { type: 'image/webp' });
 }
 
-function AiReplySwitch({
-  checked,
-  disabled,
-  onCheckedChange,
-  label,
-  hint,
-  compact,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onCheckedChange: (next: boolean) => void;
-  label: string;
-  hint?: string;
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-2 rounded-full border bg-muted/40',
-        compact ? 'px-2.5 py-1' : 'gap-3 border-[#25D366]/25 bg-[#25D366]/10 px-3 py-1.5',
-      )}
-      title={hint}
-    >
-      <Bot className={cn('h-3.5 w-3.5 shrink-0', checked ? 'text-[#25D366]' : 'text-muted-foreground', !compact && 'h-4 w-4')} />
-      {compact ? (
-        <span className="max-w-[7rem] truncate text-xs font-medium whitespace-nowrap">{label}</span>
-      ) : (
-        <div className="min-w-0 leading-tight">
-          <p className="truncate text-xs font-semibold text-foreground">{label}</p>
-        </div>
-      )}
-      <Switch
-        checked={checked}
-        disabled={disabled}
-        onCheckedChange={onCheckedChange}
-        className="shrink-0 data-[state=checked]:bg-[#25D366]"
-      />
-    </div>
-  );
-}
-
-export function InboxView({ channel, socialMode }: InboxViewProps) {
+export function InboxView({ channel }: InboxViewProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const ChannelIcon = channel.icon;
@@ -199,7 +141,6 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [filter, setFilter] = useState('');
   const [view, setView] = useState<'all' | 'open' | 'unread' | 'read' | 'closed' | 'pinned' | 'archived'>('all');
-  const [threadKind, setThreadKind] = useState<'DIRECT_MESSAGE' | 'COMMENT'>('DIRECT_MESSAGE');
   const [mobilePanel, setMobilePanel] = useState<'list' | 'thread' | 'tools'>('list');
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -208,8 +149,6 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
   const [mediaCaption, setMediaCaption] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
-  const [workspaceAiEnabled, setWorkspaceAiEnabled] = useState(true);
-  const [aiToggleBusy, setAiToggleBusy] = useState(false);
   const [scrollAtTop, setScrollAtTop] = useState(true);
   const [scrollAtBottom, setScrollAtBottom] = useState(true);
 
@@ -219,11 +158,9 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
   const cancelRecordingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
-  const threadKindRef = useRef(threadKind);
   const viewRef = useRef(view);
   const selectedIdRef = useRef(selectedId);
   const loadSeqRef = useRef(0);
-  threadKindRef.current = threadKind;
   viewRef.current = view;
   selectedIdRef.current = selectedId;
 
@@ -231,11 +168,6 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
     () => detail ?? items.find((item) => item.id === selectedId) ?? null,
     [detail, items, selectedId],
   );
-  // Per-conversation AI mode — independent from the workspace master switch.
-  const supportsComments =
-    !socialMode && (channel.provider === 'META_MESSENGER' || channel.provider === 'META_INSTAGRAM');
-  const conversationAiActive = isConversationAiActive(selected?.aiMode);
-  const aiPlatform = channelProviderToAiPlatform(channel.provider);
 
   const updateMessagesScrollState = useCallback(() => {
     const el = messagesScrollRef.current;
@@ -262,74 +194,13 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
     [],
   );
 
-  function applyConversationAiMode(conversationId: string, aiMode: 'AI_ACTIVE' | 'AI_PAUSED') {
-    setDetail((current) => (current?.id === conversationId ? { ...current, aiMode } : current));
-    setItems((current) =>
-      current.map((item) => (item.id === conversationId ? { ...item, aiMode } : item)),
-    );
-  }
-
-  useEffect(() => {
-    api<{ enabled?: boolean; autoReplyEnabled?: boolean }>(`/ai/settings?platform=${aiPlatform}`)
-      .then((settings) =>
-        setWorkspaceAiEnabled(Boolean(settings.enabled && settings.autoReplyEnabled)),
-      )
-      .catch(() => undefined);
-  }, [aiPlatform]);
-
-  async function setWorkspaceAi(next: boolean) {
-    const updated = await api<{ enabled?: boolean; autoReplyEnabled: boolean }>('/ai/settings', {
-      method: 'POST',
-      body: JSON.stringify({ platform: aiPlatform, enabled: next, autoReplyEnabled: next }),
-    });
-    const enabled = Boolean(updated.enabled && updated.autoReplyEnabled);
-    setWorkspaceAiEnabled(enabled);
-    return enabled;
-  }
-
-  async function toggleWorkspaceAi(next: boolean) {
-    setAiToggleBusy(true);
-    const previous = workspaceAiEnabled;
-    setWorkspaceAiEnabled(next);
-    try {
-      await setWorkspaceAi(next);
-    } catch (err) {
-      setWorkspaceAiEnabled(previous);
-      setError(parseApiError(err));
-    } finally {
-      setAiToggleBusy(false);
-    }
-  }
-
-  async function toggleConversationAi(next: boolean) {
-    if (!selectedId) return;
-    setAiToggleBusy(true);
-    const previousMode = (selected?.aiMode ?? 'AI_ACTIVE') as 'AI_ACTIVE' | 'AI_PAUSED' | 'HUMAN_ONLY';
-    const nextMode = next ? 'AI_ACTIVE' : 'AI_PAUSED';
-    // Only this conversation — never touch the workspace master switch.
-    applyConversationAiMode(selectedId, nextMode);
-    try {
-      const path = next ? '/ai/conversations/:id/reactivate' : '/ai/conversations/:id/pause';
-      await api(path.replace(':id', selectedId), { method: 'POST', body: JSON.stringify({}) });
-      await Promise.all([load(), loadDetail(selectedId)]);
-    } catch (err) {
-      applyConversationAiMode(selectedId, previousMode === 'HUMAN_ONLY' ? 'AI_PAUSED' : previousMode);
-      setError(parseApiError(err));
-    } finally {
-      setAiToggleBusy(false);
-    }
-  }
-
   async function load() {
-    const requestKind = threadKindRef.current;
     const requestView = viewRef.current;
     const seq = ++loadSeqRef.current;
     try {
       const query = new URLSearchParams();
-      if (socialMode) query.set('social', 'true');
-      else query.set('provider', channel.provider);
-      if (supportsComments) query.set('kind', requestKind);
-      else query.set('kind', 'DIRECT_MESSAGE');
+      query.set('provider', channel.provider);
+      query.set('kind', 'DIRECT_MESSAGE');
       if (requestView === 'open') query.set('status', 'OPEN');
       if (requestView === 'closed') query.set('status', 'CLOSED');
       if (requestView === 'unread') query.set('unread', 'true');
@@ -341,7 +212,7 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
       const conversations = await api<Conversation[]>(`/conversations?${query}`);
       // Ignore stale responses from an older tab/filter so the list never flashes empty.
       if (seq !== loadSeqRef.current) return;
-      if (threadKindRef.current !== requestKind || viewRef.current !== requestView) return;
+      if (viewRef.current !== requestView) return;
       setItems(conversations);
       const currentSelected = selectedIdRef.current;
       if (!currentSelected && conversations[0]) {
@@ -369,28 +240,10 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
   }
 
   useEffect(() => {
-    let cancelled = false;
     setSelectedId(null);
     setDetail(null);
-    // Show DB data immediately — never wait on Graph sync before painting the list.
     void load().catch(console.error);
-    void (async () => {
-      if (!(supportsComments && threadKind === 'COMMENT' && !socialMode)) return;
-      try {
-        await api('/meta/sync-comments', { method: 'POST', body: JSON.stringify({}) });
-        if (!cancelled) await load();
-      } catch {
-        // Server poller still updates; ignore transient sync errors in UI.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [view, channel.provider, socialMode, threadKind]);
-
-  useEffect(() => {
-    setThreadKind('DIRECT_MESSAGE');
-  }, [channel.provider, socialMode]);
+  }, [view, channel.provider]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -419,9 +272,6 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
       const id = selectedIdRef.current;
       if (id) loadDetail(id).catch(console.error);
     });
-    socket.on(SOCKET_EVENTS.AI_TRANSFERRED, softRefresh);
-    socket.on(SOCKET_EVENTS.AI_REACTIVATED, softRefresh);
-    socket.on(SOCKET_EVENTS.AI_PAUSED, softRefresh);
     const poll = window.setInterval(() => {
       load().catch(console.error);
       const id = selectedIdRef.current;
@@ -432,7 +282,7 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
       window.clearInterval(poll);
       socket.disconnect();
     };
-  }, [channel.provider, socialMode]);
+  }, [channel.provider]);
 
   async function submit(path: string, body?: object) {
     if (!selectedId) return;
@@ -597,25 +447,18 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
       <div className="flex h-[calc(100vh-5.5rem)] min-h-[36rem] flex-col gap-4 overflow-hidden">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-soft">
           <div className="flex min-w-0 items-center gap-3">
-            <ChannelBrandIcon brand={socialMode ? 'social' : channel.slug} size="lg" featured={channel.slug === 'whatsapp'} />
+            <ChannelBrandIcon brand={channel.slug} size="lg" featured={channel.slug === 'whatsapp'} />
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold tracking-tight">
-                {socialMode ? t('nav.socialInbox') : t(channel.inboxTitleKey)}
+                {t(channel.inboxTitleKey)}
               </h1>
               <p className="truncate text-sm text-muted-foreground">
-                {socialMode ? t('nav.socialInboxDesc') : t(channel.inboxDescKey)}
+                {t(channel.inboxDescKey)}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <AiReplySwitch
-              checked={workspaceAiEnabled}
-              disabled={aiToggleBusy}
-              onCheckedChange={(checked) => void toggleWorkspaceAi(checked)}
-              label={t('inbox.workspaceAiReply')}
-              hint={t('inbox.workspaceAiReplyHint')}
-            />
             <Badge variant="secondary">{items.length} {t('inbox.openCount')}</Badge>
             <Button variant="outline" size="sm" className="gap-1.5" asChild>
               <Link href={channel.connectHref}>
@@ -634,17 +477,6 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
           <div className="grid min-h-0 min-w-0 flex-1 gap-0 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(220px,260px)]">
         <Card className={cn('flex min-h-0 flex-col overflow-hidden rounded-none border-0 border-e shadow-none', mobilePanel !== 'list' && 'hidden xl:flex')}>
           <CardHeader className="space-y-4 pb-3">
-            {supportsComments ? (
-              <Tabs
-                value={threadKind}
-                onValueChange={(v) => setThreadKind(v as 'DIRECT_MESSAGE' | 'COMMENT')}
-              >
-                <TabsList className="grid h-auto w-full grid-cols-2">
-                  <TabsTrigger value="DIRECT_MESSAGE">{t('inbox.tabMessages')}</TabsTrigger>
-                  <TabsTrigger value="COMMENT">{t('inbox.tabPostComments')}</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            ) : null}
             <form onSubmit={(event) => { event.preventDefault(); load().catch(console.error); }} className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('inbox.search')} className="ps-9" />
@@ -675,20 +507,10 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
                 <div className="p-4">
                   <EmptyState
                     icon={ChannelIcon}
-                    title={
-                      threadKind === 'COMMENT'
-                        ? t('inbox.noPostComments')
-                        : t('inbox.noConversations')
-                    }
-                    description={
-                      threadKind === 'COMMENT'
-                        ? channel.provider === 'META_INSTAGRAM'
-                          ? t('inbox.noPostCommentsInstagramDesc')
-                          : t('inbox.noPostCommentsDesc')
-                        : t('inbox.noConversationsChannelDesc')
-                    }
-                    action={threadKind === 'COMMENT' ? undefined : t('channels.connectNow')}
-                    onAction={threadKind === 'COMMENT' ? undefined : () => router.push(channel.connectHref)}
+title={t('inbox.noConversations')}
+                    description={t('inbox.noConversationsChannelDesc')}
+                    action={t('channels.connectNow')}
+                    onAction={() => router.push(channel.connectHref)}
                   />
                 </div>
               ) : (
@@ -770,16 +592,6 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
             </div>
             {selected && (
               <div className="flex shrink-0 items-center gap-2">
-                <div className="hidden sm:block">
-                  <AiReplySwitch
-                    compact
-                    checked={conversationAiActive}
-                    disabled={aiToggleBusy}
-                    onCheckedChange={(checked) => void toggleConversationAi(checked)}
-                    label={conversationAiActive ? t('inbox.aiReplyOn') : t('inbox.aiReplyOff')}
-                    hint={t('inbox.aiReplyHint')}
-                  />
-                </div>
                 <Badge variant={selected.status === 'OPEN' ? 'success' : 'secondary'}>{selected.status}</Badge>
                 <Button variant="ghost" size="icon" className="xl:hidden" onClick={() => setMobilePanel('tools')}>
                   <PanelRight className="h-4 w-4" />
@@ -960,45 +772,33 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
                   <form
                     onSubmit={(event: FormEvent<HTMLFormElement>) => {
                       event.preventDefault();
-                      if (threadKind === 'COMMENT') {
-                        void sendText();
-                        return;
-                      }
                       if (pendingAttachments.length) void sendPendingAttachments();
                       else void sendText();
                     }}
                     className="flex items-end gap-1.5"
                   >
-                    {threadKind !== 'COMMENT' ? (
-                      <>
-                        <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => setStickerPickerOpen((open) => !open)} title={t('inbox.sendSticker')}>
-                          <Smile className="h-5 w-5 text-muted-foreground" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => fileInputRef.current?.click()} title={t('inbox.attachFile')}>
-                          <Paperclip className="h-5 w-5 text-muted-foreground" />
-                        </Button>
-                      </>
-                    ) : null}
+                    <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => setStickerPickerOpen((open) => !open)} title={t('inbox.sendSticker')}>
+                      <Smile className="h-5 w-5 text-muted-foreground" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" disabled={sending} onClick={() => fileInputRef.current?.click()} title={t('inbox.attachFile')}>
+                      <Paperclip className="h-5 w-5 text-muted-foreground" />
+                    </Button>
                     <Textarea
                       value={text}
                       onChange={(event) => setText(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();
-                          if (threadKind !== 'COMMENT' && pendingAttachments.length) void sendPendingAttachments();
+                          if (pendingAttachments.length) void sendPendingAttachments();
                           else void sendText();
                         }
                       }}
-                      placeholder={
-                        threadKind === 'COMMENT'
-                          ? t('inbox.replyCommentPlaceholder')
-                          : t(channel.replyPlaceholderKey)
-                      }
+                      placeholder={t(channel.replyPlaceholderKey)}
                       rows={1}
                       className="max-h-32 min-h-[2.5rem] flex-1 resize-none py-2"
                     />
-                    {threadKind === 'COMMENT' || text.trim() || pendingAttachments.length ? (
-                      <Button type="submit" size="icon" disabled={sending || (threadKind === 'COMMENT' && !text.trim())} title={t('inbox.sendMedia')}>
+                    {text.trim() || pendingAttachments.length ? (
+                      <Button type="submit" size="icon" disabled={sending} title={t('inbox.sendMedia')}>
                         <Send className="h-4 w-4" />
                       </Button>
                     ) : (
@@ -1047,39 +847,6 @@ export function InboxView({ channel, socialMode }: InboxViewProps) {
                   title={t('inbox.markQualifiedLeadHint')}
                 >
                   {t('inbox.markQualifiedLead')}
-                </Button>
-                <Separator />
-                <p className="text-xs font-semibold uppercase text-muted-foreground">{t('inbox.aiControl')}</p>
-                <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/30 px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t('inbox.aiReply')}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {conversationAiActive ? t('inbox.aiReplyOn') : t('inbox.aiReplyOff')}
-                      {' · '}
-                      {t('inbox.aiReplyHint')}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={conversationAiActive}
-                    disabled={aiToggleBusy || !selectedId}
-                    onCheckedChange={(checked) => void toggleConversationAi(checked)}
-                    className="shrink-0 data-[state=checked]:bg-[#25D366]"
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{t('inbox.workspaceAiReply')}</p>
-                    <p className="text-[11px] text-muted-foreground">{t('inbox.workspaceAiReplyHint')}</p>
-                  </div>
-                  <Switch
-                    checked={workspaceAiEnabled}
-                    disabled={aiToggleBusy}
-                    onCheckedChange={(checked) => void toggleWorkspaceAi(checked)}
-                    className="shrink-0 data-[state=checked]:bg-[#25D366]"
-                  />
-                </div>
-                <Button variant="outline" size="sm" onClick={() => submit('/ai/conversations/:id/transfer', { reason: 'CUSTOMER_REQUEST' }).catch(console.error)}>
-                  <UserRound className="h-3.5 w-3.5" /> {t('inbox.transferHuman')}
                 </Button>
                 <Separator />
                 <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); submit('/conversations/:id/notes', { body: form.get('body') }).catch(console.error); event.currentTarget.reset(); }} className="space-y-2">

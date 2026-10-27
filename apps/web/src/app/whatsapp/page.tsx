@@ -486,9 +486,6 @@ export default function WhatsAppPage() {
                 ))}
               </div>
             ) : null}
-            <Button asChild variant="ghost" size="sm" className="self-start px-0">
-              <Link href="/whatsapp-api" target="_blank">{t('whatsapp.methodCloudDemo')}</Link>
-            </Button>
           </CardContent>
         </Card>
       </div>

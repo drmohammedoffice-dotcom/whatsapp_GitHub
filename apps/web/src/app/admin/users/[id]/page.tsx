@@ -35,7 +35,7 @@ export default function AdminUserDetailPage() {
   if (!data) return <p>User not found.</p>;
 
   const user = data.user as Record<string, unknown>;
-  const stats = data.stats as { messageCount: number; aiCostCents: number; aiRuns: number };
+  const stats = data.stats as { messageCount: number };
   const integrations = data.integrations as Record<string, unknown[]>;
 
   return (
@@ -51,18 +51,6 @@ export default function AdminUserDetailPage() {
           <CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">Messages</p>
             <p className="text-2xl font-semibold">{stats.messageCount}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-card">
-          <CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">AI usage (cost)</p>
-            <p className="text-2xl font-semibold">${(stats.aiCostCents / 100).toFixed(2)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-card">
-          <CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">AI runs</p>
-            <p className="text-2xl font-semibold">{stats.aiRuns}</p>
           </CardContent>
         </Card>
       </div>
@@ -82,7 +70,6 @@ export default function AdminUserDetailPage() {
           <ul className="space-y-1 text-sm text-muted-foreground">
             <li>WhatsApp sessions: {(integrations.whatsappSessions ?? []).length}</li>
             <li>WhatsApp Cloud: {(integrations.whatsappCloud ?? []).length}</li>
-            <li>Meta: {(integrations.meta ?? []).length}</li>
             <li>TikTok: {(integrations.tiktok ?? []).length}</li>
           </ul>
         </CardContent>

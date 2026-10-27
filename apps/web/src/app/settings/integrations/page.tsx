@@ -3,18 +3,13 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { IntegrationHubCard } from '@/components/integrations/hub/integration-hub-card';
-import { startMetaOAuth } from '@/components/integrations/meta-oauth-connect';
-import { InstagramLoginConnect } from '@/components/integrations/instagram-login-connect';
-import { TelegramUserConnect } from '@/components/integrations/telegram-user-connect';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
 import { LoadingBlock } from '@/components/shared/loading-block';
 import { PageHeader } from '@/components/shared/page-header';
-import { Button } from '@/components/ui/button';
 import {
   connectIntegration,
   disconnectIntegration,
@@ -37,7 +32,6 @@ function IntegrationsHubInner() {
   const [busyProvider, setBusyProvider] = useState<IntegrationProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [telegramPanel, setTelegramPanel] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,13 +54,7 @@ function IntegrationsHubInner() {
   }, [load, searchParams, t]);
 
   const providers = useMemo(() => {
-    const order: IntegrationProvider[] = [
-      'facebook-messenger',
-      'instagram',
-      'whatsapp',
-      'tiktok',
-      'telegram',
-    ];
+    const order: IntegrationProvider[] = ['whatsapp', 'tiktok'];
     if (!hub) return [];
     return order
       .map((p) => hub.providers.find((x) => x.provider === p))
@@ -79,19 +67,6 @@ function IntegrationsHubInner() {
     setError(null);
     let redirecting = false;
     try {
-      if (provider === 'telegram') {
-        setTelegramPanel(true);
-        return;
-      }
-
-      // Meta: call POST /api/auth/meta/login directly (not the hub proxy)
-      if (provider === 'facebook-messenger' || provider === 'instagram') {
-        const authUrl = await startMetaOAuth();
-        redirecting = true;
-        window.location.assign(authUrl);
-        return;
-      }
-
       const result = await connectIntegration(provider);
       console.info('[Integrations Hub] connect response', result);
 
@@ -108,10 +83,6 @@ function IntegrationsHubInner() {
 
       if (result.action === 'navigate' && result.url) {
         router.push(result.url);
-        return;
-      }
-      if (result.action === 'inline') {
-        setTelegramPanel(true);
         return;
       }
 
@@ -141,17 +112,6 @@ function IntegrationsHubInner() {
           meta?.accountType === 'cloud_api'
             ? { cloudAccountId: accountId }
             : { sessionId: accountId };
-      } else if (provider === 'telegram') {
-        const tg = hub?.providers.find((p) => p.provider === 'telegram');
-        const account = tg?.accounts.find((a) => a.id === accountId);
-        body = { channelId: accountId };
-        const meta = account?.metadata as { type?: string; connectionId?: string; channelId?: string } | undefined;
-        if (meta?.type === 'personal') {
-          body = {
-            channelId: String(meta.channelId ?? accountId),
-            ...(meta.connectionId ? { connectionId: meta.connectionId } : {}),
-          };
-        }
       } else if (provider === 'tiktok') {
         body = {};
       }
@@ -218,41 +178,10 @@ function IntegrationsHubInner() {
     return t(keys[provider] as never);
   }
 
-  async function handleDisconnectAll(provider: IntegrationProvider) {
-    const summary = hub?.providers.find((p) => p.provider === provider);
-    if (!summary?.accounts.length) return;
-    setBusyProvider(provider);
-    setError(null);
-    try {
-      for (const account of summary.accounts) {
-        if (provider === 'whatsapp') {
-          const meta = account.metadata as { accountType?: string } | undefined;
-          await disconnectIntegration(
-            provider,
-            meta?.accountType === 'cloud_api'
-              ? { cloudAccountId: account.id }
-              : { sessionId: account.id },
-          );
-        } else {
-          await disconnectIntegration(provider, { channelId: account.id });
-        }
-      }
-      setNotice(t('integrationsHub.disconnectedAllSuccess'));
-      await load();
-    } catch (err) {
-      setError(parseApiError(err));
-    } finally {
-      setBusyProvider(null);
-    }
-  }
-
   function manageHref(provider: IntegrationProvider) {
     const map: Partial<Record<IntegrationProvider, string>> = {
-      'facebook-messenger': '/messenger',
-      instagram: '/instagram',
       whatsapp: '/whatsapp',
       tiktok: '/tiktok',
-      telegram: '/telegram',
     };
     return map[provider];
   }
@@ -262,11 +191,6 @@ function IntegrationsHubInner() {
       <PageHeader
         title={t('integrationsHub.title')}
         description={t('integrationsHub.description')}
-        actions={(
-          <Button variant="outline" asChild>
-            <Link href="/inbox/social">{t('integrations.unifiedInbox')}</Link>
-          </Button>
-        )}
       />
 
       <motion.div
@@ -321,49 +245,18 @@ function IntegrationsHubInner() {
                 busy={busyProvider === provider.provider}
                 onConnect={() => handleConnect(provider.provider).catch(console.error)}
                 onDisconnect={(id) => handleDisconnect(provider.provider, id).catch(console.error)}
-                onDisconnectAll={
-                  provider.provider === 'facebook-messenger' || provider.provider === 'instagram'
-                    ? () => handleDisconnectAll(provider.provider).catch(console.error)
-                    : undefined
-                }
                 onReconnect={(id) => handleReconnect(provider.provider, id).catch(console.error)}
                 onManage={
                   manageHref(provider.provider)
                     ? () => router.push(manageHref(provider.provider)!)
                     : undefined
                 }
-                hideConnectButton={provider.provider === 'telegram' && telegramPanel}
-              >
-                {provider.provider === 'telegram' && telegramPanel && (
-                  <div className="rounded-xl border bg-muted/20 p-4">
-                    <p className="mb-3 text-sm font-medium">{t('integrationsHub.telegramPersonalTitle')}</p>
-                    <TelegramUserConnect
-                      onConnected={() => {
-                        setTelegramPanel(false);
-                        setNotice(t('integrationsHub.connectedSuccess'));
-                        load().catch(console.error);
-                      }}
-                      onError={setError}
-                    />
-                  </div>
-                )}
-              </IntegrationHubCard>
+              />
             </motion.div>
           ))}
         </div>
       )}
 
-      {!loading && (
-        <div className="mt-8 max-w-xl">
-          <InstagramLoginConnect
-            onSuccess={() => {
-              setNotice('تم ربط إنستغرام واشتراك Webhook بنجاح');
-              void load();
-            }}
-            onError={setError}
-          />
-        </div>
-      )}
     </AppShell>
   );
 }

@@ -3,7 +3,6 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AdminNotificationChannel, NotificationType, PaymentStatus, SubscriptionStatus } from '@watsapp/database';
 import { Resend } from 'resend';
 import { ConfigService } from '@nestjs/config';
-import { AiGatewayService } from '../../ai/gateway/ai-gateway.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminAuditService } from './admin-audit.service';
 
@@ -35,7 +34,6 @@ export class AdminNotificationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
     private readonly config: ConfigService,
-    private readonly gateway: AiGatewayService,
   ) {}
 
   list(params: { skip?: number; take?: number }) {
@@ -146,36 +144,14 @@ export class AdminNotificationsService {
     return { sent };
   }
 
-  async marketingExpert(brief: string, kind?: string) {
+  /** Returns the built-in template for the notice kind (AI copywriting was removed). */
+  async marketingExpert(_brief: string, kind?: string) {
     const fallback = DEFAULT_TEMPLATES.find((item) => item.kind === kind) ?? DEFAULT_TEMPLATES[6]!;
-    try {
-      const result = await this.gateway.chat({
-        model: 'gpt-4o-mini',
-        temperature: 0.4,
-        maxTokens: 500,
-        json: true,
-        messages: [
-          {
-            role: 'system',
-            content: 'أنت خبير تسويق عربي لمنصة ChatLoora لإعلانات تيك توك. اكتب إشعاراً قصيراً للمشتركين. أعد JSON فقط بهذا الشكل {"title":"","body":"","advice":""}. يمكن استخدام {name} و{plan} و{days} و{amount}.',
-          },
-          { role: 'user', content: `نوع الإشعار: ${kind || 'MARKETING'}. المطلوب: ${brief || 'اكتب رسالة تسويقية قصيرة للتجديد'}` },
-        ],
-      });
-      const parsed = JSON.parse(result.content) as { title?: string; body?: string; advice?: string };
-      return {
-        title: parsed.title || fallback.title,
-        body: parsed.body || fallback.body,
-        advice: parsed.advice || 'راجع النص ثم أرسله من نفس الصفحة.',
-      };
-    } catch (error) {
-      this.logger.warn(`Marketing expert failed: ${error instanceof Error ? error.message : 'unknown'}`);
-      return {
-        title: fallback.title,
-        body: fallback.body,
-        advice: 'تعذر الاتصال بالخبير الآن. هذا نص جاهز يمكنك تعديله ثم إرساله.',
-      };
-    }
+    return {
+      title: fallback.title,
+      body: fallback.body,
+      advice: 'هذا نص جاهز يمكنك تعديله ثم إرساله.',
+    };
   }
 
   @Cron(CronExpression.EVERY_HOUR)

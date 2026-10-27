@@ -31,7 +31,6 @@ import {
   UpdateInstantFormDto,
   UpdateOrderDto,
 } from './dto/instant-form.dto';
-import { InstantFormAiService } from './instant-form-ai.service';
 import { InstantFormsService } from './instant-forms.service';
 import { InstantFormDocument } from './instant-form.document';
 
@@ -42,17 +41,11 @@ import { InstantFormDocument } from './instant-form.document';
 export class InstantFormsController {
   constructor(
     private readonly forms: InstantFormsService,
-    private readonly formAi: InstantFormAiService,
   ) {}
 
   @Get('templates')
   templates() {
     return this.forms.listTemplates();
-  }
-
-  @Post('generate')
-  generate(@CurrentPrincipal() p: AuthenticatedPrincipal, @Body() dto: GenerateInstantFormDto) {
-    return this.formAi.generate(p.teamId, dto);
   }
 
   @Post('media')

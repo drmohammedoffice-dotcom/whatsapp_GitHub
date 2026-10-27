@@ -6,19 +6,9 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { QUEUES } from '../queues/queues.constants';
-import type { AiInboundJob } from '../ai/ai-inbound.processor';
-import { channelProviderToAiPlatform } from '../ai/ai-platform';
 import { TikTokEventsService } from '../tiktok/tiktok-events.service';
 import { TikTokIntegrationTrackingService } from '../tiktok-integration/tiktok-integration-tracking.service';
 import { isTrackingChannel } from './channel-purpose';
-
-const AI_INBOUND_TYPES = new Set<MessageType>([
-  MessageType.TEXT,
-  MessageType.AUDIO,
-  MessageType.IMAGE,
-  MessageType.STICKER,
-  MessageType.VIDEO,
-]);
 
 @Injectable()
 export class ChannelMessageService {
@@ -27,7 +17,6 @@ export class ChannelMessageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
-    @InjectQueue(QUEUES.AI_INBOUND) private readonly aiInboundQueue: Queue<AiInboundJob>,
     @Optional() private readonly _tiktokIntegrationTracking: TikTokIntegrationTrackingService,
     @Optional() @Inject(TikTokEventsService) private readonly tiktokEvents?: TikTokEventsService,
   ) {}
@@ -187,69 +176,6 @@ export class ChannelMessageService {
       this.realtime.emitTeam(input.teamId, SOCKET_EVENTS.CONVERSATION_UPDATED, conversation);
     }
 
-    // Manual takeover: a human replied, so pause AI for this conversation
-    // (when the workspace has pauseAiOnHumanReply enabled).
-    if (
-      !isHistory &&
-      input.humanReply &&
-      !existedBefore &&
-      input.direction === MessageDirection.OUTBOUND &&
-      conversation.aiMode === ConversationAiMode.AI_ACTIVE &&
-      channelRow?.provider
-    ) {
-      await this.pauseAiForHumanReply(input.teamId, conversation.id, channelRow.provider);
-    }
-
-    // Skip echoes / re-sync of the same providerMessageId — otherwise pollers
-    // would re-enqueue AI and spam public comment replies.
-    if (
-      !isHistory &&
-      !existedBefore &&
-      input.direction === MessageDirection.INBOUND &&
-      AI_INBOUND_TYPES.has(input.type)
-    ) {
-      const aiText = normalizedText;
-      // IMAGE may have empty caption (receipt photo) — still enqueue for AI subscription proof.
-      if (input.type === MessageType.AUDIO || input.type === MessageType.IMAGE || aiText) {
-        const queueOpts = {
-          removeOnComplete: 100,
-          removeOnFail: 50,
-          // Keep retrying under API pressure — gateway also fails over across keys.
-          attempts: 25,
-          backoff: { type: 'custom' as const },
-          ...(input.type === MessageType.AUDIO || input.type === MessageType.IMAGE
-            ? { delay: 1500 }
-            : {}),
-        };
-        try {
-          await this.aiInboundQueue.add(
-            'process',
-            {
-              teamId: input.teamId,
-              conversationId: conversation.id,
-              messageId: message.id,
-              messageText: aiText,
-              isNewConversation,
-            },
-            {
-              ...queueOpts,
-              jobId: `ai-inbound-${message.id}`,
-            },
-          );
-          this.logger.log(
-            `[AI] Enqueued ai-inbound job conversationId=${conversation.id} messageId=${message.id} teamId=${input.teamId} type=${input.type}`,
-          );
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          if (/Job with this id already exists|already exists/i.test(msg)) {
-            this.logger.warn(`[AI] Duplicate ai-inbound skipped messageId=${message.id}`);
-          } else {
-            throw error;
-          }
-        }
-      }
-    }
-
     if (!isHistory && this.tiktokEvents && input.direction === MessageDirection.INBOUND && isNewConversation) {
       void this.tiktokEvents
         .handleConversationStarted({
@@ -269,38 +195,6 @@ export class ChannelMessageService {
   /** Nudge connected inbox clients to reload after a bulk/history sync. */
   emitConversationsRefreshed(teamId: string) {
     this.realtime.emitTeam(teamId, SOCKET_EVENTS.CONVERSATION_UPDATED, { refreshedAt: new Date().toISOString() });
-  }
-
-  /**
-   * Enforce the pauseAiOnHumanReply setting: when the workspace owner/agent
-   * answers a customer manually (from the inbox or from the linked phone),
-   * flip the conversation to AI_PAUSED so the assistant stops interjecting.
-   * The inbox toggle (reactivate) turns it back on.
-   */
-  private async pauseAiForHumanReply(teamId: string, conversationId: string, provider: ChannelProvider) {
-    try {
-      const platform = channelProviderToAiPlatform(provider);
-      const settings = await this.prisma.aiSettings.findUnique({
-        where: { teamId_platform: { teamId, platform } },
-        select: { enabled: true, autoReplyEnabled: true, pauseAiOnHumanReply: true },
-      });
-      // Nothing to pause when AI is off; do not fight the user's explicit setting.
-      if (!settings?.pauseAiOnHumanReply || !settings.enabled || !settings.autoReplyEnabled) return;
-
-      const updated = await this.prisma.conversation.updateMany({
-        where: { id: conversationId, teamId, aiMode: ConversationAiMode.AI_ACTIVE },
-        data: { aiMode: ConversationAiMode.AI_PAUSED, aiPausedAt: new Date() },
-      });
-      if (!updated.count) return;
-
-      await this.prisma.conversationEvent.create({
-        data: { conversationId, type: ConversationEventType.AI_PAUSED, metadata: { reason: 'HUMAN_REPLY' } },
-      });
-      this.realtime.emitTeam(teamId, SOCKET_EVENTS.AI_PAUSED, { conversationId, reason: 'HUMAN_REPLY' });
-      this.logger.log(`[AI] Paused after human reply conversationId=${conversationId} teamId=${teamId}`);
-    } catch (error) {
-      this.logger.warn(`[AI] pauseAiForHumanReply failed conversationId=${conversationId}: ${String(error)}`);
-    }
   }
 
   private async upsertContact(

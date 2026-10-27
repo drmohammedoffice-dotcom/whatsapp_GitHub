@@ -1,3 +1,0 @@
-export const TELEGRAM_AUTH_TTL_MS = 10 * 60 * 1000;
-export const TELEGRAM_SYNC_DIALOG_LIMIT = 100;
-export const TELEGRAM_SYNC_MESSAGE_LIMIT = 40;

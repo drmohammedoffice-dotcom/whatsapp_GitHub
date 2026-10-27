@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { SalesPartnersModule } from '../sales-partners/sales-partners.module';
 import { OfficialWhatsAppModule } from '../official-whatsapp/official-whatsapp.module';
 import { BillingController } from './billing.controller';
 import { BillingWebhooksController } from './billing-webhooks.controller';
@@ -17,7 +16,7 @@ import { BillingEmailService } from './billing-email.service';
 import { FreeTrialService } from './free-trial.service';
 
 @Module({
-  imports: [AuthModule, SalesPartnersModule, OfficialWhatsAppModule],
+  imports: [AuthModule, OfficialWhatsAppModule],
   controllers: [BillingController, BillingWebhooksController],
   providers: [
     BillingService,

@@ -283,8 +283,6 @@ export default function AdminSubscriptionsPage() {
                       <TableHead>Workspace</TableHead>
                       <TableHead>Owner email</TableHead>
                       <TableHead>Plan</TableHead>
-                      <TableHead>Referral code</TableHead>
-                      <TableHead>Partner</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Expiry date</TableHead>
                       <TableHead>Days left</TableHead>
@@ -299,10 +297,6 @@ export default function AdminSubscriptionsPage() {
                           <TableCell className="font-medium">{sub.team?.name ?? '—'}</TableCell>
                           <TableCell>{sub.owner?.email ?? '—'}</TableCell>
                           <TableCell>{sub.plan?.name ?? '—'}</TableCell>
-                          <TableCell className="font-mono text-sm" dir="ltr">
-                            {sub.referral?.partnerReferralCode || sub.referral?.codeUsed || '—'}
-                          </TableCell>
-                          <TableCell>{sub.referral?.partnerName ?? '—'}</TableCell>
                           <TableCell>
                             <Badge variant={statusVariant(sub.status) as never}>{sub.status}</Badge>
                           </TableCell>
@@ -327,7 +321,7 @@ export default function AdminSubscriptionsPage() {
                     })}
                     {!subs.length && (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
                           No subscriptions match this filter
                         </TableCell>
                       </TableRow>

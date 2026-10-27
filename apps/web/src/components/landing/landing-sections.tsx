@@ -760,9 +760,6 @@ export function LandingFooter() {
             <Link href="/register" className="block hover:text-violet-600">
               {copy.nav.startTrial}
             </Link>
-            <Link href="/become-a-partner" className="block hover:text-violet-600">
-              {copy.nav.becomePartner}
-            </Link>
             <a
               href={CHATLOORA_WINDOWS_DOWNLOAD_URL}
               download={CHATLOORA_WINDOWS_DOWNLOAD_FILENAME}
@@ -777,9 +774,6 @@ export function LandingFooter() {
           <div className="mt-3 space-y-2 text-sm text-slate-600">
             <Link href="/company" className="block hover:text-violet-600">
               {copy.footer.companyInfo}
-            </Link>
-            <Link href="/whatsapp-api" className="block hover:text-violet-600">
-              {copy.footer.whatsappApi}
             </Link>
             <span className="block">{copy.footer.privacy}</span>
             <span className="block">{copy.footer.terms}</span>

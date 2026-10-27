@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ChatLooraLogoMark } from '@/components/brand/chatloora-brand';
 import { ChannelBrandIcon } from '@/components/channels/channel-brand-icon';
-import { useIsPlatformAdmin } from '@/components/layout/subscriber-access';
 import { isNavActive, visibleNavGroups } from '@/components/layout/nav-config';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { Badge } from '@/components/ui/badge';
@@ -17,8 +16,7 @@ import { cn } from '@/lib/utils';
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const { t, dir } = useTranslation();
-  const isPlatformAdmin = useIsPlatformAdmin();
-  const groups = visibleNavGroups(isPlatformAdmin);
+  const groups = visibleNavGroups();
 
   return (
     <TooltipProvider delayDuration={0}>

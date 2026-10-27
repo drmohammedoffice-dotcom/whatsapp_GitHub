@@ -1,5 +1,4 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { AiModule } from '../../ai/ai.module';
 import { JwtModule } from '@nestjs/jwt';
 import { BillingModule } from '../../billing/billing.module';
 import { SecurityModule } from '../../security/security.module';
@@ -22,7 +21,7 @@ import { TikTokMarketingOAuthController } from './tiktok-marketing-oauth.control
 import { TikTokMarketingOAuthService } from './tiktok-marketing-oauth.service';
 
 @Module({
-  imports: [JwtModule.register({}), SecurityModule, BillingModule, forwardRef(() => AiModule)],
+  imports: [JwtModule.register({}), SecurityModule, BillingModule],
   controllers: [
     TikTokLoginKitController,
     TikTokLoginKitStatusController,

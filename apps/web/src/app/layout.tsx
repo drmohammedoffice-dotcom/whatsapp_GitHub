@@ -5,7 +5,6 @@ import { LocaleProvider } from '@/components/providers/locale-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { FacebookSdkLoader } from '@/components/integrations/facebook-sdk-loader';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { PersistentAssistant } from '@/components/assistant/persistent-assistant';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -24,35 +23,34 @@ const notoArabic = Noto_Sans_Arabic({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.chatloora.com'),
   title: {
-    default: 'ChatLoora — AI Customer Conversations Platform',
+    default: 'ChatLoora — TikTok Ads & WhatsApp Tracking',
     template: '%s · ChatLoora',
   },
   description:
-    'Manage WhatsApp, Meta, and Telegram conversations with AI replies, TikTok Ads integration, appointments, and team inbox tools. Start a 3-day free trial.',
+    'Run TikTok ads, track conversions from WhatsApp with the TikTok Pixel and Events API, and manage WhatsApp conversations. Start a 3-day free trial.',
   keywords: [
     'ChatLoora',
     'WhatsApp inbox',
-    'AI customer support',
     'TikTok Ads WhatsApp',
-    'clinic AI receptionist',
-    'omnichannel messaging',
+    'TikTok Pixel',
+    'TikTok Events API',
     'صندوق وارد واتساب',
-    'ذكاء اصطناعي للمحادثات',
+    'إعلانات تيك توك',
   ],
   openGraph: {
     type: 'website',
     locale: 'ar_IQ',
     alternateLocale: ['en_US'],
     siteName: 'ChatLoora',
-    title: 'ChatLoora — AI Customer Conversations Platform',
+    title: 'ChatLoora — TikTok Ads & WhatsApp Tracking',
     description:
-      'Unified inbox, AI replies, TikTok & Meta integrations, and clinic appointments — grow from every conversation.',
+      'TikTok ads, WhatsApp conversion tracking, and a WhatsApp inbox — grow from every conversation.',
     images: [{ url: '/chatloora-logo.png', width: 1200, height: 630, alt: 'ChatLoora' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ChatLoora — AI Customer Conversations Platform',
-    description: 'Manage every customer conversation. Powered by AI.',
+    title: 'ChatLoora — TikTok Ads & WhatsApp Tracking',
+    description: 'TikTok ads and WhatsApp conversion tracking in one place.',
     images: ['/chatloora-logo.png'],
   },
   icons: {
@@ -76,7 +74,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <TooltipProvider>
               <FacebookSdkLoader />
               {children}
-              <PersistentAssistant />
             </TooltipProvider>
           </ThemeProvider>
         </LocaleProvider>

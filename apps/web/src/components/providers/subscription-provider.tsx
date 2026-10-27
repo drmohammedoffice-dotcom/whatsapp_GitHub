@@ -5,7 +5,6 @@ import type { BillingCycle, BillingPlan, CheckoutResult, SubscriptionState } fro
 import { fetchSubscriptionStatus } from '@/lib/billing';
 import { setSubscriptionCookie } from '@/lib/subscription-cookie';
 import { api, getAccessToken } from '@/lib/utils';
-import { getStoredReferral } from '@/lib/referral';
 
 type SubscriptionContextValue = {
   status: SubscriptionState | null;
@@ -107,14 +106,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [loadPlans, refresh]);
 
   const checkout = useCallback(async (planSlug: string, billingCycle: BillingCycle) => {
-    const referral = getStoredReferral();
     return api<CheckoutResult>('/billing/checkout', {
       method: 'POST',
       body: JSON.stringify({
         planSlug,
         billingCycle,
-        referralCode: referral?.code,
-        referralSource: referral?.source,
       }),
     });
   }, []);

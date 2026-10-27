@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BillingInterval, SubscriptionStatus } from '@watsapp/database';
 import { PrismaService } from '../prisma/prisma.service';
-import { SalesPartnersService } from '../sales-partners/sales-partners.service';
 import { BillingAccessService } from './billing-access.service';
 
 const MONTHLY_DAYS = 30;
@@ -32,7 +31,6 @@ export class SubscriptionActivationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly billingAccess: BillingAccessService,
-    private readonly salesPartners: SalesPartnersService,
   ) {}
 
   /** AI package key → SubscriptionPlan.slug */
@@ -101,18 +99,6 @@ export class SubscriptionActivationService {
     });
 
     await this.billingAccess.restoreTeamIntegrations(teamId);
-    await this.salesPartners
-      .creditForSubscriptionActivation({
-        teamId,
-        subscriptionId: sub.id,
-        planId: plan.id,
-        amountCents: plan.priceCents,
-        description: `Subscription activation (${options?.source ?? 'manual'})`,
-        provider: options?.source === 'ai_proof' ? 'ai_proof' : 'admin_manual',
-      })
-      .catch((err) => {
-        this.logger.warn(`[Billing] Partner credit skipped: ${err instanceof Error ? err.message : String(err)}`);
-      });
     this.logger.log(
       `[Billing] Activated plan=${plan.slug} teamId=${teamId} email=${normalized} sub=${sub.id} source=${options?.source ?? 'manual'}`,
     );

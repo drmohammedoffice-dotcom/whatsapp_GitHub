@@ -1,12 +1,4 @@
-export const INTEGRATION_PROVIDERS = [
-  'facebook-messenger',
-  'instagram',
-  'whatsapp',
-  'tiktok',
-  'telegram',
-  'google',
-  'google-calendar',
-] as const;
+export const INTEGRATION_PROVIDERS = ['whatsapp', 'tiktok'] as const;
 
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 

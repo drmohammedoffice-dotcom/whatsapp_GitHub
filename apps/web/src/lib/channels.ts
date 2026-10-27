@@ -1,6 +1,6 @@
-import { Camera, MessageCircle, MessageSquare, Send, type LucideIcon } from 'lucide-react';
+import { MessageSquare, type LucideIcon } from 'lucide-react';
 
-export type ChannelSlug = 'whatsapp' | 'messenger' | 'instagram' | 'telegram';
+export type ChannelSlug = 'whatsapp';
 
 export type ChannelProvider =
   | 'WHATSAPP_BAILEYS'
@@ -39,48 +39,6 @@ export const channelDefinitions: ChannelDefinition[] = [
     inboxTitleKey: 'inbox.whatsappTitle',
     inboxDescKey: 'inbox.whatsappDesc',
     replyPlaceholderKey: 'inbox.replyWhatsapp',
-  },
-  {
-    slug: 'messenger',
-    provider: 'META_MESSENGER',
-    connectHref: '/messenger',
-    inboxHref: '/inbox/messenger',
-    icon: MessageCircle,
-    navConnectKey: 'nav.messenger',
-    navConnectDescKey: 'nav.messengerDesc',
-    navInboxKey: 'nav.inboxMessenger',
-    navInboxDescKey: 'nav.inboxMessengerDesc',
-    inboxTitleKey: 'inbox.messengerTitle',
-    inboxDescKey: 'inbox.messengerDesc',
-    replyPlaceholderKey: 'inbox.replyMessenger',
-  },
-  {
-    slug: 'instagram',
-    provider: 'META_INSTAGRAM',
-    connectHref: '/instagram',
-    inboxHref: '/inbox/instagram',
-    icon: Camera,
-    navConnectKey: 'nav.instagram',
-    navConnectDescKey: 'nav.instagramDesc',
-    navInboxKey: 'nav.inboxInstagram',
-    navInboxDescKey: 'nav.inboxInstagramDesc',
-    inboxTitleKey: 'inbox.instagramTitle',
-    inboxDescKey: 'inbox.instagramDesc',
-    replyPlaceholderKey: 'inbox.replyInstagram',
-  },
-  {
-    slug: 'telegram',
-    provider: 'TELEGRAM_USER',
-    connectHref: '/telegram',
-    inboxHref: '/inbox/telegram',
-    icon: Send,
-    navConnectKey: 'nav.telegram',
-    navConnectDescKey: 'nav.telegramDesc',
-    navInboxKey: 'nav.inboxTelegram',
-    navInboxDescKey: 'nav.inboxTelegramDesc',
-    inboxTitleKey: 'inbox.telegramTitle',
-    inboxDescKey: 'inbox.telegramDesc',
-    replyPlaceholderKey: 'inbox.replyTelegram',
   },
 ];
 

@@ -3,8 +3,7 @@
 import { SOCKET_EVENTS } from '@watsapp/shared';
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
-import { ArrowRight, Bell, Key, Link2, MessageCircle, Share2 } from 'lucide-react';
-import { MetaOAuthConnect } from '@/components/integrations/meta-oauth-connect';
+import { ArrowRight, Bell, Link2, MessageCircle, Share2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
@@ -15,11 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, cn, parseApiError } from '@/lib/utils';
 import { createSocket } from '@/lib/socket';
 
-type ApiKey = { id: string; name: string; prefix: string; apiKey?: string };
 type Webhook = { id: string; url: string; events: string[]; enabled: boolean };
 type Notification = { id: string; title: string; body: string; readAt?: string };
 
@@ -34,7 +31,6 @@ type ChannelRow = {
 
 export default function SettingsPage() {
   const { t, dir } = useTranslation();
-  const [keys, setKeys] = useState<ApiKey[]>([]);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [channels, setChannels] = useState<ChannelRow[]>([]);
@@ -42,13 +38,11 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   async function load() {
-    const [keyData, webhookData, notificationData, channelData] = await Promise.all([
-      api<ApiKey[]>('/api-keys'),
+    const [webhookData, notificationData, channelData] = await Promise.all([
       api<Webhook[]>('/webhooks'),
       api<Notification[]>('/notifications'),
       api<ChannelRow[]>('/channels'),
     ]);
-    setKeys(keyData);
     setWebhooks(webhookData);
     setNotifications(notificationData);
     setChannels(channelData);
@@ -69,17 +63,6 @@ export default function SettingsPage() {
     } catch (err) {
       setError(parseApiError(err));
     }
-  }
-
-  async function createKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    await runForm(async () => {
-      const key = await api<ApiKey>('/api-keys', { method: 'POST', body: JSON.stringify({ name: form.get('name') }) });
-      setKeys((items) => [key, ...items]);
-      event.currentTarget.reset();
-      setSuccess(t('settings.keyCreated'));
-    });
   }
 
   async function createWebhook(event: FormEvent<HTMLFormElement>) {
@@ -149,7 +132,6 @@ export default function SettingsPage() {
       <Tabs defaultValue="channels" className="mt-6">
         <TabsList className="mb-4 h-auto flex-wrap">
           <TabsTrigger value="channels"><MessageCircle className="me-2 h-4 w-4" />{t('settings.tabChannels')}</TabsTrigger>
-          <TabsTrigger value="api-keys"><Key className="me-2 h-4 w-4" />{t('settings.tabKeys')}</TabsTrigger>
           <TabsTrigger value="webhooks"><Link2 className="me-2 h-4 w-4" />{t('settings.tabWebhooks')}</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="me-2 h-4 w-4" />{t('settings.tabNotifications')}</TabsTrigger>
         </TabsList>
@@ -161,51 +143,11 @@ export default function SettingsPage() {
               <CardDescription>{t('settings.channelsDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
-                  <div>
-                    <p className="font-medium">{t('settings.metaOAuthTitle')}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{t('settings.metaOAuthDesc')}</p>
-                  </div>
-                  <MetaOAuthConnect
-                    label={t('integrations.connectFacebook')}
-                    busyLabel={t('integrations.connecting')}
-                    onError={setError}
-                  />
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link href="/settings/integrations">{t('settings.manageMetaConnections')}</Link>
-                  </Button>
-                  <p className="text-xs text-muted-foreground">{t('settings.metaWebhookHint')}</p>
-                </div>
-                <form
-                  className="space-y-3 rounded-lg border bg-muted/20 p-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const form = new FormData(event.currentTarget);
-                    runForm(async () => {
-                      await api('/telegram/connect', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                          botToken: form.get('botToken'),
-                          name: form.get('name'),
-                        }),
-                      });
-                      await load();
-                      setSuccess(t('settings.connectChannel'));
-                    }).catch(() => undefined);
-                  }}
-                >
-                  <p className="font-medium">{t('settings.connectTelegram')}</p>
-                  <Input name="name" placeholder={t('settings.keyName')} />
-                  <Input name="botToken" placeholder={t('settings.botToken')} required />
-                  <Button type="submit" className="w-full">{t('settings.connectChannel')}</Button>
-                </form>
-              </div>
               <div className="space-y-2">
                 <p className="text-sm font-medium">{t('settings.channelsList')}</p>
-                {channels.filter((c) => c.provider !== 'WHATSAPP_BAILEYS').length === 0 ? (
+                {channels.filter((c) => c.provider === 'WHATSAPP_CLOUD').length === 0 ? (
                   <p className="text-sm text-muted-foreground">—</p>
-                ) : channels.filter((c) => c.provider !== 'WHATSAPP_BAILEYS').map((channel) => (
+                ) : channels.filter((c) => c.provider === 'WHATSAPP_CLOUD').map((channel) => (
                   <div key={channel.id} className="flex items-center justify-between rounded-lg border p-3">
                     <div>
                       <p className="font-medium">{channel.name}</p>
@@ -215,24 +157,12 @@ export default function SettingsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => runForm(async () => {
-                        if (channel.provider === 'TELEGRAM') {
-                          await api('/telegram/disconnect', {
-                            method: 'POST',
-                            body: JSON.stringify({ channelId: channel.id }),
-                          });
-                        } else if (channel.provider === 'WHATSAPP_CLOUD') {
-                          const accountId = channel.whatsAppCloudAccountId;
-                          if (!accountId) throw new Error('WhatsApp Cloud account id missing');
-                          await api(`/whatsapp-cloud/accounts/${accountId}/disconnect`, {
-                            method: 'POST',
-                            body: '{}',
-                          });
-                        } else {
-                          await api('/meta/disconnect', {
-                            method: 'POST',
-                            body: JSON.stringify({ channelId: channel.id }),
-                          });
-                        }
+                        const accountId = channel.whatsAppCloudAccountId;
+                        if (!accountId) throw new Error('WhatsApp Cloud account id missing');
+                        await api(`/whatsapp-cloud/accounts/${accountId}/disconnect`, {
+                          method: 'POST',
+                          body: '{}',
+                        });
                         await load();
                       })}
                     >
@@ -241,44 +171,6 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="api-keys">
-          <Card className="border-0 shadow-card">
-            <CardHeader>
-              <CardTitle>{t('settings.keysTitle')}</CardTitle>
-              <CardDescription>{t('settings.keysDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <form onSubmit={createKey} className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-end">
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="keyName">{t('settings.keyName')}</Label>
-                  <Input id="keyName" name="name" placeholder="Production integration" required />
-                </div>
-                <Button type="submit">{t('settings.createKey')}</Button>
-              </form>
-              {keys.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No API keys yet. Create one to use the messaging API.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('settings.keyName')}</TableHead>
-                      <TableHead>Key</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {keys.map((key) => (
-                      <TableRow key={key.id}>
-                        <TableCell className="font-medium">{key.name}</TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground break-all">{key.apiKey ?? `${key.prefix}...`}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
             </CardContent>
           </Card>
         </TabsContent>

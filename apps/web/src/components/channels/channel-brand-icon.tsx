@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { cn } from '@/lib/utils';
 import type { ChannelSlug } from '@/lib/channels';
 
-export type BrandKey = ChannelSlug | 'social';
+export type BrandKey = ChannelSlug;
 
 const sizeMap = {
   sm: 'h-8 w-8',
@@ -21,38 +21,6 @@ function WhatsAppGlyph({ className }: { className?: string }) {
   );
 }
 
-function MessengerGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <path d="M12 0C5.373 0 0 4.975 0 11.111c0 3.498 1.744 6.615 4.472 8.653V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.975 18.627 0 12 0zm1.193 14.963l-3.056-3.259-5.963 3.259L10.733 8.1l3.13 3.259L19.752 8.1l-6.559 6.863z" />
-    </svg>
-  );
-}
-
-function InstagramGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
-    </svg>
-  );
-}
-
-function TelegramGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-    </svg>
-  );
-}
-
-function SocialGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-    </svg>
-  );
-}
-
 const brandMeta: Record<
   BrandKey,
   { bg: string; ring: string; Glyph: (props: { className?: string }) => ReactElement }
@@ -61,26 +29,6 @@ const brandMeta: Record<
     bg: 'bg-[#25D366] text-white',
     ring: 'ring-[#25D366]/25',
     Glyph: WhatsAppGlyph,
-  },
-  messenger: {
-    bg: 'bg-[#1877F2] text-white',
-    ring: 'ring-[#1877F2]/25',
-    Glyph: MessengerGlyph,
-  },
-  instagram: {
-    bg: 'bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#FCAF45] text-white',
-    ring: 'ring-pink-500/25',
-    Glyph: InstagramGlyph,
-  },
-  telegram: {
-    bg: 'bg-[#229ED9] text-white',
-    ring: 'ring-sky-500/25',
-    Glyph: TelegramGlyph,
-  },
-  social: {
-    bg: 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900',
-    ring: 'ring-slate-500/20',
-    Glyph: SocialGlyph,
   },
 };
 

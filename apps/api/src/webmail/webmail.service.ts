@@ -12,7 +12,6 @@ import { JwtService } from '@nestjs/jwt';
 import { AdminRole, TeamRole } from '@watsapp/database';
 import { isEmployeeRole } from '../admin/staff-roles';
 import { FreeTrialService } from '../billing/free-trial.service';
-import { SalesPartnersService } from '../sales-partners/sales-partners.service';
 import { EncryptionService } from '../security/encryption.service';
 import { PasswordService } from '../security/password.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -43,7 +42,6 @@ export class WebmailService {
     private readonly config: ConfigService,
     private readonly resendMail: WebmailResendService,
     private readonly freeTrial: FreeTrialService,
-    private readonly salesPartners: SalesPartnersService,
   ) {}
 
   domain() {
@@ -232,7 +230,6 @@ export class WebmailService {
     const teamId = user.teamMembers[0]?.teamId;
     let trialEndsAt: string | null = null;
     let planSlug: string | null = null;
-    let referralCode: string | null = null;
     if (teamId) {
       try {
         const sub = await this.freeTrial.grant({
@@ -256,18 +253,6 @@ export class WebmailService {
           `Mailbox provisioned but trial failed for ${email}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
-
-      // ربط فريق الزبون بكود إحالة الموظف/الشريك الذي أنشأ الإيميل
-      try {
-        referralCode = await this.salesPartners.findApprovedReferralCodeByAdminUserId(input.adminId);
-        if (referralCode) {
-          await this.salesPartners.attachReferral(teamId, user.id, referralCode);
-        }
-      } catch (err) {
-        this.logger.error(
-          `Mailbox provisioned but referral attach failed for ${email}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
     }
 
     return {
@@ -288,7 +273,6 @@ export class WebmailService {
         trialEndsAt,
         planSlug,
         fullAccess: true,
-        referralCode,
       },
     };
   }

@@ -274,13 +274,8 @@ function isLoginRedirectExempt(pathname: string) {
     pathname.startsWith('/register') ||
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/admin') ||
-    pathname.startsWith('/partners') ||
-    pathname.startsWith('/become-a-partner') ||
     pathname.startsWith('/pricing') ||
     pathname.startsWith('/r/') ||
-    pathname.startsWith('/t/') ||
-    pathname.startsWith('/go/') ||
-    pathname.startsWith('/p/') ||
     pathname.startsWith('/f/') ||
     pathname.startsWith('/s/') ||
     pathname.startsWith('/whatsapp/embedded-callback')

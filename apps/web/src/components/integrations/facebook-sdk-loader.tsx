@@ -12,7 +12,7 @@ import { API_URL } from '@/lib/utils';
 export function FacebookSdkLoader() {
   const { locale } = useTranslation();
   const pathname = usePathname() || '/';
-  const needed = /^\/(whatsapp|messenger|integrations|connect|meta)(\/|$)/.test(pathname);
+  const needed = /^\/(whatsapp|integrations|settings\/integrations)(\/|$)/.test(pathname);
 
   useEffect(() => {
     if (!needed) return;

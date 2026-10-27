@@ -9,7 +9,7 @@ import {
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { SalesReferralSource, TeamRole } from '@watsapp/database';
+import { TeamRole } from '@watsapp/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from '../security/password.service';
 import { TokenHashService } from '../security/token-hash.service';
@@ -18,7 +18,6 @@ import { AuthEmailService } from './auth-email.service';
 import { EmailVerificationService, SignupMetadata } from './email-verification.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { SalesPartnersService } from '../sales-partners/sales-partners.service';
 import { FreeTrialService } from '../billing/free-trial.service';
 import { OfficialWhatsAppOtpService } from '../official-whatsapp/official-whatsapp.otp.service';
 import { normalizeWaDigits } from '../official-whatsapp/official-whatsapp.util';
@@ -36,7 +35,6 @@ export class AuthService {
     private readonly otp: EmailVerificationService,
     private readonly authEmail: AuthEmailService,
     private readonly moduleRef: ModuleRef,
-    private readonly salesPartners: SalesPartnersService,
     private readonly whatsappOtp: OfficialWhatsAppOtpService,
   ) {}
 
@@ -171,12 +169,6 @@ export class AuthService {
       });
       const teamId = await this.resolveTeamId(user.id);
       await this.audit(teamId, user.id, 'auth.verify_email', 'user', user.id, ipAddress, userAgent);
-      await this.salesPartners.attachReferral(
-        teamId,
-        user.id,
-        metadata.referralCode,
-        metadata.referralSource === 'LINK' ? SalesReferralSource.LINK : SalesReferralSource.CODE,
-      );
       return this.publicTokens(await this.issueTokens(user.id, teamId, ipAddress, userAgent));
     }
 
@@ -498,12 +490,6 @@ export class AuthService {
 
     const teamId = user.teamMembers[0].teamId;
     await this.audit(teamId, user.id, 'auth.register', 'user', user.id, ipAddress, userAgent);
-    await this.salesPartners.attachReferral(
-      teamId,
-      user.id,
-      referralCode,
-      referralSource === 'LINK' ? SalesReferralSource.LINK : SalesReferralSource.CODE,
-    );
     this.emitCompleteRegistration(teamId, user.id, email);
     try {
       const trials = this.moduleRef.get(FreeTrialService, { strict: false });

@@ -9,7 +9,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BillingAccessService } from '../../billing/billing-access.service';
 import { FEATURE_REGISTRY, entitlementsFromLimits, seedLimitsForSlug, type StoredEntitlement } from '../../billing/feature-registry';
 import { PlanEntitlementsService } from '../../billing/plan-entitlements.service';
-import { SalesPartnersService } from '../../sales-partners/sales-partners.service';
 import { AdminAuditService } from './admin-audit.service';
 
 const MONTHLY_DAYS = 30;
@@ -22,7 +21,6 @@ export class AdminSubscriptionsService {
     private readonly audit: AdminAuditService,
     private readonly billingAccess: BillingAccessService,
     private readonly entitlements: PlanEntitlementsService,
-    private readonly salesPartners: SalesPartnersService,
   ) {}
 
   listFeatureDefinitions() {
@@ -236,34 +234,11 @@ export class AdminSubscriptionsService {
       orderBy: { updatedAt: 'desc' },
       include: {
         plan: true,
-        team: {
-          include: {
-            salesReferral: {
-              include: {
-                partner: { select: { id: true, name: true, email: true, referralCode: true } },
-              },
-            },
-          },
-        },
+        team: true,
         owner: { select: { id: true, email: true, name: true } },
       },
     });
-    return rows.map((row) => {
-      const referral = row.team?.salesReferral;
-      return {
-        ...row,
-        referral: referral
-          ? {
-              id: referral.id,
-              codeUsed: referral.codeUsed,
-              partnerId: referral.partnerId,
-              partnerName: referral.partner.name,
-              partnerEmail: referral.partner.email,
-              partnerReferralCode: referral.partner.referralCode,
-            }
-          : null,
-      };
-    });
+    return rows;
   }
 
   async activate(
@@ -349,20 +324,6 @@ export class AdminSubscriptionsService {
       },
     });
     await this.billingAccess.restoreTeamIntegrations(teamId);
-    // Same partner commission as Wayl-paid checkout (5k / 10k / 15k IQD by plan).
-    await this.salesPartners
-      .creditForSubscriptionActivation({
-        teamId,
-        subscriptionId: sub.id,
-        planId,
-        amountCents:
-          billingCycle === BillingInterval.YEARLY
-            ? yearlyCents
-            : plan.priceCents,
-        description: 'Admin manual subscription activation',
-        provider: 'admin_manual',
-      })
-      .catch(() => null);
     return sub;
   }
 
@@ -530,7 +491,6 @@ export class AdminSubscriptionsService {
       },
     });
     await this.audit.log({ adminUserId, action: 'payment.manual', resource: 'payment', resourceId: payment.id });
-    await this.salesPartners.creditFromPayment(payment.id).catch(() => null);
     return payment;
   }
 

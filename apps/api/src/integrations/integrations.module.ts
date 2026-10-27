@@ -8,7 +8,6 @@ import { StorageModule } from '../storage/storage.module';
 import { WhatsAppModule } from '../modules/whatsapp/whatsapp.module';
 import { ConnectionsController } from './connections.controller';
 import { ConnectionsService } from './connections.service';
-import { GoogleCalendarModule } from './google-calendar/google-calendar.module';
 import { IntegrationsHubController } from './integrations-hub.controller';
 import { IntegrationsHubService } from './integrations-hub.service';
 import { MetaApiClient } from './meta/meta-api.client';
@@ -19,9 +18,6 @@ import { MetaOAuthService } from './meta/meta-oauth.service';
 import { MetaService } from './meta/meta.service';
 import { MetaCommentPollService } from './meta/meta-comment-poll.service';
 import { MetaWebhookLogService } from './meta/meta-webhook-log.service';
-import { TelegramController, TelegramWebhookController } from './telegram/telegram.controller';
-import { TelegramService } from './telegram/telegram.service';
-import { TelegramUserModule } from './telegram-user/telegram-user.module';
 import { TikTokLoginKitModule } from './tiktok-login-kit/tiktok-login-kit.module';
 import { PlatformModule } from '../platform/platform.module';
 
@@ -33,18 +29,14 @@ import { PlatformModule } from '../platform/platform.module';
     SecurityModule,
     StorageModule,
     WhatsAppModule,
-    TelegramUserModule,
     TikTokLoginKitModule,
     BillingModule,
-    GoogleCalendarModule,
     PlatformModule,
   ],
   controllers: [
     MetaController,
     MetaOAuthCallbackController,
     MetaWebhookController,
-    TelegramController,
-    TelegramWebhookController,
     ConnectionsController,
     IntegrationsHubController,
   ],
@@ -56,10 +48,9 @@ import { PlatformModule } from '../platform/platform.module';
     MetaMediaService,
     MetaApiClient,
     InstagramApiClient,
-    TelegramService,
     ConnectionsService,
     IntegrationsHubService,
   ],
-  exports: [MetaService, TelegramService, ConnectionsService, IntegrationsHubService, TelegramUserModule],
+  exports: [MetaService, ConnectionsService, IntegrationsHubService],
 })
 export class IntegrationsModule {}

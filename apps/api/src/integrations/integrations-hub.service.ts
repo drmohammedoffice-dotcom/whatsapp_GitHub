@@ -2,18 +2,11 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   ChannelProvider,
   ChannelStatus,
-  GoogleCalendarConnectionStatus,
   WhatsAppCloudAccountStatus,
   WhatsAppSessionStatus,
 } from '@watsapp/database';
 import { PlanEntitlementsService } from '../billing/plan-entitlements.service';
-import { GoogleCalendarOAuthService } from './google-calendar/google-calendar-oauth.service';
-import { GoogleCalendarSyncService } from './google-calendar/google-calendar-sync.service';
-import { MetaOAuthService } from './meta/meta-oauth.service';
-import { MetaService } from './meta/meta.service';
-import { ConnectionsService, ConnectionHealth } from './connections.service';
-import { TelegramService } from './telegram/telegram.service';
-import { TelegramUserService } from './telegram-user/telegram-user.service';
+import { ConnectionsService } from './connections.service';
 import { TikTokLoginService } from './tiktok-login-kit/tiktok-login.service';
 import { TikTokBusinessService } from './tiktok-login-kit/tiktok-business.service';
 import { WhatsAppService } from '../modules/whatsapp/whatsapp.service';
@@ -30,55 +23,31 @@ import {
   IntegrationsHubResponse,
 } from './integrations-hub.types';
 
-type ChannelRow = Awaited<ReturnType<ConnectionsService['list']>>[number];
-
-function isGoogleProvider(provider: string): provider is 'google' | 'google-calendar' {
-  return provider === 'google' || provider === 'google-calendar';
-}
-
 @Injectable()
 export class IntegrationsHubService {
   constructor(
     private readonly connections: ConnectionsService,
     private readonly entitlements: PlanEntitlementsService,
-    private readonly meta: MetaService,
-    private readonly metaOAuth: MetaOAuthService,
-    private readonly telegramBot: TelegramService,
-    private readonly telegramUser: TelegramUserService,
     private readonly tiktokLogin: TikTokLoginService,
     private readonly tiktokBusiness: TikTokBusinessService,
     private readonly whatsapp: WhatsAppService,
     private readonly whatsappCloud: WhatsAppCloudService,
     private readonly prisma: PrismaService,
-    private readonly googleOAuth: GoogleCalendarOAuthService,
-    private readonly googleSync: GoogleCalendarSyncService,
   ) {}
 
   async list(teamId: string, userId: string): Promise<IntegrationsHubResponse> {
-    const [channels, whatsappSessions, whatsappCloudAccounts, tiktokBusiness, googleStatus] = await Promise.all([
-      this.connections.list(teamId),
+    const [whatsappSessions, whatsappCloudAccounts, tiktokBusiness] = await Promise.all([
       this.whatsapp.list(teamId, userId),
       this.prisma.whatsAppCloudAccount.findMany({
         where: { teamId, status: WhatsAppCloudAccountStatus.CONNECTED },
         orderBy: { connectedAt: 'desc' },
       }),
       this.tiktokBusiness.getStatus(userId),
-      this.googleOAuth.status(teamId),
     ]);
 
-    const metaApp = this.meta.getStatus();
-    const messengerChannels = channels.filter((c: ChannelRow) => c.provider === ChannelProvider.META_MESSENGER);
-    const instagramChannels = channels.filter((c: ChannelRow) => c.provider === ChannelProvider.META_INSTAGRAM);
-    const botChannels = channels.filter((c: ChannelRow) => c.provider === ChannelProvider.TELEGRAM);
-    const personalChannels = channels.filter((c: ChannelRow) => c.provider === ChannelProvider.TELEGRAM_USER);
-
     const providers: IntegrationProviderSummary[] = [
-      this.buildMetaProvider('facebook-messenger', messengerChannels, metaApp.oauthEnabled),
-      this.buildMetaProvider('instagram', instagramChannels, metaApp.oauthEnabled),
       this.buildWhatsAppProvider(whatsappSessions, whatsappCloudAccounts),
       this.buildTikTokProvider(tiktokBusiness),
-      this.buildTelegramProvider(botChannels, personalChannels),
-      this.buildGoogleProvider(googleStatus),
     ];
 
     return { updatedAt: new Date().toISOString(), providers };
@@ -91,29 +60,13 @@ export class IntegrationsHubService {
   ): Promise<IntegrationProviderSummary> {
     this.assertProvider(provider);
     const hub = await this.list(teamId, userId);
-    const key = isGoogleProvider(provider) ? 'google' : provider;
-    const found = hub.providers.find((p) => p.provider === key || p.provider === provider);
+    const found = hub.providers.find((p) => p.provider === provider);
     if (!found) throw new NotFoundException(`Integration provider "${provider}" not found`);
     return found;
   }
 
   async getStatus(teamId: string, userId: string, provider: string) {
     this.assertProvider(provider);
-    // Google Calendar UI expects the connection row shape (CONNECTED / email / calendar).
-    if (isGoogleProvider(provider)) {
-      const connection = await this.googleOAuth.status(teamId);
-      return (
-        connection ?? {
-          status: GoogleCalendarConnectionStatus.DISCONNECTED,
-          googleAccountEmail: null,
-          calendarId: null,
-          calendarSummary: null,
-          connectedAt: null,
-          lastSyncAt: null,
-          failureReason: null,
-        }
-      );
-    }
     const summary = await this.getProvider(teamId, userId, provider);
     return {
       provider: summary.provider,
@@ -134,22 +87,7 @@ export class IntegrationsHubService {
   ): Promise<IntegrationConnectResponse> {
     this.assertProvider(provider);
 
-    if (isGoogleProvider(provider)) {
-      const started = await this.googleOAuth.startConnect(teamId, userId);
-      return { action: 'redirect', url: started.url, authUrl: started.url };
-    }
-
     switch (provider as IntegrationProvider) {
-      case 'facebook-messenger': {
-        await this.entitlements.assertFacebook(teamId);
-        const { authUrl } = await this.metaOAuth.startPublicConnect(teamId, userId, 'messenger');
-        return { action: 'redirect', url: authUrl, authUrl };
-      }
-      case 'instagram': {
-        await this.entitlements.assertInstagram(teamId);
-        const { authUrl } = await this.metaOAuth.startPublicConnect(teamId, userId, 'instagram');
-        return { action: 'redirect', url: authUrl, authUrl };
-      }
       case 'whatsapp': {
         await this.entitlements.assertWhatsappInboxConnect(teamId);
         return {
@@ -163,9 +101,6 @@ export class IntegrationsHubService {
         const { authUrl } = await this.tiktokLogin.startLogin(userId, teamId);
         return { action: 'redirect', url: authUrl };
       }
-      case 'telegram':
-        await this.entitlements.assertTelegram(teamId);
-        return { action: 'inline', flow: 'telegram-user', message: 'Complete Telegram login in the panel' };
       default:
         throw new BadRequestException('Unsupported provider');
     }
@@ -185,18 +120,7 @@ export class IntegrationsHubService {
   ) {
     this.assertProvider(provider);
 
-    if (isGoogleProvider(provider)) {
-      await this.googleOAuth.disconnect(teamId, userId);
-      return { disconnected: true };
-    }
-
     switch (provider as IntegrationProvider) {
-      case 'facebook-messenger':
-      case 'instagram': {
-        if (!body?.channelId) throw new BadRequestException('channelId is required');
-        await this.meta.disconnect(teamId, body.channelId);
-        return { disconnected: true };
-      }
       case 'whatsapp': {
         const cloudAccountId = body?.cloudAccountId ?? body?.accountId;
         if (cloudAccountId && !body?.sessionId) {
@@ -210,27 +134,6 @@ export class IntegrationsHubService {
       case 'tiktok':
         await this.tiktokLogin.disconnect(userId);
         return { disconnected: true };
-      case 'telegram': {
-        if (!body?.channelId) throw new BadRequestException('channelId is required');
-        if (body.connectionId) {
-          await this.telegramUser.disconnect(teamId, body.connectionId);
-          return { disconnected: true };
-        }
-        const channel = await this.connections.findChannel(teamId, body.channelId);
-        if (!channel) throw new NotFoundException('Telegram account not found');
-        if (channel.provider === ChannelProvider.TELEGRAM_USER) {
-          if (!channel.telegramConnectionId) {
-            throw new BadRequestException('Telegram personal connection is missing');
-          }
-          await this.telegramUser.disconnect(teamId, channel.telegramConnectionId);
-          return { disconnected: true };
-        }
-        if (channel.provider === ChannelProvider.TELEGRAM) {
-          await this.telegramBot.disconnect(teamId, body.channelId);
-          return { disconnected: true };
-        }
-        throw new NotFoundException('Telegram account not found');
-      }
       default:
         throw new BadRequestException('Unsupported provider');
     }
@@ -242,10 +145,6 @@ export class IntegrationsHubService {
     provider: string,
     body?: { sessionId?: string; accountId?: string; cloudAccountId?: string },
   ) {
-    if (isGoogleProvider(provider)) {
-      const started = await this.googleOAuth.reconnect(teamId, userId);
-      return { action: 'redirect' as const, url: started.url, authUrl: started.url };
-    }
     if (provider === 'whatsapp') {
       await this.entitlements.assertWhatsappInboxConnect(teamId);
       if (body?.cloudAccountId) {
@@ -268,82 +167,15 @@ export class IntegrationsHubService {
     return this.connect(teamId, userId, provider, body);
   }
 
-  async sync(teamId: string, _userId: string, provider: string) {
+  async sync(_teamId: string, _userId: string, provider: string) {
     this.assertProvider(provider);
-    if (!isGoogleProvider(provider)) {
-      throw new BadRequestException('Sync is only supported for Google Calendar');
-    }
-    return this.googleSync.syncCalendar(teamId);
+    throw new BadRequestException('Sync is not supported for this provider');
   }
 
   private assertProvider(provider: string): asserts provider is IntegrationProvider {
     if (!INTEGRATION_PROVIDERS.includes(provider as IntegrationProvider)) {
       throw new NotFoundException(`Unknown integration provider: ${provider}`);
     }
-  }
-
-  private buildGoogleProvider(
-    connection: Awaited<ReturnType<GoogleCalendarOAuthService['status']>>,
-  ): IntegrationProviderSummary {
-    const connected = connection?.status === GoogleCalendarConnectionStatus.CONNECTED;
-    const accounts: IntegrationAccount[] = connected
-      ? [
-          {
-            id: connection!.id,
-            name: connection!.googleAccountEmail ?? 'Google Calendar',
-            subtitle: connection!.calendarSummary ?? connection!.calendarId,
-            status: 'connected',
-            health: 'healthy',
-            lastSyncAt: connection!.lastSyncAt?.toISOString() ?? null,
-            metadata: {
-              calendarId: connection!.calendarId,
-              failureReason: connection!.failureReason,
-            },
-          },
-        ]
-      : [];
-    const aggregate = this.aggregateAccounts(accounts);
-    return {
-      provider: 'google',
-      name: 'Google Calendar',
-      description: 'Sync appointments with Google Calendar for AI booking and staff scheduling',
-      ...aggregate,
-      capabilities: { oauth: true, multiAccount: false, configured: true },
-      metadata: {
-        status: connection?.status ?? GoogleCalendarConnectionStatus.DISCONNECTED,
-        googleAccountEmail: connection?.googleAccountEmail ?? null,
-        calendarSummary: connection?.calendarSummary ?? null,
-      },
-    };
-  }
-
-  private buildMetaProvider(
-    provider: 'facebook-messenger' | 'instagram',
-    channels: Awaited<ReturnType<ConnectionsService['list']>>,
-    oauthEnabled: boolean,
-  ): IntegrationProviderSummary {
-    const accounts: IntegrationAccount[] = channels.map((c) => ({
-      id: c.id,
-      name: c.name,
-      subtitle: provider === 'instagram' ? c.metadata.instagramUsername ?? null : 'Facebook Page',
-      avatarUrl: c.metadata.profilePictureUrl ?? null,
-      status: this.mapHealth(c.health),
-      health: this.healthFromConnection(c.health),
-      lastSyncAt: c.lastSeenAt?.toISOString() ?? null,
-      metadata: { pageId: c.metadata.pageId, externalId: c.externalId },
-    }));
-
-    const aggregate = this.aggregateAccounts(accounts);
-    return {
-      provider,
-      name: provider === 'facebook-messenger' ? 'Facebook Messenger' : 'Instagram',
-      description:
-        provider === 'facebook-messenger'
-          ? 'Connect Facebook Pages for Messenger conversations and AI auto-reply'
-          : 'Activate Instagram DMs linked to your Facebook Pages',
-      ...aggregate,
-      capabilities: { oauth: oauthEnabled, multiAccount: true, configured: oauthEnabled },
-    };
   }
 
   private buildWhatsAppProvider(
@@ -466,50 +298,6 @@ export class IntegrationsHubService {
     };
   }
 
-  private buildTelegramProvider(
-    botChannels: ChannelRow[],
-    personalChannels: ChannelRow[],
-  ): IntegrationProviderSummary {
-    const accounts: IntegrationAccount[] = [
-      ...botChannels.map((c) => ({
-        id: c.id,
-        name: c.name,
-        subtitle: c.metadata.botUsername ? `@${c.metadata.botUsername}` : 'Telegram Bot',
-        status: this.mapHealth(c.health),
-        health: this.healthFromConnection(c.health),
-        lastSyncAt: c.lastSeenAt?.toISOString() ?? null,
-        metadata: { type: 'bot', botUsername: c.metadata.botUsername },
-      })),
-      ...personalChannels.map((c) => ({
-        id: c.id,
-        name: c.name,
-        subtitle: c.metadata.botUsername ? `@${c.metadata.botUsername}` : 'Telegram Personal',
-        phoneNumber: null,
-        status: this.mapHealth(c.health),
-        health: this.healthFromConnection(c.health),
-        lastSyncAt: c.lastSeenAt?.toISOString() ?? null,
-        metadata: {
-          type: 'personal' as const,
-          channelId: c.id,
-          connectionId: c.telegramConnectionId ?? undefined,
-        },
-      })),
-    ];
-
-    const aggregate = this.aggregateAccounts(accounts);
-    return {
-      provider: 'telegram',
-      name: 'Telegram',
-      description: 'Connect Telegram Bot or your personal account via secure MTProto login',
-      ...aggregate,
-      capabilities: {
-        oauth: false,
-        multiAccount: true,
-        configured: this.telegramUser.isConfigured(),
-      },
-    };
-  }
-
   private aggregateAccounts(accounts: IntegrationAccount[]) {
     const connectedAccounts = accounts.filter((a) => a.status === 'connected');
     const hasExpired = accounts.some((a) => a.status === 'expired');
@@ -547,26 +335,6 @@ export class IntegrationsHubService {
     };
   }
 
-  private mapHealth(health: ConnectionHealth): IntegrationConnectionStatus {
-    const map: Record<ConnectionHealth, IntegrationConnectionStatus> = {
-      connected: 'connected',
-      disconnected: 'disconnected',
-      expired: 'expired',
-      reconnect_required: 'reconnect_required',
-      connecting: 'syncing',
-      failed: 'error',
-    };
-    return map[health];
-  }
-
-  private healthFromConnection(health: ConnectionHealth): IntegrationHealth {
-    if (health === 'connected') return 'healthy';
-    if (health === 'connecting') return 'degraded';
-    if (health === 'reconnect_required' || health === 'expired') return 'degraded';
-    if (health === 'failed') return 'unhealthy';
-    return 'unknown';
-  }
-
   private mapWhatsAppStatus(status: WhatsAppSessionStatus): IntegrationConnectionStatus {
     switch (status) {
       case WhatsAppSessionStatus.CONNECTED:
@@ -588,13 +356,5 @@ export class IntegrationsHubService {
     if (status === WhatsAppSessionStatus.PENDING_QR || status === WhatsAppSessionStatus.CONNECTING) return 'degraded';
     if (failureReason) return 'unhealthy';
     return 'unknown';
-  }
-
-  private mapTelegramUserStatus(status: string, live: boolean): IntegrationConnectionStatus {
-    if (status === 'CONNECTED') return live ? 'connected' : 'reconnect_required';
-    if (status === 'EXPIRED') return 'expired';
-    if (status === 'CONNECTING') return 'syncing';
-    if (status === 'FAILED') return 'error';
-    return 'disconnected';
   }
 }

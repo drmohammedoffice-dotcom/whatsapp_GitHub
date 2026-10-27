@@ -1,6 +1,6 @@
 ﻿import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import { BillingInterval, InvoiceStatus, OfficialNotificationType, PaymentStatus, SalesReferralSource, SubscriptionStatus } from '@watsapp/database';
+import { BillingInterval, InvoiceStatus, OfficialNotificationType, PaymentStatus, SubscriptionStatus } from '@watsapp/database';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PlanSlug } from './dto/billing.dto';
 import { FEATURE_REGISTRY, formatLimitLabel, type PlanLimits } from './feature-registry';
@@ -12,7 +12,6 @@ import { WaylService, type WaylWebhookPayload } from './wayl.service';
 import { BillingEmailService } from './billing-email.service';
 import { SubscriptionExpiryService } from './subscription-expiry.service';
 import { ConfigService } from '@nestjs/config';
-import { SalesPartnersService } from '../sales-partners/sales-partners.service';
 import { OfficialWhatsAppNotificationService } from '../official-whatsapp/official-whatsapp.notifications.service';
 import { resolveUsdToIqdRate, toWaylIqd } from './usd-to-iqd';
 
@@ -63,7 +62,6 @@ export class BillingService {
     private readonly wayl: WaylService,
     private readonly config: ConfigService,
     private readonly email: BillingEmailService,
-    private readonly salesPartners: SalesPartnersService,
   ) {}
 
   async listPlans() {
@@ -460,22 +458,6 @@ export class BillingService {
       },
     });
 
-    // Don't block checkout on referral attach.
-    if (referral?.code) {
-      void this.salesPartners
-        .attachReferral(
-          teamId,
-          userId,
-          referral.code,
-          referral.source === 'LINK' ? SalesReferralSource.LINK : SalesReferralSource.CODE,
-        )
-        .catch((err) =>
-          this.logger.warn(
-            `[checkout] referral attach failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
-        );
-    }
-
     const payment = await this.prisma.payment.create({
       data: {
         subscriptionId: subscription.id,
@@ -802,9 +784,6 @@ export class BillingService {
     await this.access.restoreTeamIntegrations(payment.teamId);
     this.emitPurchase(payment.teamId, payment.id, payment.amountCents, payment.currency);
     await this.sendInvoiceEmail(payment.teamId, payment.id, payment.subscriptionId, now, periodEnd, payment.amountCents, payment.currency);
-    await this.salesPartners.creditFromPayment(payment.id).catch((err) => {
-      this.logger.warn(`Sales commission skipped: ${err instanceof Error ? err.message : String(err)}`);
-    });
     void this.notifyOfficialWhatsApp(payment.subscriptionId);
     return this.getStatus(payment.teamId);
   }

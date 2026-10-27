@@ -149,27 +149,6 @@ export async function createInstantForm(body: {
   return parse<InstantFormView>(res);
 }
 
-export async function generateInstantFormDocument(body: {
-  brief: string;
-  productName?: string;
-  productDescription?: string;
-  price?: number;
-  compareAtPrice?: number;
-  currency?: string;
-  features?: string[];
-  images?: string[];
-  platform?: string;
-  offerBadge?: string;
-  extraNotes?: string;
-}) {
-  const res = await authedFetch(`${API_URL}/api/v1/instant-forms/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return parse<InstantFormDocument>(res);
-}
-
 export async function uploadInstantFormMedia(file: File) {
   const form = new FormData();
   form.append('file', file);

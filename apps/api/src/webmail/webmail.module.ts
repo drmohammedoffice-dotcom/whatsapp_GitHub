@@ -1,6 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { BillingModule } from '../billing/billing.module';
-import { SalesPartnersModule } from '../sales-partners/sales-partners.module';
 import { SecurityModule } from '../security/security.module';
 import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
 import { AdminRolesGuard } from '../admin/guards/admin-roles.guard';
@@ -12,7 +11,7 @@ import { WebmailResendService } from './webmail-resend.service';
 import { WebmailService } from './webmail.service';
 
 @Module({
-  imports: [SecurityModule, forwardRef(() => BillingModule), SalesPartnersModule],
+  imports: [SecurityModule, forwardRef(() => BillingModule)],
   controllers: [WebmailController, AdminWebmailController, WebmailInboundController],
   providers: [WebmailService, WebmailResendService, WebmailAuthGuard, AdminJwtGuard, AdminRolesGuard],
   exports: [WebmailService, WebmailResendService],

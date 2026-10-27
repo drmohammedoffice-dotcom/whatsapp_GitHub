@@ -16,7 +16,6 @@ import { AuthResponse, isOtpChallenge, OtpChallenge } from '@/lib/auth';
 import { fetchSubscriptionStatus } from '@/lib/billing';
 import { setAuthCookie, setSubscriptionCookie } from '@/lib/subscription-cookie';
 import { getPostAuthRedirect } from '@/lib/subscription-routes';
-import { getStoredReferral, saveReferral } from '@/lib/referral';
 import { api, checkApiHealth, parseApiError, setSession } from '@/lib/utils';
 
 export default function RegisterPage() {
@@ -29,16 +28,6 @@ export default function RegisterPage() {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [otpOpen, setOtpOpen] = useState(false);
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
-  const [storedRef, setStoredRef] = useState('');
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get('ref') ?? params.get('referral');
-    if (fromUrl) saveReferral(fromUrl, params.get('ref') ? 'CODE' : 'CODE');
-    const stored = getStoredReferral();
-    if (stored?.code) setStoredRef(stored.code);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,9 +55,6 @@ export default function RegisterPage() {
     const pwd = String(form.get('password') ?? '');
     const confirm = String(form.get('confirmPassword') ?? '');
 
-    const referralCode = String(form.get('referralCode') ?? '').trim() || getStoredReferral()?.code;
-    const referralSource = getStoredReferral()?.source ?? 'CODE';
-
     if (!name || !teamName || !email) {
       setError(t('auth.fillAllFields'));
       return;
@@ -92,8 +78,6 @@ export default function RegisterPage() {
           teamName,
           password: pwd,
           phone: String(form.get('phone') ?? '').trim() || undefined,
-          referralCode: referralCode || undefined,
-          referralSource: referralCode ? referralSource : undefined,
         }),
       });
       if (isOtpChallenge(result)) {
@@ -187,17 +171,6 @@ export default function RegisterPage() {
               <Label htmlFor="phone">{t('auth.phoneOptional')}</Label>
               <Input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="9647…" className="dir-ltr text-start" />
               <p className="text-xs text-muted-foreground">{t('auth.phoneHint')}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="referralCode">{t('auth.referralCode')}</Label>
-              <Input
-                id="referralCode"
-                name="referralCode"
-                value={storedRef}
-                onChange={(e) => setStoredRef(e.target.value.toUpperCase())}
-                autoComplete="off"
-              />
-              <p className="text-xs text-muted-foreground">{t('auth.referralCodeHint')}</p>
             </div>
 
             {error && <AlertBanner message={error} onDismiss={() => setError(null)} />}

@@ -8,10 +8,6 @@ import { cn } from '@/lib/utils';
 
 const railItems: Array<{ slug: BrandKey; href: string; labelKey: string; featured?: boolean }> = [
   { slug: 'whatsapp', href: '/inbox/whatsapp', labelKey: 'nav.whatsapp', featured: true },
-  { slug: 'messenger', href: '/inbox/messenger', labelKey: 'nav.messenger' },
-  { slug: 'instagram', href: '/inbox/instagram', labelKey: 'nav.instagram' },
-  { slug: 'telegram', href: '/inbox/telegram', labelKey: 'nav.telegram' },
-  { slug: 'social', href: '/inbox/social', labelKey: 'nav.socialInbox' },
 ];
 
 export function InboxChannelRail({ activeSlug }: { activeSlug?: string }) {

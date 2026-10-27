@@ -25,7 +25,7 @@ export default function AdminAnalyticsPage() {
 
   if (!data) return <p>Failed to load analytics.</p>;
 
-  const usage = data.usage as { aiCostCents: number; newUsers30: number; aiEvents: number };
+  const usage = data.usage as { newUsers30: number };
 
   return (
     <div>
@@ -56,13 +56,6 @@ export default function AdminAnalyticsPage() {
           </CardContent>
         </Card>
       </div>
-      <Card className="mt-4 border-0 shadow-card">
-        <CardContent className="pt-6">
-          <p className="font-medium">Usage</p>
-          <p className="mt-2 text-sm text-muted-foreground">AI events: {usage.aiEvents}</p>
-          <p className="text-sm text-muted-foreground">AI cost: ${(usage.aiCostCents / 100).toFixed(2)}</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

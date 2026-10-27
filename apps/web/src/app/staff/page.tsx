@@ -180,7 +180,6 @@ export default function StaffSubscribersPage() {
           ownerEmail={subTarget.ownerEmail}
           subscription={subTarget.subscription}
           onSaved={() => void load(q)}
-          allowReferralEdit={false}
         />
       )}
     </div>
