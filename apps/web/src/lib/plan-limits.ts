@@ -23,6 +23,9 @@ export type PlanLimits = {
   creativeImagesLimit?: number;
   creativeVideoSecondsLimit?: number;
   creative4kEnabled?: boolean;
+  instantFormsEnabled?: boolean;
+  onlineStoreEnabled?: boolean;
+  aiCampaignReviewEnabled?: boolean;
 };
 
 export type PlanFeature =
@@ -39,7 +42,10 @@ export type PlanFeature =
   | 'appointments'
   | 'team_members'
   | 'voice_ai'
-  | 'creative_studio';
+  | 'creative_studio'
+  | 'instant_forms'
+  | 'online_store'
+  | 'ai_campaign_review';
 
 export function resolvePlanSlug(slug?: string | null): PlanSlug {
   return slug?.trim() || 'basic';
@@ -59,5 +65,8 @@ export function planAllowsFeature(limits: PlanLimits | null | undefined, feature
   if (feature === 'team_members') return (limits.maxTeamMembers ?? 1) !== 0;
   if (feature === 'voice_ai') return Boolean(limits.voiceAiEnabled);
   if (feature === 'creative_studio') return Boolean(limits.creativeStudioEnabled);
+  if (feature === 'instant_forms') return Boolean(limits.instantFormsEnabled);
+  if (feature === 'online_store') return Boolean(limits.onlineStoreEnabled);
+  if (feature === 'ai_campaign_review') return Boolean(limits.aiCampaignReviewEnabled);
   return Boolean(limits.aiEnabled);
 }

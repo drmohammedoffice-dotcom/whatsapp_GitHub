@@ -228,13 +228,41 @@ export class AdminSubscriptionsService {
     return rows;
   }
 
-  listSubscriptions(params: { status?: SubscriptionStatus; skip?: number; take?: number }) {
-    return this.prisma.subscription.findMany({
+  async listSubscriptions(params: { status?: SubscriptionStatus; skip?: number; take?: number }) {
+    const rows = await this.prisma.subscription.findMany({
       where: params.status ? { status: params.status } : undefined,
       skip: params.skip ?? 0,
-      take: Math.min(params.take ?? 50, 100),
+      take: Math.min(params.take ?? 200, 300),
       orderBy: { updatedAt: 'desc' },
-      include: { plan: true, team: true, owner: { select: { id: true, email: true, name: true } } },
+      include: {
+        plan: true,
+        team: {
+          include: {
+            salesReferral: {
+              include: {
+                partner: { select: { id: true, name: true, email: true, referralCode: true } },
+              },
+            },
+          },
+        },
+        owner: { select: { id: true, email: true, name: true } },
+      },
+    });
+    return rows.map((row) => {
+      const referral = row.team?.salesReferral;
+      return {
+        ...row,
+        referral: referral
+          ? {
+              id: referral.id,
+              codeUsed: referral.codeUsed,
+              partnerId: referral.partnerId,
+              partnerName: referral.partner.name,
+              partnerEmail: referral.partner.email,
+              partnerReferralCode: referral.partner.referralCode,
+            }
+          : null,
+      };
     });
   }
 
@@ -243,7 +271,7 @@ export class AdminSubscriptionsService {
     teamId: string,
     planId: string,
     ownerUserId?: string,
-    options?: { billingCycle?: BillingInterval; durationDays?: number },
+    options?: { billingCycle?: BillingInterval; durationDays?: number; addRemainingDays?: boolean },
   ) {
     const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
     if (!plan) throw new NotFoundException('Plan not found');
@@ -255,14 +283,28 @@ export class AdminSubscriptionsService {
         ? Math.round(yearlyCents / 12)
         : plan.priceCents;
     const now = new Date();
-    const periodEnd = new Date(now);
-    if (options?.durationDays && options.durationDays > 0) {
-      periodEnd.setDate(periodEnd.getDate() + options.durationDays);
-    } else if (billingCycle === BillingInterval.YEARLY) {
-      periodEnd.setDate(periodEnd.getDate() + YEARLY_DAYS);
-    } else {
-      periodEnd.setDate(periodEnd.getDate() + MONTHLY_DAYS);
+    let baseDays =
+      options?.durationDays && options.durationDays > 0
+        ? options.durationDays
+        : billingCycle === BillingInterval.YEARLY
+          ? YEARLY_DAYS
+          : MONTHLY_DAYS;
+    let remainingDaysAdded = 0;
+    if (options?.addRemainingDays) {
+      const existing = await this.prisma.subscription.findUnique({ where: { teamId } });
+      if (existing?.currentPeriodEnd) {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const end = new Date(existing.currentPeriodEnd);
+        const startOfEnd = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+        const left = Math.round((startOfEnd.getTime() - startOfToday.getTime()) / 86_400_000);
+        if (left > 0) {
+          remainingDaysAdded = left;
+          baseDays += left;
+        }
+      }
     }
+    const periodEnd = new Date(now);
+    periodEnd.setDate(periodEnd.getDate() + baseDays);
 
     const sub = await this.prisma.subscription.upsert({
       where: { teamId },
@@ -298,7 +340,13 @@ export class AdminSubscriptionsService {
       action: 'subscription.activate',
       resource: 'subscription',
       resourceId: sub.id,
-      metadata: { planId, billingCycle, durationDays: options?.durationDays },
+      metadata: {
+        planId,
+        billingCycle,
+        durationDays: baseDays,
+        remainingDaysAdded,
+        addRemainingDays: Boolean(options?.addRemainingDays),
+      },
     });
     await this.billingAccess.restoreTeamIntegrations(teamId);
     // Same partner commission as Wayl-paid checkout (5k / 10k / 15k IQD by plan).

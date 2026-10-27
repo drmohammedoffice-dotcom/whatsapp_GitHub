@@ -13,27 +13,44 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus } from 'lucide-react';
 import {
   approveAdminPartner,
+  createAdminPartnerFromStaff,
+  createAdminPartnerManual,
   fetchAdminPartnerCommissions,
   fetchAdminPartnerDirectory,
   fetchAdminPartnerRules,
   fetchAdminPartnerWallet,
   fetchAdminPayouts,
   fetchAdminSalesPartners,
+  fetchEligibleStaffForPartner,
   deleteAdminPartner,
   rejectAdminPartner,
   saveAdminPartnerRule,
+  resetAdminPartnerPassword,
   setAdminPartnerPassword,
   updateAdminPartnerEmail,
   setAdminCommissionStatus,
+  STAFF_ROLE_LABELS,
   type AdminCommissionRow,
   type AdminCommissionRule,
   type AdminPayoutRow,
   type AdminSalesPartnerRow,
   type AdminWallet,
+  type EligibleStaffForPartner,
+  type StaffRole,
 } from '@/lib/admin-api';
 import { formatIqd } from '@/lib/partner-api';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { PayoutReview } from './payout-review';
 
 function statusBadge(status: string) {
@@ -41,6 +58,11 @@ function statusBadge(status: string) {
   if (status === 'PENDING') return 'warning' as const;
   if (status === 'REJECTED' || status === 'SUSPENDED') return 'destructive' as const;
   return 'secondary' as const;
+}
+
+function generatePartnerPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
 export default function AdminPartnersPage() {
@@ -62,6 +84,19 @@ export default function AdminPartnersPage() {
   const [manageEmail, setManageEmail] = useState('');
   const [managePassword, setManagePassword] = useState('');
   const [manageBusy, setManageBusy] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMode, setAddMode] = useState<'staff' | 'manual'>('staff');
+  const [eligibleStaff, setEligibleStaff] = useState<EligibleStaffForPartner[]>([]);
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+  const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    country: 'Iraq',
+    password: '',
+  });
   const searchRef = useRef(search);
   searchRef.current = search;
 
@@ -131,6 +166,81 @@ export default function AdminPartnersPage() {
     await load();
   }
 
+  async function openAddPartner(mode: 'staff' | 'manual' = 'staff') {
+    setAddMode(mode);
+    setAddOpen(true);
+    setSelectedStaffId('');
+    setManualForm({ name: '', email: '', phone: '', country: 'Iraq', password: generatePartnerPassword() });
+    setError(null);
+    if (mode !== 'staff') return;
+    setEligibleLoading(true);
+    try {
+      const rows = await fetchEligibleStaffForPartner();
+      setEligibleStaff(rows);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load staff';
+      setError(msg);
+      setEligibleStaff([]);
+      setNotice(`تعذر تحميل الموظفين للإضافة كشركاء: ${msg}`);
+    } finally {
+      setEligibleLoading(false);
+    }
+  }
+
+  async function onAddFromStaff() {
+    if (!selectedStaffId) return;
+    setAddBusy(true);
+    setError(null);
+    try {
+      const result = await createAdminPartnerFromStaff(selectedStaffId);
+      const bits = [
+        result.alreadyPartner ? t('partners.alreadyPartnerNotice') : t('partners.partnerAddedFromStaff'),
+        result.referralLink,
+      ];
+      if (result.temporaryPassword) bits.push(`${t('partners.tempPassword')}: ${result.temporaryPassword}`);
+      setNotice(bits.join(' — '));
+      setAddOpen(false);
+      setTab('partners');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add partner');
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
+  async function onAddManual() {
+    if (!manualForm.name.trim() || !manualForm.email.trim()) {
+      setError('أدخل الاسم والبريد');
+      return;
+    }
+    setAddBusy(true);
+    setError(null);
+    try {
+      const result = await createAdminPartnerManual({
+        name: manualForm.name.trim(),
+        email: manualForm.email.trim(),
+        phone: manualForm.phone.trim() || undefined,
+        country: manualForm.country.trim() || undefined,
+        password: manualForm.password.trim() || undefined,
+      });
+      setNotice(
+        [
+          t('partners.partnerCreatedManual'),
+          `${t('partners.tempPassword')}: ${result.temporaryPassword}`,
+          result.referralLink,
+        ].join(' — '),
+      );
+      setAddOpen(false);
+      setTab('partners');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create partner');
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -142,7 +252,16 @@ export default function AdminPartnersPage() {
 
   return (
     <div>
-      <PageHeader title={t('partners.adminTitle')} description={t('partners.adminDesc')} />
+      <PageHeader
+        title={t('partners.adminTitle')}
+        description={t('partners.adminDesc')}
+        actions={
+          <Button type="button" onClick={() => void openAddPartner('staff')}>
+            <Plus className="me-1 h-4 w-4" />
+            {t('partners.addNewPartners')}
+          </Button>
+        }
+      />
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
       {notice && (
         <div className="mt-4">
@@ -160,7 +279,17 @@ export default function AdminPartnersPage() {
           <TabsTrigger value="rules">{t('partners.tabRules')}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="requests" className="mt-4 rounded-lg border bg-card">
+        <TabsContent value="requests" className="mt-4 space-y-3">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => void openAddPartner('manual')}>
+              {t('partners.createPartnerManual')}
+            </Button>
+            <Button type="button" onClick={() => void openAddPartner('staff')}>
+              <Plus className="me-1 h-4 w-4" />
+              {t('partners.addNewPartners')}
+            </Button>
+          </div>
+          <div className="rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -200,14 +329,25 @@ export default function AdminPartnersPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </TabsContent>
 
         <TabsContent value="partners" className="mt-4 space-y-3">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('partners.searchPartner')}
-          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('partners.searchPartner')}
+              className="flex-1"
+            />
+            <Button type="button" variant="outline" onClick={() => void openAddPartner('manual')}>
+              {t('partners.createPartnerManual')}
+            </Button>
+            <Button type="button" onClick={() => void openAddPartner('staff')}>
+              <Plus className="me-1 h-4 w-4" />
+              {t('partners.addNewPartners')}
+            </Button>
+          </div>
           <div className="rounded-lg border bg-card">
             <Table>
               <TableHeader>
@@ -261,7 +401,7 @@ export default function AdminPartnersPage() {
                             setManagePassword('');
                           }}
                         >
-                          إدارة
+                          رمز الدخول
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -300,28 +440,60 @@ export default function AdminPartnersPage() {
                     حفظ البريد
                   </Button>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                  <div className="space-y-2">
-                    <p className="text-sm">رمز الدخول</p>
-                    <Input dir="ltr" value={managePassword} onChange={(event) => setManagePassword(event.target.value)} />
+                <div className="space-y-2">
+                  <p className="text-sm">رمز الدخول (لوحة أرباح الشريك)</p>
+                  <Input
+                    dir="ltr"
+                    className="font-mono"
+                    value={managePassword}
+                    onChange={(event) => setManagePassword(event.target.value)}
+                    placeholder="8 أحرف على الأقل"
+                    minLength={8}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={manageBusy}
+                      onClick={() => setManagePassword(generatePartnerPassword())}
+                    >
+                      توليد رمز
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={manageBusy || managePassword.trim().length < 8}
+                      onClick={() => {
+                        setManageBusy(true);
+                        setError(null);
+                        void setAdminPartnerPassword(manage.id, managePassword.trim())
+                          .then(() => {
+                            setNotice(`تم تغيير رمز الدخول: ${managePassword.trim()}`);
+                          })
+                          .catch((err) => setError(err instanceof Error ? err.message : 'تعذر تغيير رمز الدخول'))
+                          .finally(() => setManageBusy(false));
+                      }}
+                    >
+                      حفظ الرمز
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={manageBusy}
+                      onClick={() => {
+                        setManageBusy(true);
+                        setError(null);
+                        void resetAdminPartnerPassword(manage.id)
+                          .then((r) => {
+                            setManagePassword(r.temporaryPassword);
+                            setNotice(`${t('partners.tempPassword')}: ${r.temporaryPassword}`);
+                          })
+                          .catch((err) => setError(err instanceof Error ? err.message : 'تعذر إعادة التعيين'))
+                          .finally(() => setManageBusy(false));
+                      }}
+                    >
+                      إعادة تعيين تلقائية
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    disabled={manageBusy}
-                    onClick={() => {
-                      setManageBusy(true);
-                      setError(null);
-                      void setAdminPartnerPassword(manage.id, managePassword)
-                        .then(() => {
-                          setNotice('تم تغيير رمز الدخول');
-                          setManagePassword('');
-                        })
-                        .catch((err) => setError(err instanceof Error ? err.message : 'تعذر تغيير رمز الدخول'))
-                        .finally(() => setManageBusy(false));
-                    }}
-                  >
-                    حفظ الرمز
-                  </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -580,6 +752,155 @@ export default function AdminPartnersPage() {
           ))}
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (open) return;
+          setSelectedStaffId('');
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t('partners.addNewPartners')}</DialogTitle>
+            <DialogDescription>{t('partners.addNewPartnersDesc')}</DialogDescription>
+          </DialogHeader>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={addMode === 'staff' ? 'default' : 'outline'}
+              onClick={() => void openAddPartner('staff')}
+            >
+              {t('partners.importFromStaff')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={addMode === 'manual' ? 'default' : 'outline'}
+              onClick={() => void openAddPartner('manual')}
+            >
+              {t('partners.createPartnerManual')}
+            </Button>
+          </div>
+
+          {addMode === 'staff' ? (
+            eligibleLoading ? (
+              <div className="flex items-center gap-2 py-6 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('common.loading')}
+              </div>
+            ) : eligibleStaff.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">{t('partners.noEligibleStaff')}</p>
+            ) : (
+              <label className="block space-y-2 text-sm">
+                <span className="font-medium">{t('partners.selectStaff')}</span>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
+                >
+                  <option value="">—</option>
+                  {eligibleStaff.map((row) => {
+                    const roleLabel = (row.roles ?? [row.role])
+                      .map((r) => STAFF_ROLE_LABELS[r as StaffRole] ?? r)
+                      .join(' · ');
+                    return (
+                      <option key={row.id} value={row.id}>
+                        {row.name} — {row.email}
+                        {roleLabel ? ` (${roleLabel})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            )
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="partner-name">{t('partners.name')}</Label>
+                <Input
+                  id="partner-name"
+                  value={manualForm.name}
+                  onChange={(e) => setManualForm((f) => ({ ...f, name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="partner-email">{t('partners.email')}</Label>
+                <Input
+                  id="partner-email"
+                  type="email"
+                  dir="ltr"
+                  value={manualForm.email}
+                  onChange={(e) => setManualForm((f) => ({ ...f, email: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="partner-phone">{t('partners.phone')}</Label>
+                <Input
+                  id="partner-phone"
+                  dir="ltr"
+                  value={manualForm.phone}
+                  onChange={(e) => setManualForm((f) => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="partner-country">{t('partners.country')}</Label>
+                <Input
+                  id="partner-country"
+                  value={manualForm.country}
+                  onChange={(e) => setManualForm((f) => ({ ...f, country: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="partner-password">{t('partners.accessCode')}</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="partner-password"
+                    dir="ltr"
+                    className="font-mono"
+                    value={manualForm.password}
+                    onChange={(e) => setManualForm((f) => ({ ...f, password: e.target.value }))}
+                    minLength={8}
+                  />
+                  <Button type="button" variant="outline" onClick={() => setManualForm((f) => ({ ...f, password: generatePartnerPassword() }))}>
+                    {t('partners.generatePassword')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            {addMode === 'staff' ? (
+              <Button
+                type="button"
+                disabled={!selectedStaffId || addBusy || eligibleStaff.length === 0}
+                onClick={() => void onAddFromStaff()}
+              >
+                {addBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {t('partners.confirmAddPartner')}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled={addBusy || !manualForm.name.trim() || !manualForm.email.trim()}
+                onClick={() => void onAddManual()}
+              >
+                {addBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {t('partners.confirmCreatePartner')}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

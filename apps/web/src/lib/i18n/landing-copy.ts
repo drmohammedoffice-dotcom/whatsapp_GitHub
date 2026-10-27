@@ -254,7 +254,7 @@ const landingEn = {
   pricing: {
     eyebrow: 'Pricing',
     title: 'Simple plans that scale with you',
-    subtitle: 'WhatsApp numbers, pixels, TikTok campaigns, and support. Higher plans add AI campaign review.',
+    subtitle: 'WhatsApp numbers, pixels, TikTok campaigns, instant forms, and AI analytics on the top plan.',
     monthly: 'Monthly',
     perMonth: '/month',
     popular: 'Most Popular',
@@ -263,28 +263,32 @@ const landingEn = {
       {
         name: 'Basic',
         price: '$15',
-        features: ['1 WhatsApp number', '3 tracking pixels', 'Professional TikTok campaigns', 'Support'],
+        features: [
+          '1 connected WhatsApp number',
+          '3 tracking pixels',
+          'Link ad account to the platform',
+          'Create TikTok campaigns',
+        ],
       },
       {
         name: 'Professional',
         price: '$25',
         features: [
-          '3 WhatsApp numbers',
-          '15 tracking pixels',
-          'TikTok campaign creation',
-          'AI campaign review',
-          'Ongoing support',
+          '3 WhatsApp Business numbers',
+          '10 tracking pixels',
+          'Link account and create ads',
+          'Instant form pages for products',
         ],
       },
       {
         name: 'Business',
-        price: '$49',
+        price: '$35',
         features: [
-          '10 WhatsApp numbers',
-          'Unlimited pixels',
-          'TikTok campaign creation',
-          'AI campaign review',
-          'Priority support',
+          '5 WhatsApp numbers',
+          '20 tracking pixels',
+          'AI campaign analytics',
+          'Instant forms and online store',
+          'Special reports and priority support',
         ],
       },
     ],
@@ -332,11 +336,11 @@ const landingEn = {
       },
       {
         q: 'Can I manage multiple WhatsApp numbers?',
-        a: 'Yes. Basic includes 1 number, Professional includes 3, and Business includes 10.',
+        a: 'Yes. Basic includes 1 connected number, Professional includes 3, and Business includes 5. Only connected numbers count toward your limit.',
       },
       {
         q: 'How many pixels can I create?',
-        a: 'Basic includes 3, Professional includes 15, and Business has no pixel limit.',
+        a: 'Basic includes 3, Professional includes 10, and Business includes 20.',
       },
       {
         q: 'How fast can I launch?',
@@ -363,6 +367,8 @@ const landingEn = {
     whatsapp: 'Chat on WhatsApp',
     email: 'Email support',
     social: 'Follow ChatLoora',
+    whatsappNumber: '9647864314333',
+    supportEmail: 'noreply@chatloora.com',
   },
   footer: {
     product: 'Product',
@@ -632,7 +638,7 @@ const landingAr: LandingCopy = {
   pricing: {
     eyebrow: 'الأسعار',
     title: 'باقات بسيطة تنمو معك',
-    subtitle: 'أرقام واتساب وبكسلات وحملات تيك توك ودعم فني. الباقات الأعلى تضيف تقييم الحملات بالذكاء الاصطناعي.',
+    subtitle: 'أرقام واتساب وبكسلات وحملات تيك توك واستمارات فورية، مع تحليل الذكاء الاصطناعي في الباقة المفضلة.',
     monthly: 'شهري',
     perMonth: '/شهر',
     popular: 'الأكثر طلباً',
@@ -641,22 +647,32 @@ const landingAr: LandingCopy = {
       {
         name: 'Basic',
         price: '$15',
-        features: ['رقم واتساب واحد', '3 بكسلات تتبع', 'حملات احترافية على تيك توك', 'دعم فني'],
+        features: [
+          'رقم واتساب واحد متصل',
+          '3 بكسلات تتبع',
+          'ربط الحساب الإعلاني بالمنصة',
+          'إنشاء حملات تيك توك',
+        ],
       },
       {
         name: 'Professional',
         price: '$25',
-        features: ['3 أرقام واتساب', '15 بكسل', 'إنشاء حملات تيك توك', 'تقييم بالذكاء الاصطناعي', 'دعم فني متواصل'],
+        features: [
+          '3 أرقام واتساب أعمال',
+          '10 بكسلات تتبع',
+          'ربط الحساب وإنشاء الإعلانات',
+          'صفحات استمارة فورية للمنتجات',
+        ],
       },
       {
         name: 'Business',
-        price: '$49',
+        price: '$35',
         features: [
-          '10 أرقام واتساب',
-          'بكسلات بلا حد',
-          'إنشاء حملات تيك توك',
-          'تقييم بالذكاء الاصطناعي',
-          'دعم فني ذو أولوية',
+          '5 أرقام واتساب',
+          '20 بكسل تتبع',
+          'تحليل نتائج الحملة بالذكاء الاصطناعي',
+          'الاستمارات الفورية والمتجر الإلكتروني',
+          'تقارير خاصة ودعم ممتاز وفوري',
         ],
       },
     ],
@@ -704,11 +720,11 @@ const landingAr: LandingCopy = {
       },
       {
         q: 'هل أدير أكثر من رقم واتساب؟',
-        a: 'نعم. الأساسية رقم واحد، والاحترافية 3 أرقام، والأعمال 10 أرقام.',
+        a: 'نعم. الأساسية رقم متصل واحد، والاحترافية 3 أرقام، والأعمال 5 أرقام. تُحسب فقط الأرقام المتصلة فعلياً بالمنصة.',
       },
       {
         q: 'كم بكسل أستطيع إنشاءه؟',
-        a: 'الأساسية 3 بكسلات، والاحترافية 15، والأعمال بلا حد.',
+        a: 'الأساسية 3 بكسلات، والاحترافية 10، والأعمال 20.',
       },
       {
         q: 'كم يستغرق الإطلاق؟',
@@ -735,6 +751,8 @@ const landingAr: LandingCopy = {
     whatsapp: 'محادثة واتساب',
     email: 'البريد الإلكتروني',
     social: 'تابع ChatLoora',
+    whatsappNumber: '9647864314333',
+    supportEmail: 'noreply@chatloora.com',
   },
   footer: {
     product: 'المنتج',

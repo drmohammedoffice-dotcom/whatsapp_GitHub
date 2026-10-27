@@ -674,6 +674,77 @@ export function fetchTikTokTopupInvoices() {
   }>('/ads/topup-invoices');
 }
 
+export type TikTokAdsBalanceCheckout = {
+  id: string;
+  advertiserId: string;
+  advertiserName: string | null;
+  currency: string | null;
+  status: string;
+  destinationUrl: string;
+  confirmationSource: string | null;
+  balanceBefore: number | null;
+  balanceAfter: number | null;
+  lastCheckedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  paymentVerified: boolean;
+  amount: number | null;
+  chatlooraCollectsPayment: boolean;
+  managerFallbackUrl?: string;
+  notice?: string;
+};
+
+export function fetchTikTokAdsBalanceAdvertisers() {
+  return businessApi<{
+    connected: boolean;
+    hasBusinessAccess?: boolean;
+    businessCenterId?: string | null;
+    advertisers: Array<{
+      advertiserId: string;
+      name: string | null;
+      currency: string | null;
+      status: string | null;
+      linked: boolean;
+    }>;
+  }>('/ads/balance/advertisers');
+}
+
+export function startTikTokAdsBalanceCheckout(advertiserId: string) {
+  return businessApi<TikTokAdsBalanceCheckout>('/ads/balance/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ advertiserId }),
+  });
+}
+
+export function fetchTikTokAdsBalanceCheckouts() {
+  return businessApi<{ checkouts: TikTokAdsBalanceCheckout[] }>('/ads/balance/checkouts');
+}
+
+export function fetchTikTokAdsBalanceCheckout(id: string) {
+  return businessApi<TikTokAdsBalanceCheckout>(`/ads/balance/checkouts/${encodeURIComponent(id)}`);
+}
+
+export function markTikTokAdsBalanceReturned(id: string) {
+  return businessApi<TikTokAdsBalanceCheckout>(`/ads/balance/checkouts/${encodeURIComponent(id)}/returned`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function refreshTikTokAdsBalanceCheckout(id: string) {
+  return businessApi<TikTokAdsBalanceCheckout>(`/ads/balance/checkouts/${encodeURIComponent(id)}/refresh`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
+export function cancelTikTokAdsBalanceCheckout(id: string) {
+  return businessApi<TikTokAdsBalanceCheckout>(`/ads/balance/checkouts/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    body: '{}',
+  });
+}
+
 export function previewTikTokSparkCode(advertiserId: string, authCode: string) {
   return businessApi<TikTokSparkVideo & { authCode: string; displayName: string }>('/ads/spark-preview', {
     method: 'POST',
@@ -820,6 +891,7 @@ export function fetchTikTokBusinessStatusLegacy() {
 
 export const tiktokBusinessNavItems = [
   { href: '/tiktok/business', labelKey: 'tiktokBusiness.nav.dashboard' },
+  { href: '/tiktok/ads/balance', labelKey: 'tiktokBusiness.nav.adsBalance' },
   { href: '/tiktok/integration/wizard', labelKey: 'tiktokBusiness.nav.pixelWizard' },
   { href: '/tiktok/integration', labelKey: 'tiktokBusiness.nav.pixelDashboard' },
   { href: '/tiktok/business/advertisers', labelKey: 'tiktokBusiness.nav.advertisers' },

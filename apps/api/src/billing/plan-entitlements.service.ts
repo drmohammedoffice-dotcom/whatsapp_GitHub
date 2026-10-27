@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChannelProvider, ChannelPurpose } from '@watsapp/database';
+import { ChannelProvider, ChannelPurpose, ChannelStatus, WhatsAppSessionStatus } from '@watsapp/database';
 import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { GRACE_PERIOD_MS } from './plan-limits';
@@ -29,7 +29,10 @@ export type PlanFeature =
   | 'appointments'
   | 'team_members'
   | 'voice_ai'
-  | 'creative_studio';
+  | 'creative_studio'
+  | 'instant_forms'
+  | 'online_store'
+  | 'ai_campaign_review';
 
 export type TeamEntitlements = {
   planId: string | null;
@@ -204,22 +207,32 @@ export class PlanEntitlementsService implements OnModuleDestroy {
   }
 
   async countTrackingPhones(teamId: string): Promise<number> {
+    // يُحسب فقط الرقم المتصل فعلياً — المنفصل لا يستهلك من حصة الباقة.
     return this.prisma.channel.count({
       where: {
         teamId,
         provider: ChannelProvider.WHATSAPP_BAILEYS,
         purpose: ChannelPurpose.TRACKING,
         whatsAppSessionId: { not: null },
+        OR: [
+          { status: ChannelStatus.CONNECTED },
+          { whatsAppSession: { status: WhatsAppSessionStatus.CONNECTED } },
+        ],
       },
     });
   }
 
   async countInboxWhatsapp(teamId: string): Promise<number> {
+    // يُحسب فقط الرقم المتصل بشكل صحيح بالمنصة.
     return this.prisma.channel.count({
       where: {
         teamId,
         provider: ChannelProvider.WHATSAPP_BAILEYS,
         purpose: ChannelPurpose.INBOX,
+        OR: [
+          { status: ChannelStatus.CONNECTED },
+          { whatsAppSession: { status: WhatsAppSessionStatus.CONNECTED } },
+        ],
       },
     });
   }
@@ -246,6 +259,9 @@ export class PlanEntitlementsService implements OnModuleDestroy {
       team_members: `وصلت للحد الأقصى لأعضاء الفريق في باقتك الحالية (${entitlements.limits.maxTeamMembers}). قم بترقية باقتك.`,
       voice_ai: 'المساعد الصوتي غير متاح في باقتك الحالية. قم بترقية باقتك.',
       creative_studio: 'الاستوديو الإبداعي غير متاح في باقتك الحالية. قم بترقية باقتك.',
+      instant_forms: 'الاستمارات الفورية متاحة من الباقة الثانية. قم بترقية باقتك.',
+      online_store: 'المتجر الإلكتروني متاح في الباقة المفضلة. قم بترقية باقتك.',
+      ai_campaign_review: 'تحليل الحملات بالذكاء الاصطناعي متاح في الباقة المفضلة. قم بترقية باقتك.',
     };
     const en: Record<PlanFeature, string> = {
       tracking_phone: `You have reached the maximum number of TikTok WhatsApp numbers on your current plan (${entitlements.limits.maxTiktokWhatsappNumbers}). Upgrade your plan to add more.`,
@@ -262,6 +278,9 @@ export class PlanEntitlementsService implements OnModuleDestroy {
       team_members: `You have reached the maximum number of team members on your current plan (${entitlements.limits.maxTeamMembers}). Upgrade your plan.`,
       voice_ai: 'Voice AI is not available on your current plan. Upgrade your plan.',
       creative_studio: 'Creative Studio is not available on your current plan. Upgrade your plan.',
+      instant_forms: 'Instant forms are available from the Professional plan. Upgrade your plan.',
+      online_store: 'The online store is available on the Business plan. Upgrade your plan.',
+      ai_campaign_review: 'AI campaign analytics are available on the Business plan. Upgrade your plan.',
     };
 
     return new ForbiddenException({
@@ -367,6 +386,24 @@ export class PlanEntitlementsService implements OnModuleDestroy {
     return entitlements;
   }
 
+  async assertInstantFormsEnabled(teamId: string) {
+    const entitlements = await this.getTeamEntitlements(teamId);
+    if (!entitlements.limits.instantFormsEnabled) throw this.planUpgradeError('instant_forms', entitlements);
+    return entitlements;
+  }
+
+  async assertOnlineStoreEnabled(teamId: string) {
+    const entitlements = await this.getTeamEntitlements(teamId);
+    if (!entitlements.limits.onlineStoreEnabled) throw this.planUpgradeError('online_store', entitlements);
+    return entitlements;
+  }
+
+  async assertAiCampaignReviewEnabled(teamId: string) {
+    const entitlements = await this.getTeamEntitlements(teamId);
+    if (!entitlements.limits.aiCampaignReviewEnabled) throw this.planUpgradeError('ai_campaign_review', entitlements);
+    return entitlements;
+  }
+
   async assertTeamMember(teamId: string) {
     const entitlements = await this.getTeamEntitlements(teamId);
     if (!entitlements.canAddTeamMember) throw this.planUpgradeError('team_members', entitlements);
@@ -416,6 +453,9 @@ export class PlanEntitlementsService implements OnModuleDestroy {
     if (feature === 'team_members') return limits.maxTeamMembers !== 0;
     if (feature === 'voice_ai') return limits.voiceAiEnabled;
     if (feature === 'creative_studio') return limits.creativeStudioEnabled;
+    if (feature === 'instant_forms') return limits.instantFormsEnabled;
+    if (feature === 'online_store') return limits.onlineStoreEnabled;
+    if (feature === 'ai_campaign_review') return limits.aiCampaignReviewEnabled;
     return limits.aiEnabled;
   }
 

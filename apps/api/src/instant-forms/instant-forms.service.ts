@@ -18,6 +18,7 @@ import { access } from 'fs/promises';
 import { randomBytes } from 'crypto';
 import { extname } from 'path';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
+import { PlanEntitlementsService } from '../billing/plan-entitlements.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocalStorageService } from '../storage/local-storage.service';
 import { TikTokIntegrationTrackingService } from '../tiktok-integration/tiktok-integration-tracking.service';
@@ -274,6 +275,7 @@ export class InstantFormsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly storage: LocalStorageService,
+    private readonly entitlements: PlanEntitlementsService,
     @Inject(forwardRef(() => TikTokIntegrationTrackingService))
     private readonly tiktokTracking: TikTokIntegrationTrackingService,
   ) {}
@@ -480,6 +482,7 @@ export class InstantFormsService {
   }
 
   async create(teamId: string, userId: string | undefined, dto: CreateInstantFormDto) {
+    await this.entitlements.assertInstantFormsEnabled(teamId);
     const document = dto.draftDocument
       ? asDocument(dto.draftDocument)
       : dto.templateKey

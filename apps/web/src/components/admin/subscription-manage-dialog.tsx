@@ -17,13 +17,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import {
   activateAdminSubscription,
+  assignAdminTeamReferral,
   cancelAdminSubscription,
   changeAdminSubscriptionPlan,
   deleteAdminSubscription,
+  fetchAdminPartnerDirectory,
   pauseAdminSubscription,
   updateAdminSubscriptionPeriod,
   updateAdminSubscriptionStatus,
   type AdminPlanRow,
+  type AdminSalesPartnerRow,
   type AdminSubscriptionRow,
 } from '@/lib/admin-api';
 import { formatAdminDate, subscriptionDaysLeft, toDateInputValue, BILLING_CYCLE_DAYS } from '@/lib/admin-subscription-utils';
@@ -42,6 +45,8 @@ type SubscriptionManageDialogProps = {
   subscription: AdminSubscriptionRow | null;
   plans: AdminPlanRow[];
   onSaved: (updated?: AdminSubscriptionRow) => void;
+  /** أكواد الإحالة للأدمن فقط */
+  allowReferralEdit?: boolean;
 };
 
 function toDateInput(value: string | null | undefined) {
@@ -58,6 +63,7 @@ export function SubscriptionManageDialog({
   subscription,
   plans,
   onSaved,
+  allowReferralEdit = true,
 }: SubscriptionManageDialogProps) {
   const { t, locale } = useTranslation();
   const [planId, setPlanId] = useState('');
@@ -73,6 +79,8 @@ export function SubscriptionManageDialog({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [liveSubscription, setLiveSubscription] = useState(subscription);
+  const [partners, setPartners] = useState<AdminSalesPartnerRow[]>([]);
+  const [referralCode, setReferralCode] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -86,8 +94,12 @@ export function SubscriptionManageDialog({
     setTrialEndDate(toDateInput(subscription?.trialEndsAt));
     setDaysRemaining('');
     setReduceDays('');
+    setReferralCode(subscription?.referral?.partnerReferralCode || subscription?.referral?.codeUsed || '');
     setError(null);
     setNotice(null);
+    void fetchAdminPartnerDirectory()
+      .then((rows) => setPartners(rows.filter((p) => p.status === 'APPROVED' || p.status === 'SUSPENDED')))
+      .catch(() => setPartners([]));
   }, [open, subscription, plans]);
 
   async function run(label: string, fn: () => Promise<unknown>, successMessage: string) {
@@ -115,13 +127,13 @@ export function SubscriptionManageDialog({
     }
   }
 
-  function handleActivate() {
+  function handleActivate(addRemainingDays = false) {
     if (!planId) {
       setError('Select a plan first');
       return;
     }
     void run(
-      'activate',
+      addRemainingDays ? 'renew-add' : 'activate',
       () =>
         activateAdminSubscription({
           teamId,
@@ -129,8 +141,13 @@ export function SubscriptionManageDialog({
           ownerUserId,
           billingCycle,
           durationDays: durationDays ? Number(durationDays) : undefined,
+          addRemainingDays,
         }),
-      subscription ? 'Subscription re-activated' : 'Subscription activated — customer can access the platform',
+      addRemainingDays
+        ? 'Subscription renewed — remaining days added to the new period'
+        : subscription
+          ? 'Subscription re-activated'
+          : 'Subscription activated — customer can access the platform',
     );
   }
 
@@ -281,6 +298,97 @@ export function SubscriptionManageDialog({
               </div>
             </div>
           )}
+
+          {allowReferralEdit ? (
+            <div className="space-y-3 rounded-lg border p-4">
+              <p className="text-sm font-semibold">كود إحالة الشريك</p>
+              <p className="text-xs text-muted-foreground">
+                انقل المشترك لشريك آخر بتغيير كود الإحالة. العمولات السابقة تبقى للشريك السابق.
+              </p>
+              {liveSubscription?.referral && (
+                <p className="text-sm">
+                  الحالي:{' '}
+                  <span className="font-mono font-semibold" dir="ltr">
+                    {liveSubscription.referral.partnerReferralCode || liveSubscription.referral.codeUsed || '—'}
+                  </span>
+                  {' · '}
+                  {liveSubscription.referral.partnerName}
+                </p>
+              )}
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                <Select
+                  value={referralCode || '__none__'}
+                  onValueChange={(value) => setReferralCode(value === '__none__' ? '' : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر شريكاً / كود إحالة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">بدون شريك</SelectItem>
+                    {partners
+                      .filter((p) => p.referralCode)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.referralCode!}>
+                          {p.referralCode} — {p.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  dir="ltr"
+                  className="font-mono sm:max-w-[140px]"
+                  placeholder="أو اكتب الكود"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                />
+                <Button
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void run(
+                      'referral',
+                      async () => {
+                        const result = await assignAdminTeamReferral(teamId, referralCode.trim() || null);
+                        setLiveSubscription((current) =>
+                          current
+                            ? {
+                                ...current,
+                                referral: result.referral
+                                  ? {
+                                      id: result.referral.id,
+                                      codeUsed: result.referral.codeUsed,
+                                      partnerId: result.referral.partnerId,
+                                      partnerName: result.referral.partnerName,
+                                      partnerEmail: result.referral.partnerEmail,
+                                      partnerReferralCode: result.referral.partnerReferralCode,
+                                    }
+                                  : null,
+                              }
+                            : current,
+                        );
+                        return result;
+                      },
+                      referralCode.trim() ? 'تم تحديث إحالة المشترك' : 'تمت إزالة إحالة المشترك',
+                    )
+                  }
+                >
+                  {busy === 'referral' && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
+                  حفظ الإحالة
+                </Button>
+              </div>
+            </div>
+          ) : liveSubscription?.referral ? (
+            <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+              إحالة الشريك:{' '}
+              <span className="font-mono font-semibold" dir="ltr">
+                {liveSubscription.referral.partnerReferralCode || liveSubscription.referral.codeUsed || '—'}
+              </span>
+              {' · '}
+              {liveSubscription.referral.partnerName}
+              <p className="mt-1 text-xs text-muted-foreground">تعديل أكواد الإحالة متاح لمدير النظام فقط.</p>
+            </div>
+          ) : null}
+
           {/* Plan & activation */}
           <div className="space-y-3 rounded-lg border p-4">
             <p className="text-sm font-semibold">
@@ -358,10 +466,16 @@ export function SubscriptionManageDialog({
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={handleActivate} disabled={busy !== null}>
+              <Button size="sm" onClick={() => handleActivate(false)} disabled={busy !== null}>
                 {busy === 'activate' && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
                 {subscription ? t('admin.subscription.reactivate') : t('admin.subscription.activate')}
               </Button>
+              {subscription && remainingDays !== null && remainingDays > 0 && (
+                <Button size="sm" variant="secondary" onClick={() => handleActivate(true)} disabled={busy !== null || !planId}>
+                  {busy === 'renew-add' && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
+                  {t('admin.subscription.renewAddRemaining')}
+                </Button>
+              )}
               {subscription && (
                 <Button size="sm" variant="outline" onClick={handleChangePlan} disabled={busy !== null || !planId}>
                   {busy === 'change-plan' && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
@@ -369,6 +483,11 @@ export function SubscriptionManageDialog({
                 </Button>
               )}
             </div>
+            {subscription && remainingDays !== null && remainingDays > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t('admin.subscription.renewAddRemainingHint').replace('{days}', String(remainingDays))}
+              </p>
+            )}
           </div>
 
           {liveSubscription && (

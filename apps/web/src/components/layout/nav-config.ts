@@ -6,6 +6,7 @@ import {
   CreditCard,
   Megaphone,
   Handshake,
+  Mail,
   Palette,
   Settings,
   Share2,
@@ -103,15 +104,23 @@ export const navGroups: NavGroup[] = [
       { href: '/ai/creative', labelKey: 'nav.creative', descKey: 'nav.creativeDesc', icon: Palette, featured: true, badgeKey: 'common.new' },
       { href: '/tiktok', labelKey: 'nav.tiktok', descKey: 'nav.tiktokDesc', icon: Share2 },
       { href: '/tiktok/integration', labelKey: 'nav.tiktokPixelWizard', descKey: 'nav.tiktokPixelWizardDesc', icon: Target },
+      {
+        href: '/tiktok/integration/phones',
+        labelKey: 'nav.tiktokTrackingPhones',
+        descKey: 'nav.tiktokTrackingPhonesDesc',
+        brand: 'whatsapp',
+      },
       { href: '/tiktok/integration/forms/orders', labelKey: 'nav.tiktokOrders', descKey: 'nav.tiktokOrdersDesc', icon: ClipboardList },
+      { href: '/bookings', labelKey: 'nav.storeOrders', descKey: 'nav.storeOrdersDesc', icon: Store },
       { href: '/tiktok/ads/create', labelKey: 'nav.tiktokCreateAd', descKey: 'nav.tiktokCreateAdDesc', icon: Megaphone },
+      { href: '/tiktok/ads/balance', labelKey: 'nav.tiktokAdsBalance', descKey: 'nav.tiktokAdsBalanceDesc', icon: CreditCard },
       { href: '/success-partner', labelKey: 'nav.successPartner', descKey: 'nav.successPartnerDesc', icon: Handshake },
+      { href: '/mail', labelKey: 'nav.webmail', descKey: 'nav.webmailDesc', icon: Mail },
     ],
   },
   {
     labelKey: 'nav.system',
     items: [
-      { href: '/settings/integrations', labelKey: 'nav.integrations', descKey: 'nav.integrationsDesc', icon: Share2 },
       { href: '/plans', labelKey: 'nav.plans', descKey: 'nav.plansDesc', icon: CreditCard },
       { href: '/account', labelKey: 'nav.account', descKey: 'nav.accountDesc', icon: UserRound },
       { href: '/settings', labelKey: 'nav.settings', descKey: 'nav.settingsDesc', icon: Settings },
@@ -135,13 +144,13 @@ const HIDDEN_NAV_HREFS = new Set([
   '/inbox/telegram',
   '/inbox/social',
   '/connect',
-  '/bookings',
   '/appointments',
   '/agents',
   '/analytics',
+  '/settings/integrations',
 ]);
 
-const ADMIN_ONLY_NAV_HREFS = new Set(['/ai', '/ai/store', '/ai/creative']);
+const ADMIN_ONLY_NAV_HREFS = new Set(['/ai', '/ai/store', '/ai/creative', '/bookings']);
 
 export function visibleNavGroups(isPlatformAdmin: boolean) {
   return navGroups

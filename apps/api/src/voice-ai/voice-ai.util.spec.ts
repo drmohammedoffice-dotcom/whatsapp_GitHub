@@ -1,4 +1,4 @@
-﻿import {
+import {
   buildTwilioSignature,
   escapeXml,
   formParams,
@@ -11,14 +11,14 @@
 
 describe('voice AI helpers', () => {
   it('validates a real Twilio-style signature', () => {
-    const url = 'https://www.chatloora.com/api/webhooks/twilio/voice';
+    const url = 'https://almutamayiziq.com/api/webhooks/twilio/voice';
     const params = { CallSid: 'CA123', From: '+9647700000000', To: '+9647800000000' };
     const signature = buildTwilioSignature('test-token', url, params);
     expect(verifyTwilioSignature({ authToken: 'test-token', url, params, signature })).toBe(true);
   });
 
   it('rejects an invalid webhook signature', () => {
-    const url = 'https://www.chatloora.com/api/webhooks/twilio/voice';
+    const url = 'https://almutamayiziq.com/api/webhooks/twilio/voice';
     const params = { CallSid: 'CA123' };
     expect(
       verifyTwilioSignature({

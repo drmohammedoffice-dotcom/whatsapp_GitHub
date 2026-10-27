@@ -145,7 +145,7 @@ export class MetaService {
         );
       }
     } else if (signature && !rawBody) {
-        this.logger.warn('[Meta webhook] raw body missing — skipping signature check');
+      this.logger.warn('[Meta webhook] raw body missing — skipping signature check');
     }
     const object = String(body.object ?? '');
     if (object === 'whatsapp_business_account') {
@@ -167,7 +167,7 @@ export class MetaService {
           continue;
         }
         for (const channel of channels) {
-        await this.ingestMessagingEvent(channel, event);
+          await this.ingestMessagingEvent(channel, event);
         }
       }
 
@@ -183,16 +183,16 @@ export class MetaService {
             (value.recipient as { id?: string } | undefined)?.id,
           );
           if (!channels.length) {
-          this.logger.warn(`[Meta webhook] no connected channel for changes entryId=${entryId} object=${object}`);
-          continue;
-        }
+            this.logger.warn(`[Meta webhook] no connected channel for changes entryId=${entryId} object=${object}`);
+            continue;
+          }
           for (const channel of channels) {
-        await this.ingestMessagingEvent(channel, {
-          sender: value.sender,
-          recipient: value.recipient,
-          timestamp: value.timestamp,
-          message: value.message,
-        });
+            await this.ingestMessagingEvent(channel, {
+              sender: value.sender,
+              recipient: value.recipient,
+              timestamp: value.timestamp,
+              message: value.message,
+            });
           }
           continue;
         }
@@ -504,28 +504,28 @@ export class MetaService {
     let displayName = senderId;
     if (pageToken) {
       try {
-    const resolved = await this.media.resolveInboundMedia(channel.teamId, pageToken, {
-      text: (message.text as string | undefined) ?? null,
-      sticker_id: message.sticker_id as number | undefined,
-      attachments: message.attachments as never,
-    });
-    await this.channelMessages.ingest({
-      teamId: channel.teamId,
-      channelId: channel.id,
-      externalIdentityId: senderId,
+        const resolved = await this.media.resolveInboundMedia(channel.teamId, pageToken, {
+          text: (message.text as string | undefined) ?? null,
+          sticker_id: message.sticker_id as number | undefined,
+          attachments: message.attachments as never,
+        });
+        await this.channelMessages.ingest({
+          teamId: channel.teamId,
+          channelId: channel.id,
+          externalIdentityId: senderId,
           displayName,
-      providerMessageId,
-      direction: MessageDirection.INBOUND,
-      type: resolved.type,
-      status: MessageStatus.RECEIVED,
-      text: resolved.text,
-      payload: message,
-      mediaStorageKey: resolved.mediaStorageKey,
-      mediaMimeType: resolved.mediaMimeType,
-      mediaFileName: resolved.mediaFileName,
-      mediaSizeBytes: resolved.mediaSizeBytes,
-      occurredAt: new Date(Number(event.timestamp ?? Date.now())),
-    });
+          providerMessageId,
+          direction: MessageDirection.INBOUND,
+          type: resolved.type,
+          status: MessageStatus.RECEIVED,
+          text: resolved.text,
+          payload: message,
+          mediaStorageKey: resolved.mediaStorageKey,
+          mediaMimeType: resolved.mediaMimeType,
+          mediaFileName: resolved.mediaFileName,
+          mediaSizeBytes: resolved.mediaSizeBytes,
+          occurredAt: new Date(Number(event.timestamp ?? Date.now())),
+        });
         return;
       } catch (error) {
         this.logger.warn(

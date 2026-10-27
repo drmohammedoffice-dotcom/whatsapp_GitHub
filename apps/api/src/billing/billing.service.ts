@@ -77,8 +77,8 @@ export class BillingService {
       plans.map(async (plan, index) => {
         const limits = await this.entitlements.getPlanLimits(plan.id, plan.slug);
         const popular = plan.isRecommended || (plan.slug === 'professional' && !plans.some((p) => p.isRecommended));
-        return {
-          id: plan.id,
+      return {
+        id: plan.id,
           slug: plan.slug,
           tier: PLAN_TIER[plan.slug] ?? plan.slug.toUpperCase(),
           name: plan.nameEn ?? plan.name,
@@ -87,10 +87,10 @@ export class BillingService {
           description: this.packageCopy(plan.slug, 'en')?.description ?? plan.descriptionEn ?? plan.description,
           descriptionAr: this.packageCopy(plan.slug, 'ar')?.description ?? plan.descriptionAr ?? plan.description,
           descriptionEn: this.packageCopy(plan.slug, 'en')?.description ?? plan.descriptionEn ?? plan.description,
-          monthlyPriceCents: plan.priceCents,
-          yearlyPriceCents: planYearlyCents(plan),
-          currency: plan.currency,
-          popular,
+        monthlyPriceCents: plan.priceCents,
+        yearlyPriceCents: planYearlyCents(plan),
+        currency: plan.currency,
+        popular,
           limits,
           features: this.packageCopy(plan.slug, 'en')?.features ?? this.featureBullets(limits, 'en'),
           featuresAr: this.packageCopy(plan.slug, 'ar')?.features ?? this.featureBullets(limits, 'ar'),
@@ -108,65 +108,65 @@ export class BillingService {
     const copy = {
       1: {
         ar: {
-          description: 'رقم واتساب واحد و3 بكسلات، مع إنشاء حملات تيك توك ودعم فني.',
+          description: 'رقم واتساب متصل واحد و3 بكسلات، مع ربط الحساب الإعلاني وإنشاء الحملات.',
           features: [
-            '✓ ربط رقم واتساب واحد',
+            '✓ ربط رقم واتساب واحد متصل',
             '✓ 3 بكسلات تتبع',
-            '✓ إنشاء حملات احترافية على تيك توك',
-            '✓ دعم فني',
+            '✓ ربط الحساب الإعلاني بالمنصة',
+            '✓ إنشاء حملات تيك توك',
           ],
         },
         en: {
-          description: 'One WhatsApp number and 3 pixels, with professional TikTok campaigns and support.',
+          description: 'One connected WhatsApp number and 3 pixels, with ad account linking and campaign creation.',
           features: [
-            '✓ 1 WhatsApp number',
+            '✓ 1 connected WhatsApp number',
             '✓ 3 tracking pixels',
-            '✓ Professional TikTok campaign creation',
-            '✓ Customer support',
+            '✓ Link ad account to the platform',
+            '✓ Create TikTok campaigns',
           ],
         },
       },
       2: {
         ar: {
-          description: '3 أرقام واتساب و15 بكسل، مع إنشاء الإعلانات وتقييمها بالذكاء الاصطناعي.',
+          description: '3 أرقام واتساب أعمال و10 بكسلات، مع إنشاء الإعلانات والاستمارات الفورية.',
           features: [
-            '✓ ربط 3 أرقام واتساب',
-            '✓ 15 بكسل تتبع',
-            '✓ إنشاء الإعلانات على تيك توك',
-            '✓ تقييم الحملات بالذكاء الاصطناعي',
-            '✓ دعم فني متواصل',
+            '✓ ربط 3 أرقام واتساب أعمال',
+            '✓ 10 بكسلات تتبع',
+            '✓ ربط الحساب وإنشاء الإعلانات',
+            '✓ إنشاء صفحات استمارة فورية للمنتجات',
           ],
         },
         en: {
-          description: '3 WhatsApp numbers and 15 pixels, with ad creation and AI campaign review.',
+          description: '3 WhatsApp Business numbers and 10 pixels, with ads and instant product forms.',
           features: [
-            '✓ 3 WhatsApp numbers',
-            '✓ 15 tracking pixels',
-            '✓ TikTok ad creation',
-            '✓ AI campaign review',
-            '✓ Ongoing customer support',
+            '✓ 3 WhatsApp Business numbers',
+            '✓ 10 tracking pixels',
+            '✓ Link account and create ads',
+            '✓ Instant form pages for products',
           ],
         },
       },
       3: {
         ar: {
-          description: '10 أرقام واتساب وبكسلات بلا حد، مع إنشاء الإعلانات وتقييمها بالذكاء الاصطناعي.',
+          description: '5 أرقام واتساب و20 بكسل، مع تحليل الحملات بالذكاء الاصطناعي والمتجر والاستمارات ودعم فوري.',
           features: [
-            '✓ ربط 10 أرقام واتساب',
-            '✓ بكسلات تتبع مفتوحة',
-            '✓ إنشاء الإعلانات على تيك توك',
-            '✓ تقييم الحملات بالذكاء الاصطناعي',
-            '✓ دعم فني ذو أولوية',
+            '✓ ربط 5 أرقام واتساب',
+            '✓ 20 بكسل تتبع',
+            '✓ ربط الحساب وإنشاء الحملات',
+            '✓ تحليل نتائج الحملة بالذكاء الاصطناعي',
+            '✓ الاستمارات الفورية والمتجر الإلكتروني',
+            '✓ تقارير خاصة ودعم ممتاز وفوري',
           ],
         },
         en: {
-          description: '10 WhatsApp numbers and unlimited pixels, with ad creation and AI campaign review.',
+          description: '5 WhatsApp numbers and 20 pixels, with AI campaign analytics, store, forms, and priority support.',
           features: [
-            '✓ 10 WhatsApp numbers',
-            '✓ Unlimited tracking pixels',
-            '✓ TikTok ad creation',
-            '✓ AI campaign review',
-            '✓ Priority customer support',
+            '✓ 5 WhatsApp numbers',
+            '✓ 20 tracking pixels',
+            '✓ Link account and create campaigns',
+            '✓ AI campaign performance analytics',
+            '✓ Instant forms and online store',
+            '✓ Special reports and priority support',
           ],
         },
       },
@@ -216,6 +216,9 @@ export class BillingService {
       voice_ai_enabled: limits.voiceAiEnabled,
       creative_studio_enabled: limits.creativeStudioEnabled,
       creative_4k_enabled: limits.creative4kEnabled,
+      instant_forms_enabled: limits.instantFormsEnabled,
+      online_store_enabled: limits.onlineStoreEnabled,
+      ai_campaign_review_enabled: limits.aiCampaignReviewEnabled,
     };
     return Boolean(map[key]);
   }
@@ -446,15 +449,15 @@ export class BillingService {
       update: keepActive
         ? { ownerUserId: userId }
         : {
-            planId: plan.id,
-            ownerUserId: userId,
-            status: SubscriptionStatus.PENDING,
-            billingCycle,
-            mrrCents,
+        planId: plan.id,
+        ownerUserId: userId,
+        status: SubscriptionStatus.PENDING,
+        billingCycle,
+        mrrCents,
             autoRenew: true,
-            cancelledAt: null,
-            pausedAt: null,
-          },
+        cancelledAt: null,
+        pausedAt: null,
+      },
     });
 
     // Don't block checkout on referral attach.
@@ -497,31 +500,31 @@ export class BillingService {
     const webhookUrl = `${apiBase}/api/v1/billing/webhooks/wayl`;
     const redirectionUrl = `${apiBase}/api/v1/billing/wayl-return/${payment.id}`;
 
-    try {
-      const link = await this.wayl.createLink({
-        referenceId,
+      try {
+        const link = await this.wayl.createLink({
+          referenceId,
         total: waylTotal,
         currency: 'IQD',
-        customParameter: `team:${teamId}`,
-        lineItem: [
-          {
+          customParameter: `team:${teamId}`,
+          lineItem: [
+            {
             label: `${plan.name} ${billingCycle === BillingInterval.YEARLY ? 'yearly' : 'monthly'}`.slice(0, 255),
             amount: waylTotal,
-            type: 'increase',
-          },
-        ],
-        webhookUrl,
-        redirectionUrl,
-        linkExpiresIn: '24h',
-      });
+              type: 'increase',
+            },
+          ],
+          webhookUrl,
+          redirectionUrl,
+          linkExpiresIn: '24h',
+        });
 
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: {
+        await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: {
           providerRef: link.referenceId,
-          metadata: {
-            planSlug,
-            billingCycle,
+            metadata: {
+              planSlug,
+              billingCycle,
             planId: plan.id,
             originalAmountCents: amountCents,
             usdToIqd,
@@ -530,15 +533,15 @@ export class BillingService {
             waylStatus: link.status,
             waylId: link.id,
           },
-        },
-      });
+          },
+        });
 
-      return {
-        subscriptionId: subscription.id,
-        paymentId: payment.id,
-        planSlug,
-        planName: plan.name,
-        billingCycle,
+    return {
+      subscriptionId: subscription.id,
+      paymentId: payment.id,
+      planSlug,
+      planName: plan.name,
+      billingCycle,
         amountCents: waylTotal,
         currency: 'IQD',
         checkoutPath: link.url,
@@ -905,11 +908,11 @@ export class BillingService {
         OR: [
           { providerRef: referenceId },
           {
-            metadata: {
-              path: ['waylReferenceId'],
-              equals: referenceId,
-            },
-          },
+        metadata: {
+          path: ['waylReferenceId'],
+          equals: referenceId,
+        },
+      },
         ],
       },
     });

@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { MessageSquare } from 'lucide-react';
 import { ReactNode } from 'react';
+import { ChatLooraBrand } from '@/components/brand/chatloora-brand';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { LanguageToggle } from '@/components/shared/language-toggle';
 
@@ -27,15 +27,7 @@ export function AuthLayout({
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden overflow-hidden bg-gradient-to-br from-primary via-primary/90 to-indigo-700 p-12 lg:flex lg:flex-col lg:justify-between">
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
-          <Link href="/" className="flex items-center gap-3 text-white">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 backdrop-blur">
-              <MessageSquare className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xl font-bold">Watsapp</p>
-              <p className="text-sm text-white/80">{t('auth.platformTagline')}</p>
-            </div>
-          </Link>
+          <ChatLooraBrand href="/" size="xl" layout="stacked" showTagline tagline={t('auth.platformTagline')} />
         </motion.div>
 
         <motion.div
@@ -70,9 +62,7 @@ export function AuthLayout({
         >
           <div className="space-y-2 text-center lg:text-start">
             <div className="mb-6 flex justify-center lg:hidden">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <MessageSquare className="h-6 w-6" />
-              </div>
+              <ChatLooraBrand href="/" size="lg" layout="full-logo" showText={false} />
             </div>
             <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
             <p className="text-sm text-muted-foreground">{subtitle}</p>

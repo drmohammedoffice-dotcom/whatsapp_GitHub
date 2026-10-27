@@ -17,8 +17,9 @@ export class AdminRolesGuard implements CanActivate {
 
     const admin = context.switchToHttp().getRequest<{ admin: AdminPrincipal }>().admin;
     if (!admin) throw new ForbiddenException('Admin context missing');
-    if (admin.role === AdminRole.SUPER_ADMIN) return true;
-    if (required.includes(admin.role)) return true;
+    if (admin.role === AdminRole.SUPER_ADMIN || admin.roles?.includes(AdminRole.SUPER_ADMIN)) return true;
+    const effective = admin.roles?.length ? admin.roles : [admin.role];
+    if (required.some((r) => effective.includes(r))) return true;
     throw new ForbiddenException('Insufficient admin permissions');
   }
 }

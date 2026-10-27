@@ -9,6 +9,7 @@ import {
   TikTokLoginKitStatusController,
 } from './tiktok-login-kit.controller';
 import { TikTokAdsService } from './tiktok-ads.service';
+import { TikTokAdsBalanceService } from './tiktok-ads-balance.service';
 import { TikTokAdPublishService } from './tiktok-ad-publish.service';
 import { TikTokBusinessController } from './tiktok-business.controller';
 import {
@@ -34,6 +35,7 @@ import { TikTokMarketingOAuthService } from './tiktok-marketing-oauth.service';
     TikTokLoginApiClient,
     TikTokLoginService,
     TikTokAdsService,
+    TikTokAdsBalanceService,
     TikTokAdPublishService,
     TikTokBusinessService,
     TikTokMarketingOAuthService,
@@ -41,6 +43,7 @@ import { TikTokMarketingOAuthService } from './tiktok-marketing-oauth.service';
   exports: [
     TikTokLoginService,
     TikTokAdsService,
+    TikTokAdsBalanceService,
     TikTokBusinessService,
     TikTokMarketingOAuthService,
   ],

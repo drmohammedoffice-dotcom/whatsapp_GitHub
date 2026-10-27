@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { clearAdminToken, fetchAdminMe, getAdminToken } from '@/lib/admin-api';
+import { clearAdminToken, fetchAdminMe, getAdminToken, isEmployeeRole } from '@/lib/admin-api';
 
 export function AdminGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -19,8 +19,10 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     }
     fetchAdminMe()
       .then((me) => {
-        if (me.role === 'STAFF') {
-          router.replace('/staff');
+        if (isEmployeeRole(me.role)) {
+          // جلسة موظف بالخطأ في مفتاح الأدمن — امسحها ولا تحوّل لوحة الأدمن لصفحة الموظفين
+          clearAdminToken();
+          router.replace('/admin/login');
           setReady(true);
           return;
         }

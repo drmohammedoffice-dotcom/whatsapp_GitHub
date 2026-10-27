@@ -21,8 +21,10 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { AuthenticatedPrincipal } from '../common/principal';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
 import {
+  ApplyStoreColorsDto,
   ApplyStoreThemeDto,
   ReorderIdsDto,
+  SaveStoreColorPaletteDto,
   StoreBannerDto,
   StoreCategoryDto,
   StoreThemeDto,
@@ -138,6 +140,24 @@ export class StoreController {
   @RequirePermissions(Permission.AI_MANAGE_KNOWLEDGE)
   applyTheme(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: ApplyStoreThemeDto) {
     return this.products.applyTheme(principal.teamId, dto);
+  }
+
+  @Get('color-palette')
+  @RequirePermissions(Permission.AI_ACCESS)
+  colorPalette(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.products.getColorPalette(principal.teamId);
+  }
+
+  @Post('color-palette')
+  @RequirePermissions(Permission.AI_MANAGE_KNOWLEDGE)
+  saveColorPalette(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: SaveStoreColorPaletteDto) {
+    return this.products.saveColorPalette(principal.teamId, dto.colors);
+  }
+
+  @Post('color-palette/apply')
+  @RequirePermissions(Permission.AI_MANAGE_KNOWLEDGE)
+  applyColorPalette(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() dto: ApplyStoreColorsDto) {
+    return this.products.applyColorsToProducts(principal.teamId, dto);
   }
 
   @Delete('themes/:id')

@@ -9,7 +9,7 @@ export default function StoreVisualEditorPage() {
   return (
     <AuthGuard>
       <SubscriptionProvider>
-        <PlanGate feature="ai">
+        <PlanGate feature="online_store">
           <StoreVisualEditor />
         </PlanGate>
       </SubscriptionProvider>

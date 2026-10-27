@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { AlertBanner } from '@/components/shared/alert-banner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
 import { api, parseApiError } from '@/lib/utils';
 
 import type { OtpChallenge } from '@/lib/auth';
@@ -38,16 +38,16 @@ export function OtpVerificationModal({
   onClose,
 }: OtpVerificationModalProps) {
   const { t } = useTranslation();
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SEC);
   const [activeChallenge, setActiveChallenge] = useState<OtpChallenge | null>(challenge);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const reset = useCallback(() => {
-    setDigits(Array(OTP_LENGTH).fill(''));
+    setCode('');
     setError(null);
     setCooldown(RESEND_COOLDOWN_SEC);
   }, []);
@@ -59,7 +59,7 @@ export function OtpVerificationModal({
   useEffect(() => {
     if (!open) return;
     reset();
-    const timer = window.setTimeout(() => inputRefs.current[0]?.focus(), 100);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 100);
     return () => window.clearTimeout(timer);
   }, [open, challenge?.verificationId, reset]);
 
@@ -69,50 +69,27 @@ export function OtpVerificationModal({
     return () => window.clearInterval(timer);
   }, [open, cooldown]);
 
-  function updateDigit(index: number, value: string) {
-    const char = value.replace(/\D/g, '').slice(-1);
-    const next = [...digits];
-    next[index] = char;
-    setDigits(next);
+  function applyCode(raw: string) {
+    const next = raw.replace(/\D/g, '').slice(0, OTP_LENGTH);
+    setCode(next);
     setError(null);
-    if (char && index < OTP_LENGTH - 1) inputRefs.current[index + 1]?.focus();
-    if (char && index === OTP_LENGTH - 1 && next.every((d) => d)) {
-      void submitCode(next.join(''));
-    }
+    if (next.length === OTP_LENGTH) void submitCode(next);
   }
 
-  function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  }
-
-  function handlePaste(e: React.ClipboardEvent) {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
-    if (!pasted) return;
-    const next = Array(OTP_LENGTH).fill('');
-    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
-    setDigits(next);
-    const focusIndex = Math.min(pasted.length, OTP_LENGTH - 1);
-    inputRefs.current[focusIndex]?.focus();
-    if (pasted.length === OTP_LENGTH) void submitCode(pasted);
-  }
-
-  async function submitCode(code: string) {
-    if (!activeChallenge || code.length !== OTP_LENGTH) return;
+  async function submitCode(value: string) {
+    if (!activeChallenge || value.length !== OTP_LENGTH) return;
     setVerifying(true);
     setError(null);
     try {
       const tokens = await api<{ accessToken?: string; refreshToken?: string; teamId?: string; resetToken?: string }>(`/auth/${verifyPath}`, {
         method: 'POST',
-        body: JSON.stringify({ verificationId: activeChallenge.verificationId, code }),
+        body: JSON.stringify({ verificationId: activeChallenge.verificationId, code: value }),
       });
       onVerified(tokens);
     } catch (err) {
       setError(parseApiError(err));
-      setDigits(Array(OTP_LENGTH).fill(''));
-      inputRefs.current[0]?.focus();
+      setCode('');
+      inputRef.current?.focus();
     } finally {
       setVerifying(false);
     }
@@ -129,8 +106,8 @@ export function OtpVerificationModal({
       });
       if (next?.verificationId) setActiveChallenge(next);
       setCooldown(RESEND_COOLDOWN_SEC);
-      setDigits(Array(OTP_LENGTH).fill(''));
-      inputRefs.current[0]?.focus();
+      setCode('');
+      inputRef.current?.focus();
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -138,7 +115,6 @@ export function OtpVerificationModal({
     }
   }
 
-  const code = digits.join('');
   const isSignup = verifyPath === 'register/verify';
   const isReset = verifyPath === 'reset-password/verify';
 
@@ -164,28 +140,24 @@ export function OtpVerificationModal({
             {t('auth.otpSpamHint')}
           </p>
 
-          <div className="flex justify-center gap-2 sm:gap-3" onPaste={handlePaste}>
-            {digits.map((digit, i) => (
-              <input
-                key={i}
-                ref={(el) => { inputRefs.current[i] = el; }}
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={1}
-                value={digit}
-                disabled={verifying}
-                onChange={(e) => updateDigit(i, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(i, e)}
-                className={cn(
-                  'h-12 w-10 rounded-xl border-2 bg-background text-center text-xl font-bold shadow-sm transition-all sm:h-14 sm:w-12',
-                  'focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20',
-                  digit && 'border-primary/50',
-                  verifying && 'opacity-50',
-                )}
-              />
-            ))}
-          </div>
+          <Input
+            ref={inputRef}
+            dir="ltr"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={OTP_LENGTH}
+            value={code}
+            disabled={verifying}
+            placeholder="000000"
+            aria-label="Verification code"
+            onChange={(e) => applyCode(e.target.value)}
+            onPaste={(e) => {
+              e.preventDefault();
+              applyCode(e.clipboardData.getData('text'));
+            }}
+            className="h-12 text-center font-mono text-xl tracking-[0.35em]"
+          />
 
           {error && <AlertBanner message={error} onDismiss={() => setError(null)} />}
 

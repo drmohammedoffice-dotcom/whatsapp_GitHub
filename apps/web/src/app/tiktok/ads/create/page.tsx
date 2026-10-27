@@ -157,8 +157,7 @@ function TikTokCampaignsInner() {
   const statusOverridesRef = useRef<Map<string, { status: string; until: number }>>(new Map());
   const statsRef = useRef<TikTokCampaignStat[]>([]);
   const { status: subscription } = useSubscription();
-  const pixelLimit = subscription?.limits?.maxTiktokPixels ?? 0;
-  const canReview = Boolean(subscription?.isActive) && (pixelLimit < 0 || pixelLimit >= 15);
+  const canReview = Boolean(subscription?.isActive) && Boolean(subscription?.limits?.aiCampaignReviewEnabled);
 
   useEffect(() => {
     statsRef.current = stats;
@@ -602,7 +601,7 @@ function TikTokCampaignsInner() {
                 <Link href={`/tiktok/ads/new?advertiserId=${encodeURIComponent(advertiserId)}`}><Plus className="h-4 w-4" /> {t('tiktokAdsCreate.createCampaign')}</Link>
               </Button>
               <Button type="button" variant="outline" asChild className="flex-1 sm:flex-none">
-                <Link href="/tiktok/ads/topup"><Wallet className="h-4 w-4" /> {t('tiktokAdsCreate.topup')}</Link>
+                <Link href="/tiktok/ads/balance"><Wallet className="h-4 w-4" /> {t('tiktokAdsCreate.topup')}</Link>
               </Button>
             </div>
           </div>

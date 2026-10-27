@@ -687,7 +687,9 @@ export function LandingFaq() {
 
 export function LandingContact() {
   const copy = useLandingCopy();
-  const wa = `https://wa.me/${WHATSAPP_SALES_NUMBER}`;
+  const waNumber = copy.contact.whatsappNumber || WHATSAPP_SALES_NUMBER;
+  const supportEmail = copy.contact.supportEmail || 'noreply@chatloora.com';
+  const wa = `https://wa.me/${waNumber}`;
   return (
     <section id="contact" className="px-4 py-20 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -703,7 +705,7 @@ export function LandingContact() {
             <p className="font-semibold text-slate-900">{copy.contact.whatsapp}</p>
           </a>
           <a
-            href="mailto:noreply@chatloora.com"
+            href={`mailto:${supportEmail}`}
             className="rounded-2xl border border-sky-100 bg-sky-50/80 p-6 text-center shadow-soft transition hover:-translate-y-1"
           >
             <Mail className="mx-auto mb-3 h-6 w-6 text-sky-600" />

@@ -107,4 +107,14 @@ export class SuccessPartnerController {
   ) {
     return this.partners.confirmSuccessPayout(principal.userId!, id, body.code ?? '');
   }
+
+  @Post('payouts/:id/resend')
+  resendPayout(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('id') id: string) {
+    return this.partners.resendSuccessPayoutCode(principal.userId!, id);
+  }
+
+  @Post('payouts/:id/cancel')
+  cancelPayout(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Param('id') id: string) {
+    return this.partners.cancelSuccessPayoutDraft(principal.userId!, id);
+  }
 }

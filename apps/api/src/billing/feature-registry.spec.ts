@@ -7,38 +7,42 @@ import {
 } from './feature-registry';
 
 describe('plan entitlements registry', () => {
-  it('seeds Basic-like limits without hardcoding plan names at runtime', () => {
+  it('seeds Basic limits for $15 package', () => {
     const basic = seedLimitsForSlug('basic');
     expect(basic.maxWhatsappNumbers).toBe(1);
     expect(basic.maxPixels).toBe(3);
     expect(basic.maxTiktokPixels).toBe(3);
     expect(basic.whatsappApiEnabled).toBe(false);
-    expect(basic.instagramEnabled).toBe(false);
-    expect(basic.facebookEnabled).toBe(false);
-    expect(basic.telegramEnabled).toBe(false);
+    expect(basic.instantFormsEnabled).toBe(false);
+    expect(basic.onlineStoreEnabled).toBe(false);
+    expect(basic.aiCampaignReviewEnabled).toBe(false);
     expect(basic.aiEnabled).toBe(false);
-    expect(basic.maxTeamMembers).toBe(1);
     expect(canCreateWithLimit(1, basic.maxWhatsappNumbers)).toBe(false);
     expect(canCreateWithLimit(0, basic.maxPixels)).toBe(true);
   });
 
-  it('allows Professional seed defaults until DB entitlements override them', () => {
+  it('seeds Professional limits for $25 package', () => {
     const pro = seedLimitsForSlug('professional');
     expect(pro.maxWhatsappNumbers).toBe(3);
-    expect(pro.maxTiktokPixels).toBe(15);
+    expect(pro.maxTiktokPixels).toBe(10);
     expect(pro.whatsappApiEnabled).toBe(true);
-    expect(pro.instagramEnabled).toBe(true);
-    expect(pro.aiEnabled).toBe(true);
+    expect(pro.instantFormsEnabled).toBe(true);
+    expect(pro.onlineStoreEnabled).toBe(false);
+    expect(pro.aiCampaignReviewEnabled).toBe(false);
+    expect(pro.aiEnabled).toBe(false);
     expect(canCreateWithLimit(2, pro.maxWhatsappNumbers)).toBe(true);
     expect(canCreateWithLimit(3, pro.maxWhatsappNumbers)).toBe(false);
   });
 
-  it('allows Business seed defaults', () => {
+  it('seeds Business limits for $35 preferred package', () => {
     const business = seedLimitsForSlug('business');
-    expect(business.maxWhatsappNumbers).toBe(10);
-    expect(business.maxTiktokPixels).toBe(-1);
+    expect(business.maxWhatsappNumbers).toBe(5);
+    expect(business.maxTiktokPixels).toBe(20);
     expect(business.maxTeamMembers).toBe(10);
-    expect(business.telegramEnabled).toBe(true);
+    expect(business.instantFormsEnabled).toBe(true);
+    expect(business.onlineStoreEnabled).toBe(true);
+    expect(business.aiCampaignReviewEnabled).toBe(true);
+    expect(business.aiEnabled).toBe(true);
   });
 
   it('uses database entitlements instead of slug when admin changes limits', () => {
@@ -49,12 +53,14 @@ describe('plan entitlements registry', () => {
         { featureKey: 'maximum_whatsapp_numbers', enabled: true, limitValue: 3 },
         { featureKey: 'ai_reply_enabled', enabled: true, limitValue: null },
         { featureKey: 'instagram_integration_enabled', enabled: true, limitValue: null },
+        { featureKey: 'instant_forms_enabled', enabled: true, limitValue: null },
       ],
       fallback,
     );
     expect(limits.maxWhatsappNumbers).toBe(3);
     expect(limits.aiEnabled).toBe(true);
     expect(limits.instagramEnabled).toBe(true);
+    expect(limits.instantFormsEnabled).toBe(true);
     expect(canCreateWithLimit(2, limits.maxWhatsappNumbers)).toBe(true);
     expect(canCreateWithLimit(3, limits.maxWhatsappNumbers)).toBe(false);
   });
@@ -78,24 +84,24 @@ describe('plan entitlements registry', () => {
   });
 
   it('exposes voice AI as a boolean plan entitlement', () => {
-    const pro = seedLimitsForSlug('professional');
-    expect(pro.voiceAiEnabled).toBe(true);
-    expect(pro.voiceCallsLimit).toBe(-1);
+    const business = seedLimitsForSlug('business');
+    expect(business.voiceAiEnabled).toBe(true);
+    expect(business.voiceCallsLimit).toBe(-1);
     const basic = limitsFromEntitlements(
       [{ featureKey: 'voice_ai_enabled', enabled: false, limitValue: null }],
-      pro,
+      business,
     );
     expect(basic.voiceAiEnabled).toBe(false);
   });
 
   it('exposes Creative Studio plan entitlements', () => {
-    const pro = seedLimitsForSlug('professional');
-    expect(pro.creativeStudioEnabled).toBe(true);
-    expect(pro.creativeImagesLimit).toBe(50);
-    expect(pro.creative4kEnabled).toBe(false);
+    const business = seedLimitsForSlug('business');
+    expect(business.creativeStudioEnabled).toBe(true);
+    expect(business.creativeImagesLimit).toBe(-1);
+    expect(business.creative4kEnabled).toBe(true);
     const basic = limitsFromEntitlements(
       [{ featureKey: 'creative_studio_enabled', enabled: false, limitValue: null }],
-      pro,
+      business,
     );
     expect(basic.creativeStudioEnabled).toBe(false);
   });

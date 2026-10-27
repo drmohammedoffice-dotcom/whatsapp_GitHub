@@ -42,7 +42,7 @@ export class AdminOperationsController {
   // ─── Users ────────────────────────────────────────────────────────────────
 
   @Get('users')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.SUPPORT_AGENT, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.SUPPORT_AGENT, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   listUsers(
     @CurrentAdmin() admin: AdminPrincipal,
     @Query('q') q?: string,
@@ -52,13 +52,16 @@ export class AdminOperationsController {
     return this.users.list({
       q,
       skip: skip ? Number(skip) : 0,
-      take: take ? Number(take) : 50,
-      customersOnly: admin.role === AdminRole.STAFF,
+      take: take ? Number(take) : 200,
+      customersOnly:
+        admin.roles?.some((r) => r === AdminRole.STAFF || r === AdminRole.ACCOUNTANT) ||
+        admin.role === AdminRole.STAFF ||
+        admin.role === AdminRole.ACCOUNTANT,
     });
   }
 
   @Get('users/:id')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.SUPPORT_AGENT, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.SUPPORT_AGENT, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   getUser(@Param('id') id: string) {
     return this.users.getById(id);
   }
@@ -171,7 +174,7 @@ export class AdminOperationsController {
   }
 
   @Post('subscriptions/activate')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   activateSubscription(
     @CurrentAdmin() admin: AdminPrincipal,
     @Body()
@@ -181,16 +184,18 @@ export class AdminOperationsController {
       ownerUserId?: string;
       billingCycle?: BillingInterval;
       durationDays?: number;
+      addRemainingDays?: boolean;
     },
   ) {
     return this.subscriptions.activate(admin.adminUserId, body.teamId, body.planId, body.ownerUserId, {
       billingCycle: body.billingCycle,
       durationDays: body.durationDays,
+      addRemainingDays: Boolean(body.addRemainingDays),
     });
   }
 
   @Patch('subscriptions/:id/period')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   updateSubscriptionPeriod(
     @CurrentAdmin() admin: AdminPrincipal,
     @Param('id') id: string,
@@ -200,7 +205,7 @@ export class AdminOperationsController {
   }
 
   @Patch('subscriptions/:id/status')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   updateSubscriptionStatus(
     @CurrentAdmin() admin: AdminPrincipal,
     @Param('id') id: string,
@@ -216,19 +221,19 @@ export class AdminOperationsController {
   }
 
   @Post('subscriptions/:id/pause')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   pauseSubscription(@CurrentAdmin() admin: AdminPrincipal, @Param('id') id: string) {
     return this.subscriptions.pause(admin.adminUserId, id);
   }
 
   @Post('subscriptions/:id/cancel')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   cancelSubscription(@CurrentAdmin() admin: AdminPrincipal, @Param('id') id: string) {
     return this.subscriptions.cancel(admin.adminUserId, id);
   }
 
   @Post('subscriptions/:id/change-plan')
-  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF)
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.BILLING_MANAGER, AdminRole.STAFF, AdminRole.ACCOUNTANT)
   changePlan(@CurrentAdmin() admin: AdminPrincipal, @Param('id') id: string, @Body() body: { planId: string }) {
     return this.subscriptions.changePlan(admin.adminUserId, id, body.planId);
   }

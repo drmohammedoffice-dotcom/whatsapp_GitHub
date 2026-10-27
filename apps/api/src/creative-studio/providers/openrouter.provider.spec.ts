@@ -1,4 +1,4 @@
-﻿import { ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { OpenRouterProvider } from './openrouter.provider';
 import { PROVIDER_NOT_CONFIGURED } from './provider-error';
 
@@ -15,7 +15,7 @@ describe('OpenRouterProvider', () => {
       get: jest.fn((name: string) => {
         if (name === 'OPENROUTER_API_KEY') return key;
         if (name === 'OPENROUTER_API_BASE_URL') return 'https://openrouter.ai/api/v1';
-        if (name === 'API_PUBLIC_URL') return 'https://www.chatloora.com';
+        if (name === 'API_PUBLIC_URL') return 'https://almutamayiziq.com';
         return undefined;
       }),
     };

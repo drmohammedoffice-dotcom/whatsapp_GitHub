@@ -70,6 +70,13 @@ export default function PartnerDashboardPage() {
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = window.setTimeout(() => setResendIn((n) => Math.max(0, n - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendIn]);
 
   function reload() {
     return fetchPartnerMe().then((next) => {
@@ -262,6 +269,7 @@ export default function PartnerDashboardPage() {
                   })
                     .then((r) => {
                       setDraftId(r.id);
+                      setResendIn(15);
                       setNotice(`${t('partners.payoutSent')} — ${t('partners.checkSpam')}`);
                     })
                     .catch((err) => setError(parseApiError(err)))
@@ -271,45 +279,54 @@ export default function PartnerDashboardPage() {
                 {t('partners.sendCode')}
               </Button>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                <Input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder={t('partners.confirmCode')}
-                  className="max-w-xs"
-                />
-                <Button
-                  disabled={busy}
-                  onClick={() => {
-                    setBusy(true);
-                    void confirmPartnerPayout(draftId, code)
-                      .then(() => {
-                        setNotice(t('partners.payoutSubmitted'));
-                        setDraftId(null);
-                        setCode('');
-                        setAccount('');
-                        setCardFile(undefined);
-                        return reload();
-                      })
-                      .catch((err) => setError(parseApiError(err)))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  {t('partners.submitPayout')}
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => {
-                    setBusy(true);
-                    void resendPartnerPayoutCode(draftId)
-                      .then(() => setNotice(t('partners.payoutSent')))
-                      .catch((err) => setError(parseApiError(err)))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  {t('partners.resendCode')}
-                </Button>
+              <div className="space-y-2">
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+                  {t('partners.checkSpam')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder={t('partners.confirmCode')}
+                    className="max-w-xs"
+                  />
+                  <Button
+                    disabled={busy}
+                    onClick={() => {
+                      setBusy(true);
+                      void confirmPartnerPayout(draftId, code)
+                        .then(() => {
+                          setNotice(t('partners.payoutSubmitted'));
+                          setDraftId(null);
+                          setCode('');
+                          setAccount('');
+                          setCardFile(undefined);
+                          setResendIn(0);
+                          return reload();
+                        })
+                        .catch((err) => setError(parseApiError(err)))
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    {t('partners.submitPayout')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={busy || resendIn > 0}
+                    onClick={() => {
+                      setBusy(true);
+                      void resendPartnerPayoutCode(draftId)
+                        .then(() => {
+                          setResendIn(15);
+                          setNotice(`${t('partners.payoutSent')} — ${t('partners.checkSpam')}`);
+                        })
+                        .catch((err) => setError(parseApiError(err)))
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    {resendIn > 0 ? `${t('partners.resendCode')} (${resendIn}s)` : t('partners.resendCode')}
+                  </Button>
+                </div>
               </div>
             )}
             {notice && <AlertBanner variant="info" message={notice} onDismiss={() => setNotice(null)} />}

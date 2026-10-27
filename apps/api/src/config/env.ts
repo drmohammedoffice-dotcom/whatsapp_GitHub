@@ -105,6 +105,16 @@ export const envSchema = z.object({
   TELEGRAM_API_HASH: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().default('ChatLoora <onboarding@resend.dev>'),
+  /** Signing secret from Resend webhook endpoint (email.received) */
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
+  /** Webmail (@chatloora.com) via Resend send + inbound webhook */
+  MAIL_DOMAIN: z.string().default('chatloora.com'),
+  MAIL_WEBMAIL_JWT_TTL: z.string().default('12h'),
+  /** Optional legacy Private Email IMAP/SMTP (unused when Resend webmail is active) */
+  MAIL_IMAP_HOST: z.string().optional(),
+  MAIL_IMAP_PORT: z.coerce.number().int().positive().optional(),
+  MAIL_SMTP_HOST: z.string().optional(),
+  MAIL_SMTP_PORT: z.coerce.number().int().positive().optional(),
   /** Set to false to skip OTP until Resend domain is verified */
   AUTH_OTP_ENABLED: z
     .string()

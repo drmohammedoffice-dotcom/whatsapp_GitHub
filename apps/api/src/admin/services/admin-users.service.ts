@@ -44,7 +44,7 @@ export class AdminUsersService {
       this.prisma.user.findMany({
         where,
         skip: params.skip ?? 0,
-        take: Math.min(params.take ?? 50, 100),
+        take: Math.min(params.take ?? 200, 500),
         orderBy: { createdAt: 'desc' },
         include: {
           teamMembers: {

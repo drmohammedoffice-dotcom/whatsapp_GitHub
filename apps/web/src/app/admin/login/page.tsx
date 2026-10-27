@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { adminLogin, setAdminToken } from '@/lib/admin-api';
+import { adminLogin, isEmployeeRole, setAdminToken } from '@/lib/admin-api';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -22,12 +22,11 @@ export default function AdminLoginPage() {
     setError(null);
     try {
       const { accessToken, admin } = await adminLogin(email, password, 'admin');
-      setAdminToken(accessToken);
-      if (admin.role === 'STAFF') {
-        router.replace('/staff');
-      } else {
-        router.replace('/admin');
+      if (isEmployeeRole(admin.role)) {
+        throw new Error('حساب الموظف يدخل من /staff/login وليس لوحة الأدمن');
       }
+      setAdminToken(accessToken);
+      router.replace('/admin');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

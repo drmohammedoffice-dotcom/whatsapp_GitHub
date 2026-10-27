@@ -1460,6 +1460,8 @@ model StoreSettings {
   promoText            String?
   themeKey             String   @default("emerald")
   themeColors          Json?
+  /// Shared product color palette (name + hex) for bulk apply across products.
+  productColorPalette  Json?    @map("product_color_palette")
   /// TikTok pixel integration used for store order Events API (CompletePayment).
   pixelIntegrationId   String?  @map("pixel_integration_id")
   createdAt            DateTime @default(now())
@@ -1507,6 +1509,8 @@ model StoreBanner {
   title      String?
   subtitle   String?
   linkUrl    String?
+  /// قياسات عرض الصورة داخل إطار البانر (objectFit / position / zoom)
+  metadata   Json?
   position   Int      @default(0)
   enabled    Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -1904,6 +1908,40 @@ model TikTokMarketingAdvertiser {
   @@unique([userId, advertiserId])
   @@index([userId])
   @@map("tiktok_marketing_advertisers")
+}
+
+/// External TikTok Ads Manager billing checkout (user pays TikTok directly — not Chatloora).
+enum TikTokAdsBalanceCheckoutStatus {
+  INITIATED
+  REDIRECTED
+  PENDING_CONFIRMATION
+  EXTERNAL_CHECKOUT
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+model TikTokAdsBalanceCheckout {
+  id                   String                         @id @default(cuid())
+  teamId               String                         @map("team_id")
+  userId               String                         @map("user_id")
+  advertiserId         String                         @map("advertiser_id")
+  advertiserName       String?                        @map("advertiser_name")
+  currency             String?
+  status               TikTokAdsBalanceCheckoutStatus @default(INITIATED)
+  destinationUrl       String                         @map("destination_url") @db.Text
+  confirmationSource   String?                        @map("confirmation_source")
+  balanceBefore        Float?                         @map("balance_before")
+  balanceAfter         Float?                         @map("balance_after")
+  lastCheckedAt        DateTime?                      @map("last_checked_at")
+  metadata             Json?
+  createdAt            DateTime                       @default(now()) @map("created_at")
+  updatedAt            DateTime                       @updatedAt @map("updated_at")
+
+  @@index([teamId, createdAt])
+  @@index([userId, createdAt])
+  @@index([teamId, advertiserId])
+  @@map("tiktok_ads_balance_checkouts")
 }
 
 model TikTokAppCredentials {
@@ -2451,7 +2489,12 @@ enum AdminRole {
   SUPPORT_AGENT
   BILLING_MANAGER
   DEVELOPER
+  /// موظف تفعيل اشتراكات (قديم — نفس صلاحيات المحاسب)
   STAFF
+  /// محاسب: تفعيل/تجديد الاشتراكات بدون تعديل أكواد الإحالة
+  ACCOUNTANT
+  /// منشئ حسابات بريد: إنشاء وإدارة صناديق @chatloora.com
+  MAILBOX_CREATOR
 }
 
 enum BillingInterval {
@@ -2508,8 +2551,13 @@ enum SupportTicketStatus {
 model AdminUser {
   id             String          @id @default(cuid())
   userId         String          @unique @map("user_id")
+  /// الدور الأساسي (للتوافق مع النظام القديم)
   role           AdminRole       @default(SUPPORT_AGENT)
+  /// أدوار إضافية للموظفين — يمكن الجمع بين محاسب + إنشاء حسابات إلخ
+  roles          Json            @default("[]") @map("roles")
   residence      String?         @map("residence")
+  /// صورة الملف الشخصي للموظف (مفتاح التخزين المحلي)
+  avatarKey      String?         @map("avatar_key")
   isActive       Boolean         @default(true) @map("is_active")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
@@ -2907,6 +2955,19 @@ model LandingOffer {
 
   @@index([isActive, sortOrder])
   @@map("landing_offers")
+}
+
+/// Editable landing-page copy (EN/AR JSON) + section visibility toggles.
+model LandingPageConfig {
+  id          String   @id @default("default")
+  contentEn   Json     @map("content_en")
+  contentAr   Json     @map("content_ar")
+  visibility  Json?
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("landing_page_config")
 }
 
 model SupportTicket {
@@ -4199,6 +4260,57 @@ model PhoneOtpVerification {
   @@index([phone, purpose])
   @@index([email, purpose])
   @@map("phone_otp_verifications")
+}
+
+/// صناديق بريد @chatloora.com — الدخول عبر /mail؛ الإرسال/الاستقبال عبر Resend.
+model DomainMailbox {
+  id                 String                 @id @default(cuid())
+  localPart          String                 @map("local_part")
+  email              String                 @unique
+  displayName        String?                @map("display_name")
+  passwordHash       String                 @map("password_hash")
+  passwordEncrypted  String                 @map("password_encrypted")
+  isActive           Boolean                @default(true) @map("is_active")
+  notes              String?
+  lastLoginAt        DateTime?              @map("last_login_at")
+  createdByAdminId   String?                @map("created_by_admin_id")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  messages           DomainMailboxMessage[]
+
+  @@unique([localPart])
+  @@index([isActive])
+  @@map("domain_mailboxes")
+}
+
+model DomainMailboxMessage {
+  id              String         @id @default(cuid())
+  mailboxId       String         @map("mailbox_id")
+  folder          String         @default("INBOX")
+  direction       String
+  resendEmailId   String?        @map("resend_email_id")
+  messageIdHeader String?        @map("message_id_header")
+  fromAddress     String         @map("from_address")
+  toAddresses     String         @map("to_addresses")
+  ccAddresses     String?        @map("cc_addresses")
+  bccAddresses    String?        @map("bcc_addresses")
+  subject         String         @default("")
+  textBody        String?        @map("text_body") @db.Text
+  htmlBody        String?        @map("html_body") @db.Text
+  preview         String         @default("")
+  seen            Boolean        @default(false)
+  flagged         Boolean        @default(false)
+  hasAttachments  Boolean        @default(false) @map("has_attachments")
+  attachmentsJson Json?          @map("attachments_json")
+  sentAt          DateTime?      @map("sent_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  mailbox         DomainMailbox  @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+
+  @@unique([mailboxId, resendEmailId])
+  @@index([mailboxId, folder, createdAt])
+  @@index([mailboxId, seen])
+  @@map("domain_mailbox_messages")
 }
 
 

@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+﻿# syntax=docker/dockerfile:1
 # Production Dockerfile for the @watsapp/web (Next.js) app inside a PNPM monorepo.
 # IMPORTANT: The Docker build context MUST be the repository ROOT (not apps/web),
 # so that workspace packages such as packages/shared are available.

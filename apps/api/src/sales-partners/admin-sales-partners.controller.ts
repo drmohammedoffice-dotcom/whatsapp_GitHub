@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -42,6 +43,33 @@ export class AdminSalesPartnersController {
     return this.partners.listDirectory(q);
   }
 
+  @Get('eligible-staff')
+  eligibleStaff() {
+    return this.partners.listEligibleStaffForPartner();
+  }
+
+  @Post('from-staff')
+  createFromStaff(@CurrentAdmin() admin: AdminPrincipal, @Body() body: { staffId?: string }) {
+    const staffId = body?.staffId?.trim();
+    if (!staffId) throw new BadRequestException('اختر موظفاً أولاً');
+    return this.partners.createFromStaff(staffId, admin.adminUserId);
+  }
+
+  @Post('manual')
+  createManual(
+    @CurrentAdmin() admin: AdminPrincipal,
+    @Body()
+    body: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      country?: string;
+      password?: string;
+    },
+  ) {
+    return this.partners.createManual(admin.adminUserId, body ?? {});
+  }
+
   @Get('wallet')
   wallet() {
     return this.partners.walletOverview();
@@ -75,6 +103,13 @@ export class AdminSalesPartnersController {
   @Get('payouts/:id')
   payout(@Param('id') id: string) {
     return this.partners.getPayoutAdmin(id);
+  }
+
+  /** نقل/تعيين إحالة مشترك — للأدمن الأعلى فقط (ليس المحاسب/الموظفين). */
+  @Patch('referrals/by-team/:teamId')
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN)
+  assignTeamReferral(@Param('teamId') teamId: string, @Body() body: { referralCode?: string | null }) {
+    return this.partners.assignTeamReferral(teamId, body.referralCode);
   }
 
   @Get('payouts/:id/file/:kind')
@@ -128,6 +163,11 @@ export class AdminSalesPartnersController {
   @Patch(':id/email')
   updateEmail(@Param('id') id: string, @Body() body: { email?: string }) {
     return this.partners.updatePartnerEmail(id, body.email ?? '');
+  }
+
+  @Patch(':id/referral-code')
+  updateReferralCode(@Param('id') id: string, @Body() body: { referralCode?: string }) {
+    return this.partners.updatePartnerReferralCode(id, body.referralCode ?? '');
   }
 
   @Delete(':id')

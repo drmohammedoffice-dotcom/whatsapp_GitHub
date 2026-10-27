@@ -1300,8 +1300,62 @@ export class TikTokAdPublishService {
       const max = Math.max(min + 1, Number(input.devicePriceMax) || min + 1);
       body.device_price_ranges = [min, max];
     }
-    if (input.dayparting && /^[01]{336}$/.test(input.dayparting)) body.dayparting = input.dayparting;
+    if (input.dayparting && /^[01]{336}$/.test(input.dayparting)) {
+      const converted = this.convertDayparting(input.dayparting, userZone, tikTokZone);
+      body.dayparting = converted;
+      if (converted !== input.dayparting) {
+        this.logger.log(
+          `[Marketing API] dayparting converted ${userZone} → ${tikTokZone}`,
+        );
+      }
+    }
     return body;
+  }
+
+  /** فرق الإزاحة بالدقائق (محلي − UTC) لمنطقة زمنية. */
+  private zoneOffsetMinutes(timeZone: string, at = new Date()) {
+    try {
+      const utcWall = this.formatTikTokTime(at, 'UTC');
+      const localWall = this.formatTikTokTime(at, timeZone);
+      const parse = (wall: string) => {
+        const m = wall.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+        if (!m) return 0;
+        return Date.UTC(
+          Number(m[1]),
+          Number(m[2]) - 1,
+          Number(m[3]),
+          Number(m[4]),
+          Number(m[5]),
+          Number(m[6]),
+        );
+      };
+      return (parse(localWall) - parse(utcWall)) / 60_000;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * dayparting بطول 336 = 7 أيام × 48 نصف ساعة.
+   * الشبكة في الواجهة بتوقيت المستخدم (بغداد) بينما تيك توك يقرأها بتوقيت الحساب.
+   */
+  private convertDayparting(dayparting: string, fromZone: string, toZone: string) {
+    const from = String(fromZone || '').trim();
+    const to = String(toZone || '').trim();
+    if (!dayparting || !/^[01]{336}$/.test(dayparting) || !from || !to || from === to) {
+      return dayparting;
+    }
+    const shiftHalfHours = Math.round(
+      (this.zoneOffsetMinutes(to) - this.zoneOffsetMinutes(from)) / 30,
+    );
+    if (!shiftHalfHours) return dayparting;
+    const out = Array.from({ length: 336 }, () => '0');
+    for (let i = 0; i < 336; i += 1) {
+      if (dayparting[i] !== '1') continue;
+      const j = ((i + shiftHalfHours) % 336 + 336) % 336;
+      out[j] = '1';
+    }
+    return out.join('');
   }
 
   /**
@@ -2392,12 +2446,10 @@ export class TikTokAdPublishService {
     input: { advertiserId: string; campaignId: string; startDate?: string; endDate?: string; messages?: Array<{ role?: string; content?: string }> },
   ) {
     const teamAccess = await this.access.getTeamAccess(teamId);
-    const entitlements = await this.entitlements.getTeamEntitlements(teamId);
-    const pixelLimit = entitlements.limits.maxTiktokPixels;
-    const allowed = teamAccess.isActive && (pixelLimit < 0 || pixelLimit >= 15);
-    if (!allowed) {
-      throw new ForbiddenException('تقييم الحملات بالذكاء الاصطناعي متاح في الباقة الثانية والثالثة.');
+    if (!teamAccess.isActive) {
+      throw new ForbiddenException('اشتراكك غير نشط. جدّد الباقة لاستخدام تحليل الحملات.');
     }
+    await this.entitlements.assertAiCampaignReviewEnabled(teamId);
     const report = await this.performance(userId, input.advertiserId, input.startDate, input.endDate);
     const campaign = report.campaigns.find((row) => row.campaignId === input.campaignId);
     if (!campaign) throw new BadRequestException('الحملة غير موجودة في هذا الحساب');

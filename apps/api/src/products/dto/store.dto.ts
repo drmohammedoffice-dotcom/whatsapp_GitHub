@@ -230,6 +230,20 @@ export class StoreBannerDto {
   @Type(() => Number)
   @IsNumber()
   position?: number;
+
+  /** cover | contain — عرض الصورة داخل إطار البانر الثابت */
+  @IsOptional()
+  @IsString()
+  imageObjectFit?: string;
+
+  @IsOptional()
+  @IsString()
+  imageObjectPosition?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  imageZoom?: number;
 }
 
 export class ReorderIdsDto {
@@ -246,6 +260,14 @@ export class StoreCheckoutItemDto {
   @IsNumber()
   @Min(1)
   quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  colorId?: string;
+
+  @IsOptional()
+  @IsString()
+  colorName?: string;
 }
 
 export class StoreCheckoutDto {
@@ -341,4 +363,48 @@ export class LandingCheckoutDto {
   @IsOptional()
   @IsString()
   userAgent?: string;
+}
+
+export class StoreColorSwatchDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @IsString()
+  name!: string;
+
+  @IsString()
+  hex!: string;
+}
+
+export class SaveStoreColorPaletteDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => StoreColorSwatchDto)
+  colors!: StoreColorSwatchDto[];
+}
+
+export class ApplyStoreColorsDto {
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => StoreColorSwatchDto)
+  colors?: StoreColorSwatchDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  productIds?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  all?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  linkImagesByPosition?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  saveAsStorePalette?: boolean;
 }

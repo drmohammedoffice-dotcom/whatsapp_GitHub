@@ -10,13 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
 import {
+  cancelSuccessPayoutDraft,
   confirmSuccessPartner,
   confirmSuccessPayout,
   fetchSuccessPartner,
   requestSuccessPayout,
   resendSuccessCode,
+  resendSuccessPayoutCode,
   sendSuccessTicket,
   startSuccessPartner,
   successAvatarUrl,
@@ -396,43 +397,24 @@ function PartnerCodeDialog({
         </DialogHeader>
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs text-amber-950">لم تصلك الرسالة؟ تحقق من صندوق الرسائل غير المرغوب بها.</p>
         {error && <p className="text-center text-sm text-destructive">{error}</p>}
-        <div dir="ltr" className="relative mx-auto w-fit">
-          <div className="pointer-events-none flex justify-center gap-2">
-            {Array.from({ length: 6 }, (_, index) => (
-              <span
-                key={index}
-                className={cn('flex h-12 w-10 items-center justify-center rounded-xl border-2 text-xl font-bold', code[index] && 'border-primary/50')}
-              >
-                {code[index] ?? ''}
-              </span>
-            ))}
-          </div>
-          <input
-            ref={(node) => { inputRef.current = node; }}
-            dir="ltr"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            disabled={busy}
-            value={code}
-            aria-label="رمز التأكيد"
-            onChange={(event) => applyCode(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Backspace') return;
-              event.preventDefault();
-              setCode((current) => current.slice(0, -1));
-            }}
-            onFocus={(event) => {
-              const end = event.currentTarget.value.length;
-              event.currentTarget.setSelectionRange(end, end);
-            }}
-            onPaste={(event) => {
-              event.preventDefault();
-              applyCode(event.clipboardData.getData('text'));
-            }}
-            className="absolute inset-0 cursor-text opacity-0"
-          />
-        </div>
+        <Input
+          ref={(node) => { inputRef.current = node; }}
+          dir="ltr"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          disabled={busy}
+          value={code}
+          placeholder="000000"
+          aria-label="رمز التأكيد"
+          onChange={(event) => applyCode(event.target.value)}
+          onPaste={(event) => {
+            event.preventDefault();
+            applyCode(event.clipboardData.getData('text'));
+          }}
+          className="h-12 text-center font-mono text-xl tracking-[0.35em]"
+        />
         <Button
           type="button"
           variant="outline"
@@ -465,6 +447,7 @@ function Dashboard({
   const [busy, setBusy] = useState(false);
   const [payoutId, setPayoutId] = useState('');
   const [code, setCode] = useState('');
+  const [resendIn, setResendIn] = useState(0);
   const requested = Math.round(Number(amount) || 0);
   const net = requested >= 10000 ? requested - 500 : 0;
 
@@ -479,6 +462,12 @@ function Dashboard({
       if (url) URL.revokeObjectURL(url);
     };
   }, [data.partner.hasAvatar]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = window.setTimeout(() => setResendIn((n) => Math.max(0, n - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendIn]);
 
   async function copy(value: string, key: string) {
     await navigator.clipboard.writeText(value);
@@ -499,12 +488,30 @@ function Dashboard({
     }
   }
 
+  async function closeWithdraw() {
+    const draftId = payoutId;
+    setWithdrawOpen(false);
+    setPayoutId('');
+    setCode('');
+    setResendIn(0);
+    if (draftId) {
+      try {
+        await cancelSuccessPayoutDraft(draftId);
+        const next = await fetchSuccessPartner();
+        onChange(next);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   async function submitPayout() {
     setBusy(true);
     onError('');
     try {
       const result = await requestSuccessPayout({ amountCents: requested, method, accountNumber, accountName });
       setPayoutId(result.id);
+      setResendIn(15);
     } catch (err) {
       onError(err instanceof Error ? err.message : 'تعذر إنشاء طلب السحب');
     } finally {
@@ -520,8 +527,23 @@ function Dashboard({
       setWithdrawOpen(false);
       setPayoutId('');
       setCode('');
+      setResendIn(0);
     } catch (err) {
       onError(err instanceof Error ? err.message : 'رمز غير صحيح');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendCode() {
+    if (!payoutId || resendIn > 0) return;
+    setBusy(true);
+    onError('');
+    try {
+      await resendSuccessPayoutCode(payoutId);
+      setResendIn(15);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'تعذر إعادة إرسال الرمز');
     } finally {
       setBusy(false);
     }
@@ -640,14 +662,23 @@ function Dashboard({
       </Card>
 
       {withdrawOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setWithdrawOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => void closeWithdraw()}>
           <div className="w-full max-w-md space-y-4 rounded-2xl bg-background p-5" onClick={(event) => event.stopPropagation()}>
             {payoutId ? (
               <>
                 <h2 className="text-lg font-semibold">تأكيد الرمز</h2>
                 <p className="text-sm text-muted-foreground">أدخل رمز التأكيد الذي وصل إلى بريدك.</p>
-                <Input dir="ltr" value={code} onChange={(event) => setCode(event.target.value)} />
-                <Button type="button" disabled={busy} onClick={() => void confirmCode()}>تأكيد السحب</Button>
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100">
+                  إذا لم يصلك الرمز، تفقد صندوق الرسائل غير المرغوب بها (Spam / Junk) ثم أعد الإرسال.
+                </p>
+                <Input dir="ltr" value={code} onChange={(event) => setCode(event.target.value)} placeholder="رمز التأكيد" />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" disabled={busy} onClick={() => void confirmCode()}>تأكيد السحب</Button>
+                  <Button type="button" variant="outline" disabled={busy || resendIn > 0} onClick={() => void resendCode()}>
+                    {resendIn > 0 ? `إعادة الإرسال بعد ${resendIn}ث` : 'إعادة إرسال الرمز'}
+                  </Button>
+                  <Button type="button" variant="ghost" disabled={busy} onClick={() => void closeWithdraw()}>إلغاء</Button>
+                </div>
               </>
             ) : (
               <>

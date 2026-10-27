@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { BillingModule } from '../billing/billing.module';
 import { BookingsModule } from '../bookings/bookings.module';
 import { StorageModule } from '../storage/storage.module';
 import { TikTokIntegrationModule } from '../tiktok-integration/tiktok-integration.module';
@@ -8,7 +9,7 @@ import { StoreController } from './store.controller';
 import { StorePublicController } from './store-public.controller';
 
 @Module({
-  imports: [StorageModule, BookingsModule, forwardRef(() => TikTokIntegrationModule)],
+  imports: [StorageModule, BookingsModule, BillingModule, forwardRef(() => TikTokIntegrationModule)],
   controllers: [StorePublicController, StoreController, ProductsController],
   providers: [ProductsService],
   exports: [ProductsService],

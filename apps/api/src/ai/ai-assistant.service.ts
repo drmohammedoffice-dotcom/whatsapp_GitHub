@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { AiAgentType } from '@watsapp/database';
 import { PlanEntitlementsService } from '../billing/plan-entitlements.service';
 import { PrismaService } from '../prisma/prisma.service';

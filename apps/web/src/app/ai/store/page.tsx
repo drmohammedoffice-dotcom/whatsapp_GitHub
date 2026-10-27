@@ -7,7 +7,8 @@ import { AppShell } from '@/components/layout/app-shell';
 import { PlanGate } from '@/components/billing/plan-gate';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { PageHeader } from '@/components/shared/page-header';
-import { ProductEditorDialog, type StoreCategory, type StoreProduct } from '@/components/store/product-editor-dialog';
+import { ApplyProductColorsDialog } from '@/components/store/apply-product-colors-dialog';
+import { ProductEditorDialog, type ProductColorOption, type StoreCategory, type StoreProduct } from '@/components/store/product-editor-dialog';
 import { FlashLandingCopyEditor } from '@/components/store/flash-landing-copy-editor';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -105,17 +106,20 @@ export default function StorePage() {
   const [compareDraft, setCompareDraft] = useState('');
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [sharedColors, setSharedColors] = useState<ProductColorOption[]>([]);
+  const [sharedColorsOpen, setSharedColorsOpen] = useState(false);
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams({ q, stock });
     if (categoryFilter) qs.set('categoryId', categoryFilter);
-    const [list, store, log, cats, themes, slides] = await Promise.all([
+    const [list, store, log, cats, themes, slides, palette] = await Promise.all([
       api<StoreProduct[]>(`/products?${qs.toString()}`),
       api<Settings>('/store/settings'),
       api<Movement[]>('/store/stock'),
       api<StoreCategory[]>('/store/categories'),
       api<CustomTheme[]>('/store/themes'),
       api<StoreBanner[]>('/store/banners'),
+      api<{ colors: ProductColorOption[] }>('/store/color-palette').catch(() => ({ colors: [] as ProductColorOption[] })),
     ]);
     setProducts(list);
     setSettings(store);
@@ -123,6 +127,14 @@ export default function StorePage() {
     setCategories(cats);
     setCustomThemes(themes);
     setBanners(slides);
+    setSharedColors(
+      (palette.colors || []).map((c, index) => ({
+        id: c.id || `c_${index + 1}`,
+        name: c.name || '',
+        hex: c.hex || '#000000',
+        imageId: null,
+      })),
+    );
     if (store.theme) setDraftColors(store.theme);
   }, [q, stock, categoryFilter]);
 
@@ -235,6 +247,33 @@ export default function StorePage() {
     descPlaceholder: t('store.descPlaceholder'),
     priceIqd: t('store.priceIqd'),
     quantity: t('store.quantity'),
+    hideQuantity: t('store.hideQuantity'),
+    minOrderQuantity: t('store.minOrderQuantity'),
+    minOrderQuantityHint: t('store.minOrderQuantityHint'),
+    colorsTitle: t('store.colorsTitle'),
+    colorsHint: t('store.colorsHint'),
+    colorsNeedImages: t('store.colorsNeedImages'),
+    addColor: t('store.addColor'),
+    colorName: t('store.colorName'),
+    colorSwatch: t('store.colorSwatch'),
+    colorImage: t('store.colorImage'),
+    colorImageOption: t('store.colorImageOption'),
+    loadStoreColors: t('store.loadStoreColors'),
+    applyColorsToProducts: t('store.applyColorsToProducts'),
+    applyColorsTitle: t('store.applyColorsTitle'),
+    applyColorsDesc: t('store.applyColorsDesc'),
+    applyColorsAll: t('store.applyColorsAll'),
+    applyColorsPick: t('store.applyColorsPick'),
+    applyColorsSelectAll: t('store.applyColorsSelectAll'),
+    applyColorsLinkByPosition: t('store.applyColorsLinkByPosition'),
+    applyColorsSavePalette: t('store.applyColorsSavePalette'),
+    applyColorsSubmit: t('store.applyColorsSubmit'),
+    applyColorsClose: t('store.applyColorsClose'),
+    applyColorsNeedColors: t('store.applyColorsNeedColors'),
+    applyColorsNeedProducts: t('store.applyColorsNeedProducts'),
+    applyColorsDone: t('store.applyColorsDone'),
+    applyColorsNoOther: t('store.applyColorsNoOther'),
+    applyColorsEmpty: t('store.applyColorsEmpty'),
     category: t('store.category'),
     noCategory: t('store.noCategory'),
     markOut: t('store.markOut'),
@@ -242,6 +281,18 @@ export default function StorePage() {
     mediaHint: t('store.mediaHint'),
     save: t('store.save'),
     saving: t('store.saving'),
+    imageFitTitle: t('store.imageFitTitle'),
+    imageFitHint: t('store.imageFitHint'),
+    imageFitMode: t('store.imageFitMode'),
+    imageFitCover: t('store.imageFitCover'),
+    imageFitContain: t('store.imageFitContain'),
+    imageFitPosition: t('store.imageFitPosition'),
+    imagePosCenter: t('store.imagePosCenter'),
+    imagePosTop: t('store.imagePosTop'),
+    imagePosBottom: t('store.imagePosBottom'),
+    imagePosLeft: t('store.imagePosLeft'),
+    imagePosRight: t('store.imagePosRight'),
+    imageFitZoom: t('store.imageFitZoom'),
   };
 
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
@@ -301,7 +352,7 @@ export default function StorePage() {
 
   return (
     <AppShell>
-      <PlanGate feature="ai">
+      <PlanGate feature="online_store">
         <PageHeader
           title={t('store.title')}
           description={t('store.description')}
@@ -324,11 +375,6 @@ export default function StorePage() {
             </div>
           )}
         />
-        <div className="mb-4">
-          <Button asChild variant="outline">
-            <Link href="/bookings">{t('nav.bookings')}</Link>
-          </Button>
-        </div>
         {filteredHint > 0 && (
           <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
             {filteredHint} {t('store.outOfStock')}
@@ -365,6 +411,82 @@ export default function StorePage() {
           </TabsList>
 
           <TabsContent value="products">
+            <Card className="mb-4 border-violet-500/30 shadow-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{t('store.sharedColorsTitle')}</CardTitle>
+                <CardDescription>{t('store.sharedColorsDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {sharedColors.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t('store.applyColorsEmpty')}</p>
+                  ) : (
+                    sharedColors.map((c) => (
+                      <span key={c.id} className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm">
+                        <span className="h-4 w-4 rounded-full border" style={{ background: c.hex }} />
+                        {c.name}
+                      </span>
+                    ))
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setSharedColors((prev) => [
+                        ...prev,
+                        { id: `c_${Date.now().toString(36)}`, name: '', hex: '#000000', imageId: null },
+                      ])
+                    }
+                  >
+                    <Plus className="me-1 h-3.5 w-3.5" />
+                    {t('store.addColor')}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setSharedColorsOpen(true)}
+                    disabled={!sharedColors.some((c) => c.name.trim())}
+                  >
+                    <Copy className="me-1 h-3.5 w-3.5" />
+                    {t('store.sharedColorsManage')}
+                  </Button>
+                </div>
+                {sharedColors.length > 0 ? (
+                  <div className="space-y-2">
+                    {sharedColors.map((color, index) => (
+                      <div key={color.id} className="grid gap-2 sm:grid-cols-[auto_1fr_auto]">
+                        <input
+                          type="color"
+                          value={/^#([0-9a-fA-F]{6})$/.test(color.hex) ? color.hex : '#000000'}
+                          onChange={(e) =>
+                            setSharedColors((prev) => prev.map((c, i) => (i === index ? { ...c, hex: e.target.value } : c)))
+                          }
+                          className="h-10 w-12 cursor-pointer rounded border bg-transparent p-1"
+                        />
+                        <Input
+                          value={color.name}
+                          onChange={(e) =>
+                            setSharedColors((prev) => prev.map((c, i) => (i === index ? { ...c, name: e.target.value } : c)))
+                          }
+                          placeholder={t('store.colorName')}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          onClick={() => setSharedColors((prev) => prev.filter((_, i) => i !== index))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
             {landingProduct ? (
               <Card className="mb-4 border-amber-500/40 shadow-card">
                 <CardHeader>
@@ -959,8 +1081,33 @@ export default function StorePage() {
           categories={categories}
           mediaUrls={mediaUrls}
           labels={editorLabels}
+          allProducts={products}
           onOpenChange={setOpen}
           onSaved={load}
+        />
+
+        <ApplyProductColorsDialog
+          open={sharedColorsOpen}
+          products={products}
+          colors={sharedColors}
+          onOpenChange={setSharedColorsOpen}
+          onDone={load}
+          labels={{
+            title: t('store.applyColorsTitle'),
+            desc: t('store.applyColorsDesc'),
+            applyAll: t('store.applyColorsAll'),
+            pickProducts: t('store.applyColorsPick'),
+            selectAll: t('store.applyColorsSelectAll'),
+            linkByPosition: t('store.applyColorsLinkByPosition'),
+            savePalette: t('store.applyColorsSavePalette'),
+            apply: t('store.applyColorsSubmit'),
+            close: t('store.applyColorsClose'),
+            needColors: t('store.applyColorsNeedColors'),
+            needProducts: t('store.applyColorsNeedProducts'),
+            applied: t('store.applyColorsDone'),
+            noOther: t('store.applyColorsNoOther'),
+            emptyPalette: t('store.applyColorsEmpty'),
+          }}
         />
       </PlanGate>
     </AppShell>

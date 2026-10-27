@@ -44,6 +44,11 @@ type StoreBanner = {
   subtitle: string | null;
   linkUrl: string | null;
   enabled: boolean;
+  metadata?: {
+    imageObjectFit?: 'cover' | 'contain' | string;
+    imageObjectPosition?: string;
+    imageZoom?: number;
+  } | null;
 };
 
 const COLOR_FIELDS: Array<{ key: keyof StoreThemeColors; labelAr: string; labelEn: string }> = [
@@ -182,6 +187,23 @@ export function StoreVisualEditor() {
     const publicProducts: PublicProduct[] = products.map((p) => {
         const price = Number(p.unitPrice) || 0;
         const compare = Number(p.metadata?.compareAtPrice) || 0;
+        const zoom = Number(p.metadata?.imageZoom);
+        const media = p.images
+          .map((m) => ({
+            id: m.id,
+            kind: m.kind,
+            url: mediaUrls[m.id] || '',
+          }))
+          .filter((m) => m.url);
+        const colors = (p.metadata?.colors || [])
+          .filter((c) => c?.name)
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            hex: c.hex || '#000000',
+            imageId: c.imageId || null,
+            imageUrl: c.imageId ? media.find((m) => m.id === c.imageId)?.url ?? null : null,
+          }));
         return {
           id: p.id,
           name: p.name,
@@ -190,28 +212,37 @@ export function StoreVisualEditor() {
           compareAtPrice: compare > price ? compare : null,
           currency: p.currency || settings.currency || 'IQD',
           quantity: inStock(p) ? p.quantity : 0,
+          hideQuantity: Boolean(p.metadata?.hideQuantity),
+          minOrderQuantity: Math.min(
+            9999,
+            Math.max(1, Math.floor(Number(p.metadata?.minOrderQuantity) || 1) || 1),
+          ),
           inStock: inStock(p),
           isActive: p.isActive !== false,
           categoryId: p.categoryId ?? null,
           categoryName: categories.find((c) => c.id === p.categoryId)?.name ?? null,
-          media: p.images
-            .map((m) => ({
-              id: m.id,
-              kind: m.kind,
-              url: mediaUrls[m.id] || '',
-            }))
-            .filter((m) => m.url),
+          imageObjectFit: p.metadata?.imageObjectFit === 'contain' ? 'contain' : 'cover',
+          imageObjectPosition: p.metadata?.imageObjectPosition || 'center',
+          imageZoom: Number.isFinite(zoom) ? Math.min(200, Math.max(50, Math.round(zoom))) : 100,
+          colors,
+          media,
         };
       });
     const publicBanners: PublicBanner[] = banners
       .filter((b) => b.enabled)
-      .map((b) => ({
-        id: b.id,
-        title: b.title,
-        subtitle: b.subtitle,
-        linkUrl: b.linkUrl,
-        imageUrl: bannerUrls[b.id] || '',
-      }))
+      .map((b): PublicBanner => {
+        const zoom = Number(b.metadata?.imageZoom);
+        return {
+          id: b.id,
+          title: b.title,
+          subtitle: b.subtitle,
+          linkUrl: b.linkUrl,
+          imageUrl: bannerUrls[b.id] || '',
+          imageObjectFit: b.metadata?.imageObjectFit === 'contain' ? 'contain' : 'cover',
+          imageObjectPosition: b.metadata?.imageObjectPosition || 'center',
+          imageZoom: Number.isFinite(zoom) ? Math.min(200, Math.max(50, Math.round(zoom))) : 100,
+        };
+      })
       .filter((b) => b.imageUrl);
     return {
       settings: {
@@ -248,6 +279,33 @@ export function StoreVisualEditor() {
     descPlaceholder: t('store.descPlaceholder'),
     priceIqd: t('store.priceIqd'),
     quantity: t('store.quantity'),
+    hideQuantity: t('store.hideQuantity'),
+    minOrderQuantity: t('store.minOrderQuantity'),
+    minOrderQuantityHint: t('store.minOrderQuantityHint'),
+    colorsTitle: t('store.colorsTitle'),
+    colorsHint: t('store.colorsHint'),
+    colorsNeedImages: t('store.colorsNeedImages'),
+    addColor: t('store.addColor'),
+    colorName: t('store.colorName'),
+    colorSwatch: t('store.colorSwatch'),
+    colorImage: t('store.colorImage'),
+    colorImageOption: t('store.colorImageOption'),
+    loadStoreColors: t('store.loadStoreColors'),
+    applyColorsToProducts: t('store.applyColorsToProducts'),
+    applyColorsTitle: t('store.applyColorsTitle'),
+    applyColorsDesc: t('store.applyColorsDesc'),
+    applyColorsAll: t('store.applyColorsAll'),
+    applyColorsPick: t('store.applyColorsPick'),
+    applyColorsSelectAll: t('store.applyColorsSelectAll'),
+    applyColorsLinkByPosition: t('store.applyColorsLinkByPosition'),
+    applyColorsSavePalette: t('store.applyColorsSavePalette'),
+    applyColorsSubmit: t('store.applyColorsSubmit'),
+    applyColorsClose: t('store.applyColorsClose'),
+    applyColorsNeedColors: t('store.applyColorsNeedColors'),
+    applyColorsNeedProducts: t('store.applyColorsNeedProducts'),
+    applyColorsDone: t('store.applyColorsDone'),
+    applyColorsNoOther: t('store.applyColorsNoOther'),
+    applyColorsEmpty: t('store.applyColorsEmpty'),
     category: t('store.category'),
     noCategory: t('store.noCategory'),
     markOut: t('store.markOut'),
@@ -255,6 +313,18 @@ export function StoreVisualEditor() {
     mediaHint: t('store.mediaHint'),
     save: t('store.save'),
     saving: t('store.saving'),
+    imageFitTitle: t('store.imageFitTitle'),
+    imageFitHint: t('store.imageFitHint'),
+    imageFitMode: t('store.imageFitMode'),
+    imageFitCover: t('store.imageFitCover'),
+    imageFitContain: t('store.imageFitContain'),
+    imageFitPosition: t('store.imageFitPosition'),
+    imagePosCenter: t('store.imagePosCenter'),
+    imagePosTop: t('store.imagePosTop'),
+    imagePosBottom: t('store.imagePosBottom'),
+    imagePosLeft: t('store.imagePosLeft'),
+    imagePosRight: t('store.imagePosRight'),
+    imageFitZoom: t('store.imageFitZoom'),
   };
 
   async function saveCategory(event: FormEvent<HTMLFormElement>) {
@@ -297,9 +367,26 @@ export function StoreVisualEditor() {
     fd.append('file', file);
     fd.append('title', String(form.get('title') || ''));
     fd.append('subtitle', String(form.get('subtitle') || ''));
+    fd.append('imageObjectFit', String(form.get('imageObjectFit') || 'cover'));
+    fd.append('imageObjectPosition', String(form.get('imageObjectPosition') || 'center'));
+    fd.append('imageZoom', String(form.get('imageZoom') || '100'));
     await apiUpload('/store/banners', fd);
     event.currentTarget.reset();
     setBannerDialogOpen(false);
+    await load();
+  }
+
+  async function saveBannerFit(bannerId: string, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    await api(`/store/banners/${bannerId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        imageObjectFit: String(form.get('imageObjectFit') || 'cover'),
+        imageObjectPosition: String(form.get('imageObjectPosition') || 'center'),
+        imageZoom: Math.min(200, Math.max(50, Number(form.get('imageZoom') || 100) || 100)),
+      }),
+    });
     await load();
   }
 
@@ -496,6 +583,7 @@ export function StoreVisualEditor() {
         mediaUrls={mediaUrls}
         labels={editorLabels}
         defaultCategoryId={defaultCategoryId}
+        allProducts={products}
         onOpenChange={(open) => {
           setProductOpen(open);
           if (!open) {
@@ -542,43 +630,120 @@ export function StoreVisualEditor() {
       </Dialog>
 
       <Dialog open={bannerDialogOpen} onOpenChange={setBannerDialogOpen}>
-        <DialogContent className="max-w-lg" dir="rtl">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader className="text-right sm:text-right">
             <DialogTitle>{t('store.banners')}</DialogTitle>
             <DialogDescription className="text-right">{t('store.bannersDesc')}</DialogDescription>
           </DialogHeader>
-          <form className="grid gap-3" onSubmit={uploadBanner}>
+          <form className="grid gap-3" onSubmit={(e) => void uploadBanner(e)}>
             <Input name="title" placeholder={t('store.bannerTitle')} />
             <Input name="subtitle" placeholder={t('store.bannerSubtitle')} />
             <Input name="file" type="file" accept="image/*" required />
+            <div className="space-y-2 rounded-xl border border-dashed p-3">
+              <p className="text-sm font-medium">{t('store.bannerImageFitTitle')}</p>
+              <p className="text-xs text-muted-foreground">{t('store.bannerImageFitHint')}</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <select
+                  name="imageObjectFit"
+                  defaultValue="cover"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="cover">{t('store.imageFitCover')}</option>
+                  <option value="contain">{t('store.imageFitContain')}</option>
+                </select>
+                <select
+                  name="imageObjectPosition"
+                  defaultValue="center"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="center">{t('store.imagePosCenter')}</option>
+                  <option value="top">{t('store.imagePosTop')}</option>
+                  <option value="bottom">{t('store.imagePosBottom')}</option>
+                  <option value="left">{t('store.imagePosLeft')}</option>
+                  <option value="right">{t('store.imagePosRight')}</option>
+                </select>
+                <Input name="imageZoom" type="number" min={50} max={200} step={5} dir="ltr" defaultValue={100} />
+              </div>
+            </div>
             <Button type="submit">{t('store.addBanner')}</Button>
           </form>
-          <div className="grid gap-2">
-            {banners.map((banner) => (
-              <div key={banner.id} className="flex items-center gap-3 rounded-xl border p-2">
-                <div className="h-14 w-20 overflow-hidden rounded-lg bg-muted">
-                  {bannerUrls[banner.id] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={bannerUrls[banner.id]} alt="" className="h-full w-full object-cover" />
-                  ) : null}
+          <div className="grid gap-3">
+            {banners.map((banner) => {
+              const zoom = Number(banner.metadata?.imageZoom);
+              return (
+                <div key={banner.id} className="space-y-2 rounded-xl border p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-14 w-20 overflow-hidden rounded-lg bg-muted">
+                      {bannerUrls[banner.id] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={bannerUrls[banner.id]}
+                          alt=""
+                          className="h-full w-full"
+                          style={{
+                            objectFit: banner.metadata?.imageObjectFit === 'contain' ? 'contain' : 'cover',
+                            objectPosition: banner.metadata?.imageObjectPosition || 'center',
+                            transform:
+                              Number.isFinite(zoom) && zoom !== 100
+                                ? `scale(${Math.min(200, Math.max(50, zoom)) / 100})`
+                                : undefined,
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{banner.title || '—'}</p>
+                      <p className="truncate text-xs text-muted-foreground">{banner.subtitle}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={async () => {
+                        await api(`/store/banners/${banner.id}`, { method: 'DELETE' });
+                        await load();
+                      }}
+                    >
+                      {t('common.delete')}
+                    </Button>
+                  </div>
+                  <form className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={(e) => void saveBannerFit(banner.id, e)}>
+                    <select
+                      name="imageObjectFit"
+                      defaultValue={banner.metadata?.imageObjectFit === 'contain' ? 'contain' : 'cover'}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      <option value="cover">{t('store.imageFitCover')}</option>
+                      <option value="contain">{t('store.imageFitContain')}</option>
+                    </select>
+                    <select
+                      name="imageObjectPosition"
+                      defaultValue={banner.metadata?.imageObjectPosition || 'center'}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      <option value="center">{t('store.imagePosCenter')}</option>
+                      <option value="top">{t('store.imagePosTop')}</option>
+                      <option value="bottom">{t('store.imagePosBottom')}</option>
+                      <option value="left">{t('store.imagePosLeft')}</option>
+                      <option value="right">{t('store.imagePosRight')}</option>
+                    </select>
+                    <Input
+                      name="imageZoom"
+                      type="number"
+                      min={50}
+                      max={200}
+                      step={5}
+                      dir="ltr"
+                      className="h-9 text-xs"
+                      defaultValue={Number.isFinite(zoom) ? Math.min(200, Math.max(50, Math.round(zoom))) : 100}
+                    />
+                    <Button type="submit" size="sm" variant="outline">
+                      {t('store.saveBannerFit')}
+                    </Button>
+                  </form>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{banner.title || '—'}</p>
-                  <p className="truncate text-xs text-muted-foreground">{banner.subtitle}</p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  onClick={async () => {
-                    await api(`/store/banners/${banner.id}`, { method: 'DELETE' });
-                    await load();
-                  }}
-                >
-                  {t('common.delete')}
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>

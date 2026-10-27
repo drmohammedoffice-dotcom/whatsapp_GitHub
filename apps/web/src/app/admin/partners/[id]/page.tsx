@@ -13,15 +13,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
+  assignAdminTeamReferral,
   deleteAdminPartner,
   fetchAdminPartner,
+  fetchAdminPartnerDirectory,
   fetchAdminPayoutImageUrl,
   payAdminPayout,
   resetAdminPartnerPassword,
   setAdminPartnerPassword,
   updateAdminPartnerEmail,
+  updateAdminPartnerReferralCode,
   setAdminPayoutStatus,
   type AdminPartnerDetail,
+  type AdminSalesPartnerRow,
 } from '@/lib/admin-api';
 import { formatIqd } from '@/lib/partner-api';
 
@@ -73,6 +77,9 @@ export default function AdminPartnerDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [partners, setPartners] = useState<AdminSalesPartnerRow[]>([]);
+  const [transferCode, setTransferCode] = useState<Record<string, string>>({});
   const [receiptFiles, setReceiptFiles] = useState<Record<string, File | undefined>>({});
 
   const load = useCallback(async () => {
@@ -80,10 +87,15 @@ export default function AdminPartnerDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const next = await fetchAdminPartner(params.id);
+      const [next, directory] = await Promise.all([
+        fetchAdminPartner(params.id),
+        fetchAdminPartnerDirectory().catch(() => [] as AdminSalesPartnerRow[]),
+      ]);
       setData(next);
       setPassword(next.partner.currentPassword ?? '');
       setEmail(next.partner.email);
+      setReferralCode(next.partner.referralCode ?? '');
+      setPartners(directory.filter((p) => p.status === 'APPROVED' || p.status === 'SUSPENDED'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
@@ -177,6 +189,36 @@ export default function AdminPartnerDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-4 border-0 shadow-card">
+        <CardContent className="space-y-3 pt-6">
+          <p className="font-medium">كود الإحالة</p>
+          <p className="text-xs text-muted-foreground">غيّر كود الشريك؛ سيُحدَّث تلقائياً على مشتركي هذا الشريك.</p>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              dir="ltr"
+              className="max-w-xs font-mono uppercase"
+              value={referralCode}
+              onChange={(event) => setReferralCode(event.target.value.toUpperCase())}
+              placeholder="REFCODE"
+            />
+            <Button
+              type="button"
+              onClick={() =>
+                void updateAdminPartnerReferralCode(partner.id, referralCode)
+                  .then((result) => {
+                    setNotice(`تم حفظ كود الإحالة: ${result.referralCode}`);
+                    setReferralCode(result.referralCode);
+                    return load();
+                  })
+                  .catch((err) => setError(err instanceof Error ? err.message : 'تعذر حفظ كود الإحالة'))
+              }
+            >
+              حفظ كود الإحالة
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="mt-4 border-0 shadow-card">
         <CardContent className="space-y-3 pt-6">
@@ -344,18 +386,68 @@ export default function AdminPartnerDetailPage() {
           <TableHeader>
             <TableRow>
               <TableHead>{t('common.workspace')}</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>كود الإحالة</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>نقل لشريك آخر</TableHead>
               <TableHead>Date</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.referrals.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>{row.teamName}</TableCell>
-                <TableCell>{row.subscriptionStatus ?? '—'}</TableCell>
-                <TableCell>{new Date(row.createdAt).toLocaleString()}</TableCell>
+            {data.referrals.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  لا يوجد مشتركون محالون
+                </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              data.referrals.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.teamName}</TableCell>
+                  <TableCell dir="ltr">{row.email ?? '—'}</TableCell>
+                  <TableCell className="font-mono text-sm" dir="ltr">
+                    {row.codeUsed || partner.referralCode || '—'}
+                  </TableCell>
+                  <TableCell>{row.subscriptionStatus ?? '—'}</TableCell>
+                  <TableCell>
+                    <div className="flex min-w-[220px] flex-wrap gap-2">
+                      <select
+                        className="h-9 rounded-md border bg-background px-2 text-sm"
+                        value={transferCode[row.teamId] ?? ''}
+                        onChange={(event) =>
+                          setTransferCode((prev) => ({ ...prev, [row.teamId]: event.target.value }))
+                        }
+                      >
+                        <option value="">اختر شريكاً</option>
+                        {partners
+                          .filter((p) => p.id !== partner.id && p.referralCode)
+                          .map((p) => (
+                            <option key={p.id} value={p.referralCode!}>
+                              {p.referralCode} — {p.name}
+                            </option>
+                          ))}
+                      </select>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!transferCode[row.teamId]}
+                        onClick={() =>
+                          void assignAdminTeamReferral(row.teamId, transferCode[row.teamId])
+                            .then(() => {
+                              setNotice(`تم نقل ${row.teamName} إلى ${transferCode[row.teamId]}`);
+                              return load();
+                            })
+                            .catch((err) => setError(err instanceof Error ? err.message : 'تعذر نقل الإحالة'))
+                        }
+                      >
+                        نقل
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell>{new Date(row.createdAt).toLocaleString()}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

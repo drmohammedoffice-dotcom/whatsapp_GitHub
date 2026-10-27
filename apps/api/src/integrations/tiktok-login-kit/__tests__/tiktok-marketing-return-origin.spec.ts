@@ -1,4 +1,4 @@
-﻿import { ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { TikTokMarketingOAuthService } from '../tiktok-marketing-oauth.service';
 
 describe('TikTok Marketing OAuth return origin', () => {
@@ -22,14 +22,14 @@ describe('TikTok Marketing OAuth return origin', () => {
 
   it('keeps the browser origin when it is allowed by CORS', () => {
     const svc = makeService(
-      'https://www.chatloora.com,https://www.chatloora.com',
-      'https://www.chatloora.com',
+      'https://almutamayiziq.com,https://www.almutamayiziq.com',
+      'https://almutamayiziq.com',
     );
-    expect(svc.resolveWebBase('https://www.chatloora.com')).toBe('https://www.chatloora.com');
+    expect(svc.resolveWebBase('https://www.almutamayiziq.com')).toBe('https://www.almutamayiziq.com');
   });
 
   it('falls back to WEB_PUBLIC_URL when origin is not allowed', () => {
-    const svc = makeService('https://www.chatloora.com', 'https://www.chatloora.com');
-    expect(svc.resolveWebBase('https://evil.example')).toBe('https://www.chatloora.com');
+    const svc = makeService('https://almutamayiziq.com', 'https://almutamayiziq.com');
+    expect(svc.resolveWebBase('https://evil.example')).toBe('https://almutamayiziq.com');
   });
 });

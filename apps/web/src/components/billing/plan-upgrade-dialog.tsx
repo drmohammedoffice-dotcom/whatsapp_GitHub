@@ -28,6 +28,9 @@ const TITLE_KEYS: Record<PlanFeature, string> = {
   team_members: 'billing.upgradeLimitTitle',
   voice_ai: 'billing.upgradeAiTitle',
   creative_studio: 'billing.upgradeAiTitle',
+  instant_forms: 'billing.upgradeLockedTitle',
+  online_store: 'billing.upgradeLockedTitle',
+  ai_campaign_review: 'billing.upgradeAiTitle',
 };
 
 const BODY_KEYS: Record<PlanFeature, string> = {
@@ -45,6 +48,9 @@ const BODY_KEYS: Record<PlanFeature, string> = {
   team_members: 'billing.upgradeLimitBody',
   voice_ai: 'billing.upgradeAiBody',
   creative_studio: 'billing.upgradeAiBody',
+  instant_forms: 'billing.upgradeLockedBody',
+  online_store: 'billing.upgradeLockedBody',
+  ai_campaign_review: 'billing.upgradeAiBody',
 };
 
 export function PlanUpgradeDialog({ feature, title, description }: PlanUpgradeDialogProps) {

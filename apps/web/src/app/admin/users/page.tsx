@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CreditCard, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CreditCard, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
 import { SubscriptionManageDialog } from '@/components/admin/subscription-manage-dialog';
 import { SubscriptionExpiryCell } from '@/components/admin/subscription-expiry-cell';
@@ -52,13 +52,17 @@ export default function AdminUsersPage() {
     subscription: AdminSubscriptionRow | null;
   } | null>(null);
 
-  const load = useCallback(async (search?: string) => {
+  const PAGE_SIZE = 100;
+  const [skip, setSkip] = useState(0);
+
+  const load = useCallback(async (search?: string, pageSkip = 0) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAdminUsers({ q: search });
+      const data = await fetchAdminUsers({ q: search, skip: pageSkip, take: PAGE_SIZE });
       setUsers(data.users);
       setTotal(data.total);
+      setSkip(pageSkip);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
@@ -67,7 +71,7 @@ export default function AdminUsersPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    void load('', 0);
     fetchAdminPlans().then(setPlans).catch(console.error);
   }, [load]);
 
@@ -82,7 +86,7 @@ export default function AdminUsersPage() {
     }
     try {
       await deleteAdminUser(user.id);
-      await load(q);
+      await load(q, skip);
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Delete failed');
     }
@@ -92,7 +96,7 @@ export default function AdminUsersPage() {
     try {
       if (user.suspendedAt) await activateAdminUser(user.id);
       else await suspendAdminUser(user.id);
-      await load(q);
+      await load(q, skip);
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Request failed');
     }
@@ -125,10 +129,10 @@ export default function AdminUsersPage() {
             placeholder="Search by name or email..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void load(q)}
+            onKeyDown={(e) => e.key === 'Enter' && void load(q, 0)}
           />
         </div>
-        <Button variant="outline" onClick={() => void load(q)}>
+        <Button variant="outline" onClick={() => void load(q, 0)}>
           Search
         </Button>
         <Button
@@ -223,7 +227,37 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      <UserFormDialog open={formOpen} onOpenChange={setFormOpen} user={editingUser} plans={plans} onSaved={() => void load(q)} />
+      {!loading && total > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <p>
+            عرض {skip + 1}–{Math.min(skip + users.length, total)} من أصل {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={skip <= 0 || loading}
+              onClick={() => void load(q, Math.max(0, skip - PAGE_SIZE))}
+            >
+              <ChevronRight className="me-1 h-4 w-4" />
+              السابق
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={skip + users.length >= total || loading}
+              onClick={() => void load(q, skip + PAGE_SIZE)}
+            >
+              التالي
+              <ChevronLeft className="ms-1 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <UserFormDialog open={formOpen} onOpenChange={setFormOpen} user={editingUser} plans={plans} onSaved={() => void load(q, skip)} />
 
       {subTarget && (
         <SubscriptionManageDialog
@@ -239,7 +273,7 @@ export default function AdminUsersPage() {
             if (updated) {
               setSubTarget((prev) => (prev ? { ...prev, subscription: updated } : prev));
             }
-            void load(q);
+            void load(q, skip);
           }}
         />
       )}

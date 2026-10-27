@@ -321,7 +321,6 @@ export const tiktokIntegrationNavItems = [
   { href: '/tiktok/integration/forms', labelKey: 'tiktokIntegration.nav.forms' },
   { href: '/tiktok/integration/forms/orders', labelKey: 'tiktokIntegration.nav.orders' },
   { href: '/ai/store', labelKey: 'tiktokIntegration.nav.store' },
-  { href: '/tiktok/integration/phones', labelKey: 'tiktokIntegration.nav.trackingPhones' },
 ] as const;
 
 export type TikTokContactDebugRow = {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Align the three live plans with WhatsApp, pixel, and description limits. */
+/** Align the three live plans with prices, WhatsApp, pixels, and feature flags. */
 const fs = require('fs');
 const path = require('path');
 const { createRequire } = require('module');
@@ -21,22 +21,58 @@ loadEnv(path.join(root, 'apps', 'api', '.env'));
 
 const PACKS = [
   {
+    priceCents: 1500,
+    yearlyPriceCents: 14400,
+    isRecommended: false,
     wa: 1,
     pixels: 3,
-    descriptionAr: 'رقم واتساب واحد و3 بكسلات، مع إنشاء حملات تيك توك ودعم فني.',
-    descriptionEn: 'One WhatsApp number and 3 pixels, with professional TikTok campaigns and support.',
+    descriptionAr: 'رقم واتساب متصل واحد و3 بكسلات، مع ربط الحساب الإعلاني وإنشاء الحملات.',
+    descriptionEn: 'One connected WhatsApp number and 3 pixels, with ad account linking and campaign creation.',
+    features: {
+      instant_forms_enabled: false,
+      online_store_enabled: false,
+      ai_campaign_review_enabled: false,
+      ai_reply_enabled: false,
+      creative_studio_enabled: false,
+      voice_ai_enabled: false,
+      whatsapp_api_enabled: false,
+    },
   },
   {
+    priceCents: 2500,
+    yearlyPriceCents: 24000,
+    isRecommended: false,
     wa: 3,
-    pixels: 15,
-    descriptionAr: '3 أرقام واتساب و15 بكسل، مع إنشاء الإعلانات وتقييمها بالذكاء الاصطناعي.',
-    descriptionEn: '3 WhatsApp numbers and 15 pixels, with ad creation and AI campaign review.',
+    pixels: 10,
+    descriptionAr: '3 أرقام واتساب أعمال و10 بكسلات، مع إنشاء الإعلانات والاستمارات الفورية.',
+    descriptionEn: '3 WhatsApp Business numbers and 10 pixels, with ads and instant product forms.',
+    features: {
+      instant_forms_enabled: true,
+      online_store_enabled: false,
+      ai_campaign_review_enabled: false,
+      ai_reply_enabled: false,
+      creative_studio_enabled: false,
+      voice_ai_enabled: false,
+      whatsapp_api_enabled: true,
+    },
   },
   {
-    wa: 10,
-    pixels: -1,
-    descriptionAr: '10 أرقام واتساب وبكسلات بلا حد، مع إنشاء الإعلانات وتقييمها بالذكاء الاصطناعي.',
-    descriptionEn: '10 WhatsApp numbers and unlimited pixels, with ad creation and AI campaign review.',
+    priceCents: 3500,
+    yearlyPriceCents: 33600,
+    isRecommended: true,
+    wa: 5,
+    pixels: 20,
+    descriptionAr: '5 أرقام واتساب و20 بكسل، مع تحليل الحملات بالذكاء الاصطناعي والمتجر والاستمارات ودعم فوري.',
+    descriptionEn: '5 WhatsApp numbers and 20 pixels, with AI campaign analytics, store, forms, and priority support.',
+    features: {
+      instant_forms_enabled: true,
+      online_store_enabled: true,
+      ai_campaign_review_enabled: true,
+      ai_reply_enabled: true,
+      creative_studio_enabled: true,
+      voice_ai_enabled: true,
+      whatsapp_api_enabled: true,
+    },
   },
 ];
 
@@ -48,10 +84,55 @@ function tierOf(slug, index, count) {
   return count <= 3 ? index : null;
 }
 
-const KEYS = ['maximum_whatsapp_numbers', 'maximum_tiktok_whatsapp_numbers', 'maximum_tiktok_pixels', 'maximum_pixels'];
+const LIMIT_KEYS = [
+  'maximum_whatsapp_numbers',
+  'maximum_tiktok_whatsapp_numbers',
+  'maximum_tiktok_pixels',
+  'maximum_pixels',
+];
+
+const FEATURE_DEFS = [
+  {
+    key: 'instant_forms_enabled',
+    category: 'tiktok',
+    valueType: 'BOOLEAN',
+    nameAr: 'الاستمارات الفورية',
+    nameEn: 'Instant forms',
+    descriptionAr: 'إنشاء صفحات استمارة فورية للمنتجات',
+    descriptionEn: 'Create instant form landing pages for products',
+    sortOrder: 112,
+  },
+  {
+    key: 'online_store_enabled',
+    category: 'other',
+    valueType: 'BOOLEAN',
+    nameAr: 'المتجر الإلكتروني',
+    nameEn: 'Online store',
+    descriptionAr: 'تفعيل المتجر الإلكتروني داخل المنصة',
+    descriptionEn: 'Enable the in-platform online store',
+    sortOrder: 113,
+  },
+  {
+    key: 'ai_campaign_review_enabled',
+    category: 'ai',
+    valueType: 'BOOLEAN',
+    nameAr: 'تحليل الحملات بالذكاء الاصطناعي',
+    nameEn: 'AI campaign analytics',
+    descriptionAr: 'تحليل نتائج الحملات الإعلانية بالذكاء الاصطناعي',
+    descriptionEn: 'AI-powered campaign performance analytics',
+    sortOrder: 114,
+  },
+];
 
 async function main() {
   const prisma = new PrismaClient();
+  for (const feature of FEATURE_DEFS) {
+    await prisma.featureDefinition.upsert({
+      where: { key: feature.key },
+      update: feature,
+      create: feature,
+    });
+  }
   const plans = await prisma.subscriptionPlan.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: 'asc' }, { priceCents: 'asc' }],
@@ -63,12 +144,16 @@ async function main() {
     await prisma.subscriptionPlan.update({
       where: { id: plan.id },
       data: {
+        priceCents: pack.priceCents,
+        yearlyPriceCents: pack.yearlyPriceCents,
+        isRecommended: pack.isRecommended,
         description: pack.descriptionEn,
         descriptionAr: pack.descriptionAr,
         descriptionEn: pack.descriptionEn,
+        sortOrder: tier + 1,
       },
     });
-    for (const featureKey of KEYS) {
+    for (const featureKey of LIMIT_KEYS) {
       const limitValue = featureKey.includes('pixel') ? pack.pixels : pack.wa;
       await prisma.planEntitlement.upsert({
         where: { planId_featureKey: { planId: plan.id, featureKey } },
@@ -76,7 +161,16 @@ async function main() {
         create: { planId: plan.id, featureKey, enabled: true, limitValue },
       });
     }
-    console.log(`plan ${plan.slug} wa=${pack.wa} pixels=${pack.pixels}`);
+    for (const [featureKey, enabled] of Object.entries(pack.features)) {
+      await prisma.planEntitlement.upsert({
+        where: { planId_featureKey: { planId: plan.id, featureKey } },
+        update: { enabled, limitValue: null },
+        create: { planId: plan.id, featureKey, enabled, limitValue: null },
+      });
+    }
+    console.log(
+      `plan ${plan.slug} $${pack.priceCents / 100} wa=${pack.wa} pixels=${pack.pixels} recommended=${pack.isRecommended}`,
+    );
   }
   await prisma.$disconnect();
   console.log('PLAN_PACKAGES_OK');

@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -20,6 +20,7 @@ import {
   SalesReferralSource,
   SubscriptionStatus,
 } from '@watsapp/database';
+import { isEmployeeRole, resolveAdminRoles } from '../admin/staff-roles';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from '../security/password.service';
 import { EncryptionService } from '../security/encryption.service';
@@ -47,9 +48,9 @@ const SUCCESS_PARTNER_IQD: Record<string, number> = {
 /** Fallback by plan monthly USD cents when slug is custom. */
 const SUCCESS_PARTNER_IQD_BY_USD_CENTS: Record<number, number> = {
   1500: 5000,
-  2500: 5000,
+  2500: 10000,
   2900: 5000,
-  3500: 10000,
+  3500: 15000,
   4900: 15000,
   7900: 10000,
   14900: 15000,
@@ -320,6 +321,216 @@ export class SalesPartnersService {
     return { deleted: true };
   }
 
+  /** موظفون نشطون لم يُفعَّلوا كشركاء مبيعات بعد. */
+  async listEligibleStaffForPartner() {
+    const staffRows = await this.prisma.adminUser.findMany({
+      where: { isActive: true },
+      include: { user: { select: { id: true, email: true, name: true, phone: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const partnerUserIds = new Set(
+      (
+        await this.prisma.salesPartner.findMany({
+          where: { userId: { not: null }, status: SalesPartnerStatus.APPROVED },
+          select: { userId: true },
+        })
+      )
+        .map((p) => p.userId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const partnerEmails = new Set(
+      (
+        await this.prisma.salesPartner.findMany({
+          where: { status: SalesPartnerStatus.APPROVED },
+          select: { email: true },
+        })
+      ).map((p) => p.email.toLowerCase()),
+    );
+
+    return staffRows
+      .filter((row) => {
+        const roles = resolveAdminRoles(row.role, row.roles);
+        if (!roles.some((r) => isEmployeeRole(r))) return false;
+        if (partnerUserIds.has(row.userId)) return false;
+        if (partnerEmails.has(row.user.email.toLowerCase())) return false;
+        return true;
+      })
+      .map((row) => ({
+        id: row.id,
+        userId: row.userId,
+        role: row.role,
+        roles: resolveAdminRoles(row.role, row.roles),
+        residence: row.residence,
+        email: row.user.email,
+        name: row.user.name,
+        phone: row.user.phone,
+      }));
+  }
+
+  /**
+   * أدمن: ترقية موظف موجود إلى شريك مبيعات معتمد + كود إحالة.
+   * يستخدم نفس حساب المستخدم (userId) لربط عمولات إنشاء الإيميلات لاحقاً.
+   */
+  async createFromStaff(staffAdminUserId: string, reviewedByAdminId: string) {
+    const staff = await this.prisma.adminUser.findUnique({
+      where: { id: staffAdminUserId },
+      include: { user: true },
+    });
+    if (!staff || !staff.isActive) throw new NotFoundException('الموظف غير موجود أو غير نشط');
+    const roles = resolveAdminRoles(staff.role, staff.roles);
+    if (!roles.some((r) => isEmployeeRole(r))) {
+      throw new BadRequestException('يمكن إضافة شركاء فقط من حسابات الموظفين');
+    }
+
+    const email = staff.user.email.trim().toLowerCase();
+    const existingByUser = await this.prisma.salesPartner.findUnique({ where: { userId: staff.userId } });
+    const existingByEmail = existingByUser
+      ? null
+      : await this.prisma.salesPartner.findUnique({ where: { email } });
+    const existing = existingByUser ?? existingByEmail;
+
+    if (existing?.status === SalesPartnerStatus.APPROVED && existing.referralCode) {
+      const linked =
+        existing.userId === staff.userId
+          ? existing
+          : await this.prisma.salesPartner.update({
+              where: { id: existing.id },
+              data: { userId: staff.userId },
+            });
+      return {
+        partner: linked,
+        temporaryPassword: null as string | null,
+        referralLink: this.referralLink(linked.referralCode!),
+        alreadyPartner: true,
+      };
+    }
+
+    let referralCode = existing?.referralCode ?? randomCode(staff.user.name);
+    while (
+      await this.prisma.salesPartner.findFirst({
+        where: existing
+          ? { referralCode, NOT: { id: existing.id } }
+          : { referralCode },
+      })
+    ) {
+      referralCode = randomCode(staff.user.name);
+    }
+
+    const temporaryPassword = randomPassword();
+    const passwordHash = await this.passwords.hash(temporaryPassword);
+    const passwordEncrypted = this.encryption.encryptJson({ password: temporaryPassword });
+    const baseData = {
+      name: staff.user.name.trim() || email,
+      email,
+      phone: (staff.user.phone?.trim() || '07000000000').slice(0, 32),
+      country: (staff.residence?.trim() || 'Iraq').slice(0, 64),
+      reason: 'موظف جات لورا — ترقية من لوحة الأدمن',
+      userId: staff.userId,
+      status: SalesPartnerStatus.APPROVED,
+      referralCode,
+      passwordHash,
+      passwordEncrypted,
+      reviewedAt: new Date(),
+      reviewedBy: reviewedByAdminId,
+      notes: existing?.notes ?? null,
+    };
+
+    const partner = existing
+      ? await this.prisma.salesPartner.update({ where: { id: existing.id }, data: baseData })
+      : await this.prisma.salesPartner.create({ data: baseData });
+
+    return {
+      partner,
+      temporaryPassword,
+      referralLink: this.referralLink(referralCode),
+      alreadyPartner: false,
+    };
+  }
+
+  /**
+   * أدمن: إنشاء شريك مبيعات جديد مباشرة (معتمد + كود إحالة + رمز دخول).
+   */
+  async createManual(
+    reviewedByAdminId: string,
+    input: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      country?: string;
+      password?: string;
+    },
+  ) {
+    const name = (input.name ?? '').trim();
+    const email = (input.email ?? '').trim().toLowerCase();
+    const phone = (input.phone ?? '').trim() || '07000000000';
+    const country = (input.country ?? '').trim() || 'Iraq';
+    if (name.length < 2) throw new BadRequestException('أدخل اسم الشريك');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new BadRequestException('أدخل بريداً إلكترونياً صحيحاً');
+    }
+
+    const existing = await this.prisma.salesPartner.findUnique({ where: { email } });
+    if (existing?.status === SalesPartnerStatus.APPROVED && existing.referralCode) {
+      throw new ConflictException('يوجد شريك معتمد بهذا البريد مسبقاً');
+    }
+
+    let referralCode = existing?.referralCode ?? randomCode(name);
+    while (
+      await this.prisma.salesPartner.findFirst({
+        where: existing ? { referralCode, NOT: { id: existing.id } } : { referralCode },
+      })
+    ) {
+      referralCode = randomCode(name);
+    }
+
+    const temporaryPassword =
+      input.password && input.password.trim().length >= 8 ? input.password.trim() : randomPassword();
+    const passwordHash = await this.passwords.hash(temporaryPassword);
+    const passwordEncrypted = this.encryption.encryptJson({ password: temporaryPassword });
+    const data = {
+      name,
+      email,
+      phone: phone.slice(0, 32),
+      country: country.slice(0, 64),
+      reason: 'إضافة يدوية من لوحة الأدمن',
+      status: SalesPartnerStatus.APPROVED,
+      referralCode,
+      passwordHash,
+      passwordEncrypted,
+      reviewedAt: new Date(),
+      reviewedBy: reviewedByAdminId,
+    };
+
+    const partner = existing
+      ? await this.prisma.salesPartner.update({ where: { id: existing.id }, data })
+      : await this.prisma.salesPartner.create({ data });
+
+    return {
+      partner,
+      temporaryPassword,
+      referralLink: this.referralLink(referralCode),
+    };
+  }
+
+  /** كود إحالة الشريك المرتبط بموظف الأدمن الذي أنشأ الصندوق. */
+  async findApprovedReferralCodeByAdminUserId(adminUserId?: string | null): Promise<string | null> {
+    if (!adminUserId) return null;
+    const admin = await this.prisma.adminUser.findUnique({
+      where: { id: adminUserId },
+      select: { userId: true },
+    });
+    if (!admin) return null;
+    const partner = await this.prisma.salesPartner.findFirst({
+      where: {
+        userId: admin.userId,
+        status: SalesPartnerStatus.APPROVED,
+        referralCode: { not: null },
+      },
+      select: { referralCode: true },
+    });
+    return partner?.referralCode ?? null;
+  }
+
   async ensureRules() {
     const plans = await this.prisma.subscriptionPlan.findMany();
     for (const plan of plans) {
@@ -374,6 +585,99 @@ export class SalesPartnersService {
         codeUsed: code,
       },
     });
+  }
+
+  /**
+   * أدمن: تعيين/نقل إحالة مساحة عمل لشريك عبر كود الإحالة.
+   * العمولات السابقة تبقى للشريك القديم؛ العمولات الجديدة تذهب للشريك الجديد.
+   */
+  async assignTeamReferral(teamId: string, rawCode: string | null | undefined) {
+    const team = await this.prisma.team.findUnique({ where: { id: teamId }, select: { id: true, name: true } });
+    if (!team) throw new NotFoundException('Workspace not found');
+
+    const code = (rawCode ?? '').trim().toUpperCase();
+    const existing = await this.prisma.salesReferral.findUnique({
+      where: { teamId },
+      include: { partner: { select: { id: true, name: true, referralCode: true } } },
+    });
+
+    if (!code) {
+      if (!existing) return { cleared: true, referral: null };
+      await this.prisma.salesReferral.delete({ where: { id: existing.id } });
+      return { cleared: true, referral: null };
+    }
+
+    const partner = await this.prisma.salesPartner.findFirst({
+      where: {
+        referralCode: code,
+        status: { in: [SalesPartnerStatus.APPROVED, SalesPartnerStatus.SUSPENDED] },
+      },
+      select: { id: true, name: true, email: true, referralCode: true, status: true },
+    });
+    if (!partner?.referralCode) {
+      throw new BadRequestException('كود الإحالة غير موجود أو الشريك غير مفعّل');
+    }
+
+    const row = existing
+      ? await this.prisma.salesReferral.update({
+          where: { id: existing.id },
+          data: {
+            partnerId: partner.id,
+            codeUsed: partner.referralCode,
+            source: SalesReferralSource.CODE,
+          },
+          include: { partner: { select: { id: true, name: true, email: true, referralCode: true } } },
+        })
+      : await this.prisma.salesReferral.create({
+          data: {
+            partnerId: partner.id,
+            teamId,
+            source: SalesReferralSource.CODE,
+            codeUsed: partner.referralCode,
+          },
+          include: { partner: { select: { id: true, name: true, email: true, referralCode: true } } },
+        });
+
+    return {
+      cleared: false,
+      referral: {
+        id: row.id,
+        teamId: row.teamId,
+        codeUsed: row.codeUsed,
+        partnerId: row.partnerId,
+        partnerName: row.partner.name,
+        partnerEmail: row.partner.email,
+        partnerReferralCode: row.partner.referralCode,
+      },
+    };
+  }
+
+  /** أدمن: تغيير كود الإحالة الخاص بالشريك (فريد). */
+  async updatePartnerReferralCode(partnerId: string, rawCode: string) {
+    const partner = await this.prisma.salesPartner.findUnique({ where: { id: partnerId } });
+    if (!partner) throw new NotFoundException('Partner not found');
+    const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 4 || code.length > 16) {
+      throw new BadRequestException('كود الإحالة يجب أن يكون بين 4 و 16 حرفاً/رقماً');
+    }
+    const clash = await this.prisma.salesPartner.findFirst({
+      where: { referralCode: code, NOT: { id: partnerId } },
+    });
+    if (clash) throw new ConflictException('كود الإحالة مستخدم لشريك آخر');
+    const updated = await this.prisma.salesPartner.update({
+      where: { id: partnerId },
+      data: { referralCode: code },
+    });
+    // حدّث codeUsed للإحالات المرتبطة بهذا الشريك حتى تبقى متسقة.
+    await this.prisma.salesReferral.updateMany({
+      where: { partnerId },
+      data: { codeUsed: code },
+    });
+    return {
+      id: updated.id,
+      referralCode: updated.referralCode,
+      referralLink: this.referralLink(updated.referralCode!),
+    };
   }
 
   /** Resolve fixed IQD commission for a plan (slug first, then USD price, then DB rule). */
@@ -731,9 +1035,11 @@ export class SalesPartnersService {
         const daysLeft = end ? Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000)) : null;
         return {
           id: r.id,
+          teamId: r.teamId,
           teamName: r.team.name,
           email: r.user?.email ?? null,
           source: r.source,
+          codeUsed: r.codeUsed,
           createdAt: r.createdAt,
           subscriptionStatus: live ? 'ACTIVE' : sub ? 'EXPIRED' : 'NONE',
           planName: sub?.plan?.nameAr || sub?.plan?.name || null,
@@ -754,14 +1060,30 @@ export class SalesPartnersService {
     }
   }
 
+  /**
+   * يُحجز الرصيد فقط بعد إكمال رمز البريد (SUBMITTED) أو موافقة الأدمن (APPROVED).
+   * مسودات AWAITING_EMAIL لا تخصم من المتاح حتى لا يُفقد الرصيد عند إلغاء العملية.
+   */
   private async reservedPayoutCents(partnerId: string) {
     const rows = await this.prisma.salesPayoutRequest.findMany({
       where: {
         partnerId,
-        status: { in: [SalesPayoutStatus.AWAITING_EMAIL, SalesPayoutStatus.SUBMITTED, SalesPayoutStatus.APPROVED] },
+        status: { in: [SalesPayoutStatus.SUBMITTED, SalesPayoutStatus.APPROVED] },
       },
     });
     return rows.reduce((n, r) => n + r.amountCents, 0);
+  }
+
+  /** إلغاء مسودات رمز البريد غير المكتملة حتى لا تبقى معلّقة. */
+  private async cancelAwaitingEmailDrafts(partnerId: string, exceptId?: string) {
+    await this.prisma.salesPayoutRequest.updateMany({
+      where: {
+        partnerId,
+        status: SalesPayoutStatus.AWAITING_EMAIL,
+        ...(exceptId ? { id: { not: exceptId } } : {}),
+      },
+      data: { status: SalesPayoutStatus.CANCELLED, emailCodeHash: null, emailCodeExpiresAt: null },
+    });
   }
 
   private mapPayout(row: {
@@ -826,7 +1148,19 @@ export class SalesPartnersService {
     accountNumber: string,
     file?: UploadedMediaFile,
     withdrawAll?: boolean,
+    opts?: { method?: string; accountName?: string },
   ) {
+    const methodRaw = String(opts?.method ?? '').trim().toUpperCase();
+    if (methodRaw === 'ZAIN_CASH' || methodRaw === 'MASTERCARD') {
+      return this.createMethodPayoutDraft(partnerId, {
+        amountCents,
+        method: methodRaw,
+        accountNumber,
+        accountName: opts?.accountName,
+        withdrawAll,
+      });
+    }
+
     const dashboard = await this.buildDashboard(partnerId);
     const available = dashboard.stats.availablePayoutCents;
     const amount = withdrawAll ? available : Math.round(Number(amountCents));
@@ -835,6 +1169,7 @@ export class SalesPartnersService {
     const account = accountNumber.trim();
     if (account.length < 6) throw new BadRequestException('أدخل رقم بطاقة أو حساب SuperQi');
     if (!file) throw new BadRequestException('أرفق صورة البطاقة أو الحساب');
+    await this.cancelAwaitingEmailDrafts(partnerId);
     const imageKey = await this.storePayoutImage(partnerId, file);
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const row = await this.prisma.salesPayoutRequest.create({
@@ -858,6 +1193,61 @@ export class SalesPartnersService {
     return { id: row.id, emailed: true };
   }
 
+  private async createMethodPayoutDraft(
+    partnerId: string,
+    input: {
+      amountCents: number;
+      method: 'ZAIN_CASH' | 'MASTERCARD';
+      accountNumber: string;
+      accountName?: string;
+      withdrawAll?: boolean;
+    },
+  ) {
+    const dashboard = await this.buildDashboard(partnerId);
+    const available = dashboard.stats.availablePayoutCents;
+    const amount = input.withdrawAll ? available : Math.round(Number(input.amountCents));
+    if (!Number.isFinite(amount) || amount < PAYOUT_MIN_IQD) {
+      throw new BadRequestException('أدنى مبلغ للسحب هو 10,000 دينار عراقي');
+    }
+    if (amount > available) throw new BadRequestException('المبلغ أكبر من الأرباح المتاحة للسحب');
+    const method = input.method === 'MASTERCARD' ? SalesPayoutMethod.MASTERCARD : SalesPayoutMethod.ZAIN_CASH;
+    const accountNumber = input.accountNumber.trim();
+    const accountName = input.accountName?.trim() || '';
+    if (method === SalesPayoutMethod.ZAIN_CASH && accountNumber.replace(/\D/g, '').length < 8) {
+      throw new BadRequestException('أدخل رقم هاتف حساب زين كاش');
+    }
+    if (method === SalesPayoutMethod.MASTERCARD) {
+      if (accountName.length < 3) throw new BadRequestException('أدخل اسم صاحب البطاقة');
+      if (accountNumber.replace(/\s/g, '').length < 8) throw new BadRequestException('أدخل رقم البطاقة أو المحفظة');
+    }
+    await this.cancelAwaitingEmailDrafts(partnerId);
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const netCents = amount - PAYOUT_FEE_IQD;
+    const row = await this.prisma.salesPayoutRequest.create({
+      data: {
+        partnerId,
+        amountCents: amount,
+        feeCents: PAYOUT_FEE_IQD,
+        netCents,
+        currency: 'IQD',
+        method,
+        accountNumber,
+        accountName: accountName || null,
+        status: SalesPayoutStatus.AWAITING_EMAIL,
+        emailCodeHash: this.tokenHash.hash(code),
+        emailCodeExpiresAt: new Date(Date.now() + 10 * 60_000),
+      },
+    });
+    const partner = await this.requireApproved(partnerId);
+    await this.mail.sendPayoutCode({
+      to: partner.email,
+      name: partner.name,
+      code,
+      amountLabel: `${netCents.toLocaleString('en-US')} IQD`,
+    });
+    return { id: row.id, emailed: true, email: partner.email, netCents, feeCents: PAYOUT_FEE_IQD };
+  }
+
   async confirmPayout(partnerId: string, payoutId: string, code: string) {
     const row = await this.prisma.salesPayoutRequest.findFirst({
       where: { id: payoutId, partnerId },
@@ -871,6 +1261,11 @@ export class SalesPartnersService {
     }
     if (this.tokenHash.hash(code.trim()) !== row.emailCodeHash) {
       throw new BadRequestException('رمز التأكيد غير صحيح');
+    }
+    // الخصم الفعلي هنا فقط: بعد التحقق من الرمز يصبح الطلب SUBMITTED ويُحسب من المحجوز.
+    const dashboard = await this.buildDashboard(partnerId);
+    if (row.amountCents > dashboard.stats.availablePayoutCents) {
+      throw new BadRequestException('المبلغ أكبر من الرصيد المتاح حالياً');
     }
     return this.prisma.salesPayoutRequest.update({
       where: { id: row.id },
@@ -888,6 +1283,12 @@ export class SalesPartnersService {
       where: { id: payoutId, partnerId, status: SalesPayoutStatus.AWAITING_EMAIL },
     });
     if (!row) throw new NotFoundException('Payout not found');
+    const lastSentAt = row.emailCodeExpiresAt
+      ? new Date(row.emailCodeExpiresAt.getTime() - 10 * 60_000)
+      : null;
+    if (lastSentAt && Date.now() - lastSentAt.getTime() < 15_000) {
+      throw new BadRequestException('انتظر 15 ثانية قبل إعادة إرسال الرمز');
+    }
     const code = String(Math.floor(100000 + Math.random() * 900000));
     await this.prisma.salesPayoutRequest.update({
       where: { id: row.id },
@@ -906,9 +1307,26 @@ export class SalesPartnersService {
     return { emailed: true };
   }
 
+  async cancelPayoutDraft(partnerId: string, payoutId: string) {
+    const row = await this.prisma.salesPayoutRequest.findFirst({
+      where: { id: payoutId, partnerId, status: SalesPayoutStatus.AWAITING_EMAIL },
+    });
+    if (!row) return { cancelled: false };
+    await this.prisma.salesPayoutRequest.update({
+      where: { id: row.id },
+      data: {
+        status: SalesPayoutStatus.CANCELLED,
+        emailCodeHash: null,
+        emailCodeExpiresAt: null,
+      },
+    });
+    return { cancelled: true };
+  }
+
   async setPayoutStatus(id: string, status: SalesPayoutStatus, note?: string) {
     const row = await this.prisma.salesPayoutRequest.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Payout not found');
+    // REJECTED / CANCELLED يخرجان من المحجوز فيعود المبلغ للمتاح تلقائياً.
     return this.prisma.salesPayoutRequest.update({
       where: { id },
       data: { status, adminNote: note?.trim() || row.adminNote },
@@ -1025,7 +1443,15 @@ export class SalesPartnersService {
       return { stage: 'verify' as const, email: partner.email };
     }
     const dashboard = await this.buildDashboard(partner.id);
-    return { stage: 'dashboard' as const, ...dashboard };
+    // «قيد المراجعة» = طلبات سحب أُرسلت بانتظار الأدمن (ليس عمولات معلّقة).
+    const pendingPayoutCents = dashboard.payouts
+      .filter((p) => p.status === SalesPayoutStatus.SUBMITTED || p.status === SalesPayoutStatus.APPROVED)
+      .reduce((n, p) => n + p.amountCents, 0);
+    return {
+      stage: 'dashboard' as const,
+      ...dashboard,
+      stats: { ...dashboard.stats, pendingCents: pendingPayoutCents },
+    };
   }
 
   async startSuccessPartner(
@@ -1196,6 +1622,7 @@ export class SalesPartnersService {
       if (accountName.length < 3) throw new BadRequestException('أدخل اسم صاحب البطاقة');
       if (accountNumber.replace(/\s/g, '').length < 8) throw new BadRequestException('أدخل رقم البطاقة أو المحفظة');
     }
+    await this.cancelAwaitingEmailDrafts(partner.id);
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const netCents = amount - PAYOUT_FEE_IQD;
     const row = await this.prisma.salesPayoutRequest.create({
@@ -1220,6 +1647,16 @@ export class SalesPartnersService {
       amountLabel: `${netCents.toLocaleString('en-US')} IQD`,
     });
     return { id: row.id, emailed: true, email: partner.email, netCents, feeCents: PAYOUT_FEE_IQD };
+  }
+
+  async resendSuccessPayoutCode(userId: string, payoutId: string) {
+    const partner = await this.requireUserPartner(userId);
+    return this.resendPayoutCode(partner.id, payoutId);
+  }
+
+  async cancelSuccessPayoutDraft(userId: string, payoutId: string) {
+    const partner = await this.requireUserPartner(userId);
+    return this.cancelPayoutDraft(partner.id, payoutId);
   }
 
   async getPayoutAdmin(id: string) {

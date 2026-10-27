@@ -1,7 +1,29 @@
 import { API_URL, getAccessToken, setAdminImpersonation } from './utils';
 
 const ADMIN_TOKEN_KEY = 'chatlooraAdminToken';
+const STAFF_TOKEN_KEY = 'chatlooraStaffToken';
 
+export const EMPLOYEE_ROLES = ['STAFF', 'ACCOUNTANT', 'MAILBOX_CREATOR'] as const;
+export type EmployeeRole = (typeof EMPLOYEE_ROLES)[number];
+
+export function isEmployeeRole(role: string | null | undefined): role is EmployeeRole {
+  return !!role && (EMPLOYEE_ROLES as readonly string[]).includes(role);
+}
+
+export function staffHasRole(me: { role?: string; roles?: string[] } | null | undefined, required: string | string[]) {
+  if (!me) return false;
+  const effective = me.roles?.length ? me.roles : me.role ? [me.role] : [];
+  const needed = Array.isArray(required) ? required : [required];
+  return needed.some((r) => effective.includes(r));
+}
+
+export function isEmployeeAccount(me: { role?: string; roles?: string[] } | null | undefined) {
+  if (!me) return false;
+  if (isEmployeeRole(me.role)) return true;
+  return (me.roles ?? []).some((r) => isEmployeeRole(r));
+}
+
+/** توكن لوحة الأدمن فقط — منفصل عن توكن الموظفين */
 export function getAdminToken() {
   if (typeof window === 'undefined') return null;
   return window.localStorage.getItem(ADMIN_TOKEN_KEY);
@@ -15,8 +37,29 @@ export function clearAdminToken() {
   window.localStorage.removeItem(ADMIN_TOKEN_KEY);
 }
 
+/** توكن بوابة الموظفين — لا يخلط مع جلسة الأدمن */
+export function getStaffToken() {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(STAFF_TOKEN_KEY);
+}
+
+export function setStaffToken(token: string) {
+  window.localStorage.setItem(STAFF_TOKEN_KEY, token);
+}
+
+export function clearStaffToken() {
+  window.localStorage.removeItem(STAFF_TOKEN_KEY);
+}
+
+function portalToken() {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname || '';
+  if (path.startsWith('/staff')) return getStaffToken() || getAdminToken();
+  return getAdminToken() || getStaffToken();
+}
+
 async function adminApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getAdminToken();
+  const token = portalToken();
   const response = await fetch(`${API_URL}/api/v1/admin${path}`, {
     ...init,
     headers: {
@@ -111,6 +154,15 @@ export type AdminPlanRow = {
   limits?: Record<string, unknown>;
 };
 
+export type AdminSubscriptionReferral = {
+  id: string;
+  codeUsed: string | null;
+  partnerId: string;
+  partnerName: string;
+  partnerEmail: string;
+  partnerReferralCode: string | null;
+};
+
 export type AdminSubscriptionRow = {
   id: string;
   teamId: string;
@@ -123,12 +175,15 @@ export type AdminSubscriptionRow = {
   team?: { id: string; name: string; slug: string };
   plan?: AdminPlanRow;
   owner?: { id: string; email: string; name: string } | null;
+  referral?: AdminSubscriptionReferral | null;
 };
 
 export type AdminMe = {
   id: string;
   role: string;
+  roles?: string[];
   residence?: string | null;
+  hasAvatar?: boolean;
   isActive: boolean;
   user: { id: string; email: string; name: string };
 };
@@ -136,6 +191,7 @@ export type AdminMe = {
 export type AdminStaffRow = {
   id: string;
   role: string;
+  roles?: string[];
   residence: string | null;
   isActive: boolean;
   createdAt: string;
@@ -188,22 +244,66 @@ export function fetchAdminMe() {
   return adminApi<AdminMe>('/auth/me');
 }
 
+export async function fetchStaffAvatarObjectUrl() {
+  const token = getStaffToken() || getAdminToken();
+  const response = await fetch(`${API_URL}/api/v1/admin/auth/me/avatar`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error('Avatar not found');
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
+export async function uploadStaffAvatar(file: File) {
+  const token = getStaffToken() || getAdminToken();
+  const form = new FormData();
+  form.append('file', file);
+  const response = await fetch(`${API_URL}/api/v1/admin/auth/me/avatar`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error((body as { message?: string }).message ?? 'تعذر رفع الصورة');
+  }
+  return response.json() as Promise<{ updated: boolean; hasAvatar: boolean }>;
+}
+
 export function fetchAdminStaff() {
   return adminApi<AdminStaffRow[]>('/staff');
 }
+
+export type StaffRole = 'STAFF' | 'ACCOUNTANT' | 'MAILBOX_CREATOR';
+
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  ACCOUNTANT: 'محاسب (تفعيل الاشتراكات)',
+  MAILBOX_CREATOR: 'إنشاء الحسابات (البريد)',
+  STAFF: 'موظف عام (اشتراكات)',
+};
 
 export function createAdminStaff(input: {
   email: string;
   name: string;
   password: string;
   residence?: string;
+  role?: StaffRole;
+  roles?: StaffRole[];
 }) {
   return adminApi<AdminStaffRow>('/staff', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function updateAdminStaff(
   id: string,
-  input: { name?: string; password?: string; residence?: string; isActive?: boolean },
+  input: {
+    name?: string;
+    email?: string;
+    password?: string;
+    residence?: string;
+    isActive?: boolean;
+    role?: StaffRole;
+    roles?: StaffRole[];
+  },
 ) {
   return adminApi<AdminStaffRow>(`/staff/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
 }
@@ -225,10 +325,11 @@ export function fetchAdminDashboard() {
   return adminApi<AdminDashboardStats>('/dashboard');
 }
 
-export function fetchAdminUsers(params?: { q?: string; skip?: number }) {
+export function fetchAdminUsers(params?: { q?: string; skip?: number; take?: number }) {
   const sp = new URLSearchParams();
   if (params?.q) sp.set('q', params.q);
   if (params?.skip) sp.set('skip', String(params.skip));
+  if (params?.take) sp.set('take', String(params.take));
   const qs = sp.toString();
   return adminApi<{ users: AdminUserRow[]; total: number }>(`/users${qs ? `?${qs}` : ''}`);
 }
@@ -267,6 +368,7 @@ export function activateAdminSubscription(input: {
   ownerUserId?: string;
   billingCycle?: 'MONTHLY' | 'YEARLY';
   durationDays?: number;
+  addRemainingDays?: boolean;
 }) {
   return adminApi<AdminSubscriptionRow>('/subscriptions/activate', { method: 'POST', body: JSON.stringify(input) });
 }
@@ -823,7 +925,16 @@ export type AdminPartnerDetail = {
     availablePayoutCents: number;
   };
   commissions: Array<{ id: string; kind: string; status: string; amountCents: number; saleCents: number; createdAt: string }>;
-  referrals: Array<{ id: string; teamName: string; source: string; subscriptionStatus: string | null; createdAt: string }>;
+  referrals: Array<{
+    id: string;
+    teamId: string;
+    teamName: string;
+    email?: string | null;
+    source: string;
+    codeUsed?: string | null;
+    subscriptionStatus: string | null;
+    createdAt: string;
+  }>;
   payouts: AdminPayoutRow[];
 };
 
@@ -939,6 +1050,50 @@ export function approveAdminPartner(id: string) {
   );
 }
 
+export type EligibleStaffForPartner = {
+  id: string;
+  userId: string;
+  role: string;
+  roles: string[];
+  residence: string | null;
+  email: string;
+  name: string;
+  phone: string | null;
+};
+
+export function fetchEligibleStaffForPartner() {
+  return adminApi<EligibleStaffForPartner[]>('/sales-partners/eligible-staff');
+}
+
+export function createAdminPartnerFromStaff(staffId: string) {
+  return adminApi<{
+    partner: AdminSalesPartnerRow;
+    temporaryPassword: string | null;
+    referralLink: string;
+    alreadyPartner?: boolean;
+  }>('/sales-partners/from-staff', {
+    method: 'POST',
+    body: JSON.stringify({ staffId }),
+  });
+}
+
+export function createAdminPartnerManual(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  country?: string;
+  password?: string;
+}) {
+  return adminApi<{
+    partner: AdminSalesPartnerRow;
+    temporaryPassword: string;
+    referralLink: string;
+  }>('/sales-partners/manual', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export function rejectAdminPartner(id: string, notes?: string) {
   return adminApi<AdminSalesPartnerRow>(`/sales-partners/${id}/reject`, {
     method: 'POST',
@@ -977,16 +1132,161 @@ export function setAdminCommissionStatus(id: string, status: string) {
   });
 }
 
+export function assignAdminTeamReferral(teamId: string, referralCode: string | null) {
+  return adminApi<{
+    cleared: boolean;
+    referral: {
+      id: string;
+      teamId: string;
+      codeUsed: string | null;
+      partnerId: string;
+      partnerName: string;
+      partnerEmail: string;
+      partnerReferralCode: string | null;
+    } | null;
+  }>(`/sales-partners/referrals/by-team/${teamId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ referralCode }),
+  });
+}
+
+export function updateAdminPartnerReferralCode(id: string, referralCode: string) {
+  return adminApi<{ id: string; referralCode: string; referralLink: string }>(
+    `/sales-partners/${id}/referral-code`,
+    { method: 'PATCH', body: JSON.stringify({ referralCode }) },
+  );
+}
+
+export type AdminMailbox = {
+  id: string;
+  localPart: string;
+  email: string;
+  displayName: string | null;
+  isActive: boolean;
+  notes: string | null;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  webmailUrl: string;
+  setupHint: string;
+};
+
+export type AdminMailboxCredentials = {
+  email: string;
+  password: string;
+  webmailUrl: string;
+};
+
+export function fetchAdminMailboxes(q?: string) {
+  const qs = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : '';
+  return adminApi<AdminMailbox[]>(`/mailboxes${qs}`);
+}
+
+export function createAdminMailbox(body: {
+  localPart?: string;
+  password?: string;
+  displayName?: string;
+  notes?: string;
+  autoGenerate?: boolean;
+}) {
+  return adminApi<{ mailbox: AdminMailbox; credentials: AdminMailboxCredentials }>('/mailboxes', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export type AdminMailboxProvisionResult = {
+  mailbox: AdminMailbox;
+  credentials: AdminMailboxCredentials & { platformLoginUrl?: string };
+  subscriber?: {
+    userId: string;
+    teamId: string | null;
+    email: string;
+    name: string;
+    emailVerified: boolean;
+    trialDays: number;
+    trialEndsAt: string | null;
+    planSlug: string | null;
+    fullAccess: boolean;
+  };
+};
+
+export function createAdminMailboxAuto(body?: { displayName?: string; notes?: string }) {
+  return adminApi<AdminMailboxProvisionResult>('/mailboxes/auto', {
+    method: 'POST',
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export function updateAdminMailbox(
+  id: string,
+  body: {
+    displayName?: string | null;
+    notes?: string | null;
+    isActive?: boolean;
+    password?: string;
+    rotatePassword?: boolean;
+  },
+) {
+  return adminApi<{ mailbox: AdminMailbox; credentials?: AdminMailboxCredentials }>(`/mailboxes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function revealAdminMailboxPassword(id: string) {
+  return adminApi<AdminMailboxCredentials>(`/mailboxes/${id}/password`);
+}
+
+export function deleteAdminMailbox(id: string) {
+  return adminApi<{ ok: boolean; email: string }>(`/mailboxes/${id}`, { method: 'DELETE' });
+}
+
+export function openAdminMailboxSession(id: string) {
+  return adminApi<{
+    accessToken: string;
+    mailbox: { id: string; email: string; displayName: string | null };
+  }>(`/mailboxes/${id}/session`, { method: 'POST', body: '{}' });
+}
+
+export type AdminLandingPayload = {
+  contentEn: Record<string, unknown> | null;
+  contentAr: Record<string, unknown> | null;
+  visibility: Record<string, boolean>;
+  updatedAt: string | null;
+};
+
+export function fetchAdminLanding() {
+  return adminApi<AdminLandingPayload>('/landing');
+}
+
+export function saveAdminLanding(input: {
+  contentEn?: Record<string, unknown>;
+  contentAr?: Record<string, unknown>;
+  visibility?: Record<string, boolean>;
+}) {
+  return adminApi<AdminLandingPayload>('/landing', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function resetAdminLanding() {
+  return adminApi<AdminLandingPayload>('/landing/reset', { method: 'POST', body: '{}' });
+}
+
 export const ADMIN_NAV = [
   { href: '/admin', labelKey: 'admin.nav.dashboard' },
   { href: '/admin/users', labelKey: 'admin.nav.subscribers' },
   { href: '/admin/subscriptions', labelKey: 'admin.nav.subscriptions' },
   { href: '/admin/staff', labelKey: 'admin.nav.staff', superAdminOnly: true },
+  { href: '/admin/landing', labelKey: 'admin.nav.landing' },
   { href: '/admin/offers', labelKey: 'admin.nav.offers' },
   { href: '/admin/partners', labelKey: 'admin.nav.partners' },
   { href: '/admin/workspaces', labelKey: 'admin.nav.workspaces' },
   { href: '/admin/payments', labelKey: 'admin.nav.payments' },
   { href: '/admin/support', labelKey: 'admin.nav.support' },
+  { href: '/admin/mail', labelKey: 'admin.nav.mail' },
   { href: '/admin/whatsapp', labelKey: 'admin.nav.whatsapp' },
   { href: '/admin/whatsapp-system', labelKey: 'admin.nav.whatsappSystem' },
   { href: '/admin/tiktok', labelKey: 'admin.nav.tiktok' },
@@ -1001,4 +1301,12 @@ export const ADMIN_NAV = [
   { href: '/admin/audit', labelKey: 'admin.nav.audit' },
 ] as const;
 
-export const STAFF_NAV = [{ href: '/staff', labelKey: 'staff.nav.subscribers' }] as const;
+export const STAFF_NAV = [
+  { href: '/staff', labelKey: 'staff.nav.subscribers', roles: ['STAFF', 'ACCOUNTANT'] as const },
+  { href: '/staff/mail', labelKey: 'staff.nav.mail', roles: ['MAILBOX_CREATOR'] as const },
+  {
+    href: '/staff/partner-earnings',
+    labelKey: 'staff.nav.partnerEarnings',
+    roles: ['STAFF', 'ACCOUNTANT', 'MAILBOX_CREATOR'] as const,
+  },
+] as const;

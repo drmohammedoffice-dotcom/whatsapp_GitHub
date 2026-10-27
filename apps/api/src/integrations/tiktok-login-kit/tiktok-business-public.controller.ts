@@ -1,14 +1,23 @@
-import { BadRequestException, Body, Controller, Delete, Get, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiProperty, ApiTags } from '@nestjs/swagger';
+import { IsString, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { SubscriptionGuard } from '../../billing/subscription.guard';
 import { CurrentPrincipal } from '../../common/current-principal.decorator';
 import { AuthenticatedPrincipal } from '../../common/principal';
 import type { UploadedMediaFile } from '../../common/uploaded-media-file';
 import { TikTokAdPublishService, type PublishTikTokAdInput } from './tiktok-ad-publish.service';
+import { TikTokAdsBalanceService } from './tiktok-ads-balance.service';
 import { TikTokMarketingOAuthService } from './tiktok-marketing-oauth.service';
 import { TikTokBusinessService } from './tiktok-business.service';
+
+class StartTikTokAdsBalanceCheckoutDto {
+  @ApiProperty({ description: 'TikTok advertiser id owned by the current user' })
+  @IsString()
+  @MinLength(5)
+  advertiserId!: string;
+}
 
 @ApiTags('TikTok Business Public API')
 @ApiBearerAuth()
@@ -19,6 +28,7 @@ export class TikTokBusinessPublicController {
     private readonly business: TikTokBusinessService,
     private readonly marketingOAuth: TikTokMarketingOAuthService,
     private readonly publishAds: TikTokAdPublishService,
+    private readonly adsBalance: TikTokAdsBalanceService,
   ) {}
 
   @Get('status')
@@ -292,6 +302,73 @@ export class TikTokBusinessPublicController {
   @ApiOperation({ summary: 'TikTok advertiser top-up invoices' })
   topupInvoices(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
     return this.publishAds.listTopups(principal.teamId!);
+  }
+
+  @Get('ads/balance/advertisers')
+  @ApiOperation({ summary: 'List TikTok advertisers available for external Ads Manager balance top-up' })
+  balanceAdvertisers(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.adsBalance.listAdvertisers(principal.userId!);
+  }
+
+  @Post('ads/balance/checkout')
+  @ApiOperation({
+    summary: 'Start external TikTok Ads Manager billing redirect (payment on TikTok, not Chatloora)',
+  })
+  startBalanceCheckout(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Body() body: StartTikTokAdsBalanceCheckoutDto,
+  ) {
+    return this.adsBalance.startCheckout({
+      userId: principal.userId!,
+      teamId: principal.teamId!,
+      advertiserId: body.advertiserId,
+    });
+  }
+
+  @Get('ads/balance/checkouts')
+  @ApiOperation({ summary: 'List external TikTok Ads balance checkout sessions for this team/user' })
+  listBalanceCheckouts(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+    return this.adsBalance.listCheckouts(principal.teamId!, principal.userId!);
+  }
+
+  @Get('ads/balance/checkouts/:id')
+  @ApiOperation({ summary: 'Get one TikTok Ads balance checkout session' })
+  getBalanceCheckout(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id') id: string,
+  ) {
+    return this.adsBalance.getCheckout(principal.teamId!, principal.userId!, id);
+  }
+
+  @Post('ads/balance/checkouts/:id/returned')
+  @ApiOperation({
+    summary: 'Mark user returned from TikTok (does NOT confirm payment)',
+  })
+  markBalanceReturned(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id') id: string,
+  ) {
+    return this.adsBalance.markReturned(principal.teamId!, principal.userId!, id);
+  }
+
+  @Post('ads/balance/checkouts/:id/refresh')
+  @ApiOperation({
+    summary: 'Refresh advertiser balance snapshot (informational — not payment confirmation)',
+  })
+  refreshBalanceCheckout(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id') id: string,
+  ) {
+    return this.adsBalance.refreshStatus(principal.teamId!, principal.userId!, id);
+  }
+
+  @Post('ads/balance/checkouts/:id/cancel')
+  @ApiOperation({ summary: 'Cancel an open TikTok Ads balance checkout session' })
+  cancelBalanceCheckout(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id') id: string,
+  ) {
+    return this.adsBalance.cancelCheckout(principal.teamId!, principal.userId!, id);
   }
 
   @Post('ads/spark-preview')

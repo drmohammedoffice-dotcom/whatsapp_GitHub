@@ -60,7 +60,14 @@ export class SalesPartnersPortalController {
   createPayout(
     @CurrentPartnerId() partnerId: string,
     @UploadedFile() file: UploadedMediaFile | undefined,
-    @Body() body: { amountCents?: string; accountNumber?: string; withdrawAll?: string },
+    @Body()
+    body: {
+      amountCents?: string;
+      accountNumber?: string;
+      accountName?: string;
+      method?: string;
+      withdrawAll?: string;
+    },
   ) {
     return this.partners.createPayoutDraft(
       partnerId,
@@ -68,6 +75,7 @@ export class SalesPartnersPortalController {
       body.accountNumber ?? '',
       file,
       body.withdrawAll === 'true' || body.withdrawAll === '1',
+      { method: body.method, accountName: body.accountName },
     );
   }
 
@@ -83,6 +91,11 @@ export class SalesPartnersPortalController {
   @Post('payouts/:id/resend')
   resendPayout(@CurrentPartnerId() partnerId: string, @Param('id') id: string) {
     return this.partners.resendPayoutCode(partnerId, id);
+  }
+
+  @Post('payouts/:id/cancel')
+  cancelPayout(@CurrentPartnerId() partnerId: string, @Param('id') id: string) {
+    return this.partners.cancelPayoutDraft(partnerId, id);
   }
 
   @Get('payouts/:id/file/:kind')

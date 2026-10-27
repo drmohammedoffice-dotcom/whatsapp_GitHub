@@ -96,12 +96,13 @@ export default function AdminSubscriptionsPage() {
       window.alert('User has no workspace');
       return;
     }
+    const enriched = subs.find((row) => row.teamId === membership.team.id);
     setSubTarget({
       teamId: membership.team.id,
       teamName: membership.team.name,
       ownerUserId: user.id,
       ownerEmail: user.email,
-      subscription: membership.team.subscription ?? null,
+      subscription: enriched ?? membership.team.subscription ?? null,
     });
     setSubDialogOpen(true);
   }
@@ -282,7 +283,8 @@ export default function AdminSubscriptionsPage() {
                       <TableHead>Workspace</TableHead>
                       <TableHead>Owner email</TableHead>
                       <TableHead>Plan</TableHead>
-                      <TableHead>Cycle</TableHead>
+                      <TableHead>Referral code</TableHead>
+                      <TableHead>Partner</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Expiry date</TableHead>
                       <TableHead>Days left</TableHead>
@@ -297,7 +299,10 @@ export default function AdminSubscriptionsPage() {
                           <TableCell className="font-medium">{sub.team?.name ?? '—'}</TableCell>
                           <TableCell>{sub.owner?.email ?? '—'}</TableCell>
                           <TableCell>{sub.plan?.name ?? '—'}</TableCell>
-                          <TableCell>{sub.billingCycle ?? 'MONTHLY'}</TableCell>
+                          <TableCell className="font-mono text-sm" dir="ltr">
+                            {sub.referral?.partnerReferralCode || sub.referral?.codeUsed || '—'}
+                          </TableCell>
+                          <TableCell>{sub.referral?.partnerName ?? '—'}</TableCell>
                           <TableCell>
                             <Badge variant={statusVariant(sub.status) as never}>{sub.status}</Badge>
                           </TableCell>

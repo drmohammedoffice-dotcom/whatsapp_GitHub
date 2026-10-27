@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2, Search, Settings2 } from 'lucide-react';
 import { SubscriptionManageDialog } from '@/components/admin/subscription-manage-dialog';
 import { SubscriptionExpiryCell } from '@/components/admin/subscription-expiry-cell';
+import { StaffIdentityBadge } from '@/components/staff/staff-identity-badge';
 import { PageHeader } from '@/components/shared/page-header';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
+  fetchAdminMe,
   fetchAdminPlans,
   fetchAdminUsers,
   type AdminPlanRow,
@@ -26,6 +29,7 @@ function statusVariant(status: string) {
 
 export default function StaffSubscribersPage() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [plans, setPlans] = useState<AdminPlanRow[]>([]);
   const [q, setQ] = useState('');
@@ -58,6 +62,19 @@ export default function StaffSubscribersPage() {
   }, []);
 
   useEffect(() => {
+    fetchAdminMe()
+      .then((me) => {
+        const roles = me.roles?.length ? me.roles : me.role ? [me.role] : [];
+        const onlyMail =
+          roles.includes('MAILBOX_CREATOR') &&
+          !roles.includes('ACCOUNTANT') &&
+          !roles.includes('STAFF');
+        if (onlyMail) router.replace('/staff/mail');
+      })
+      .catch(() => undefined);
+  }, [router]);
+
+  useEffect(() => {
     void load(q);
   }, [load, q]);
 
@@ -79,7 +96,11 @@ export default function StaffSubscribersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('staff.pageTitle')} description={t('staff.pageSubtitle')} />
+      <PageHeader
+        title={t('staff.pageTitle')}
+        description={t('staff.pageSubtitle')}
+        actions={<StaffIdentityBadge />}
+      />
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground rtl:left-auto rtl:right-3" />
@@ -159,6 +180,7 @@ export default function StaffSubscribersPage() {
           ownerEmail={subTarget.ownerEmail}
           subscription={subTarget.subscription}
           onSaved={() => void load(q)}
+          allowReferralEdit={false}
         />
       )}
     </div>

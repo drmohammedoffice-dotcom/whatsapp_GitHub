@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { SubscriptionStatus, TeamRole } from '@watsapp/database';
@@ -22,19 +22,28 @@ export class FreeTrialService {
     private readonly moduleRef: ModuleRef,
   ) {}
 
-  async grant(input: { teamId: string; userId: string; email: string; name: string }) {
+  async grant(input: {
+    teamId: string;
+    userId: string;
+    email: string;
+    name: string;
+    /** Highest-tier plan for mailbox-provisioned customers (all features). */
+    fullAccess?: boolean;
+    skipWelcomeEmail?: boolean;
+  }) {
     const existing = await this.prisma.subscription.findUnique({ where: { teamId: input.teamId } });
     if (existing) return existing;
 
-    const plan =
-      (await this.prisma.subscriptionPlan.findFirst({
-        where: { isActive: true, slug: { in: ['basic', 'starter'] } },
-        orderBy: { sortOrder: 'asc' },
-      })) ??
-      (await this.prisma.subscriptionPlan.findFirst({
-        where: { isActive: true },
-        orderBy: { sortOrder: 'asc' },
-      }));
+    const plan = input.fullAccess
+      ? await this.resolveFullAccessPlan()
+      : ((await this.prisma.subscriptionPlan.findFirst({
+          where: { isActive: true, slug: { in: ['basic', 'starter'] } },
+          orderBy: { sortOrder: 'asc' },
+        })) ??
+        (await this.prisma.subscriptionPlan.findFirst({
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' },
+        })));
     if (!plan) {
       this.logger.error(`Free trial skipped: no active plan team=${input.teamId}`);
       return null;
@@ -53,22 +62,49 @@ export class FreeTrialService {
         currentPeriodEnd: ends,
         autoRenew: false,
         mrrCents: 0,
-        metadata: { freeTrial: true, trialDays: 3, emails: {} },
+        metadata: {
+          freeTrial: true,
+          trialDays: 3,
+          fullAccess: Boolean(input.fullAccess),
+          provisionedFromMailbox: Boolean(input.fullAccess),
+          emails: {},
+        },
       },
     });
 
-    const sent = await Promise.race([
-      this.email.sendTrialStarted({
-        to: input.email,
-        customerName: input.name || input.email,
-        endsAt: ends,
-        plansUrl: this.plansUrl(),
-      }),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 8000)),
-    ]);
-    if (sent) await this.markEmail(subscription.id, 'startedAt');
-    this.logger.log(`Free trial granted team=${input.teamId} until=${ends.toISOString()}`);
+    if (!input.skipWelcomeEmail) {
+      const sent = await Promise.race([
+        this.email.sendTrialStarted({
+          to: input.email,
+          customerName: input.name || input.email,
+          endsAt: ends,
+          plansUrl: this.plansUrl(),
+        }),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 8000)),
+      ]);
+      if (sent) await this.markEmail(subscription.id, 'startedAt');
+    }
+    this.logger.log(
+      `Free trial granted team=${input.teamId} plan=${plan.slug} fullAccess=${Boolean(input.fullAccess)} until=${ends.toISOString()}`,
+    );
     return subscription;
+  }
+
+  /** Prefer business/enterprise (or highest priced active plan) for unrestricted trial features. */
+  private async resolveFullAccessPlan() {
+    return (
+      (await this.prisma.subscriptionPlan.findFirst({
+        where: {
+          isActive: true,
+          slug: { in: ['business', 'enterprise', 'agency', 'professional', 'pro'] },
+        },
+        orderBy: { priceCents: 'desc' },
+      })) ??
+      (await this.prisma.subscriptionPlan.findFirst({
+        where: { isActive: true },
+        orderBy: { priceCents: 'desc' },
+      }))
+    );
   }
 
   async sendDueNotices(now = new Date()) {

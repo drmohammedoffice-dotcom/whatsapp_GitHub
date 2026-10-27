@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@watsapp/database';
-import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { Request } from 'express';
 import { CurrentAdmin } from '../decorators/current-admin.decorator';
 import { RequireAdminRoles } from '../decorators/require-admin-roles.decorator';
@@ -19,6 +19,8 @@ import { AdminJwtGuard } from '../guards/admin-jwt.guard';
 import { AdminRolesGuard } from '../guards/admin-roles.guard';
 import { AdminPrincipal } from '../types/admin-principal';
 import { AdminStaffService } from '../services/admin-staff.service';
+
+const STAFF_ROLES = [AdminRole.ACCOUNTANT, AdminRole.MAILBOX_CREATOR, AdminRole.STAFF] as const;
 
 class CreateStaffDto {
   @ApiProperty()
@@ -39,6 +41,17 @@ class CreateStaffDto {
   @IsOptional()
   @IsString()
   residence?: string;
+
+  @ApiProperty({ required: false, enum: STAFF_ROLES })
+  @IsOptional()
+  @IsIn(STAFF_ROLES as unknown as string[])
+  role?: string;
+
+  @ApiProperty({ required: false, isArray: true, enum: STAFF_ROLES })
+  @IsOptional()
+  @IsArray()
+  @IsIn(STAFF_ROLES as unknown as string[], { each: true })
+  roles?: string[];
 }
 
 class UpdateStaffDto {
@@ -47,6 +60,11 @@ class UpdateStaffDto {
   @IsString()
   @MinLength(2)
   name?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -63,6 +81,17 @@ class UpdateStaffDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({ required: false, enum: STAFF_ROLES })
+  @IsOptional()
+  @IsIn(STAFF_ROLES as unknown as string[])
+  role?: string;
+
+  @ApiProperty({ required: false, isArray: true, enum: STAFF_ROLES })
+  @IsOptional()
+  @IsArray()
+  @IsIn(STAFF_ROLES as unknown as string[], { each: true })
+  roles?: string[];
 }
 
 @ApiTags('Chatloora Admin Staff')

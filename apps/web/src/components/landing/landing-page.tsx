@@ -18,8 +18,9 @@ import {
   LandingTrial,
   LandingVideo,
 } from './landing-sections';
+import { LandingContentProvider } from './landing-content-provider';
 import { LandingShell } from './landing-ui';
-import { useLandingCopy } from './use-landing-copy';
+import { useLandingCopy, useLandingVisibility } from './use-landing-copy';
 
 function LandingJsonLd() {
   const copy = useLandingCopy();
@@ -70,26 +71,36 @@ function LandingJsonLd() {
   return null;
 }
 
-export function LandingPage() {
+function LandingPageInner() {
+  const visibility = useLandingVisibility();
+
   return (
     <LandingShell>
       <LandingJsonLd />
       <LandingNavbar />
       <main>
         <LandingHero />
-        <LandingProblems />
-        <LandingFeatures />
-        <LandingTikTok />
-        <LandingHowItWorks />
-        <LandingVideo />
-        <LandingTestimonials />
-        <LandingStats />
-        <LandingTrial />
-        <LandingPricing />
-        <LandingFaq />
-        <LandingContact />
+        {visibility.problems ? <LandingProblems /> : null}
+        {visibility.features ? <LandingFeatures /> : null}
+        {visibility.tiktok ? <LandingTikTok /> : null}
+        {visibility.how ? <LandingHowItWorks /> : null}
+        {visibility.video ? <LandingVideo /> : null}
+        {visibility.testimonials ? <LandingTestimonials /> : null}
+        {visibility.stats ? <LandingStats /> : null}
+        {visibility.trial ? <LandingTrial /> : null}
+        {visibility.pricing ? <LandingPricing /> : null}
+        {visibility.faq ? <LandingFaq /> : null}
+        {visibility.contact ? <LandingContact /> : null}
       </main>
       <LandingFooter />
     </LandingShell>
+  );
+}
+
+export function LandingPage() {
+  return (
+    <LandingContentProvider>
+      <LandingPageInner />
+    </LandingContentProvider>
   );
 }

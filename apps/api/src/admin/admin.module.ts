@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { AssistantModule } from '../assistant/assistant.module';
 import { BillingModule } from '../billing/billing.module';
+import { LandingModule } from '../landing/landing.module';
 import { SalesPartnersModule } from '../sales-partners/sales-partners.module';
 import { SecurityModule } from '../security/security.module';
 import { VoiceAiModule } from '../voice-ai/voice-ai.module';
@@ -22,6 +23,7 @@ import { AdminDashboardService } from './services/admin-dashboard.service';
 import { AdminIntegrationsService } from './services/admin-integrations.service';
 import { AdminNotificationsService } from './services/admin-notifications.service';
 import { AdminOffersService } from './services/admin-offers.service';
+import { AdminLandingService } from './services/admin-landing.service';
 import { AdminAssistantService } from './services/admin-assistant.service';
 import { AdminVoiceService } from './services/admin-voice.service';
 import { AdminSettingsService } from './services/admin-settings.service';
@@ -33,9 +35,21 @@ import { AdminWorkspacesService } from './services/admin-workspaces.service';
 import { AdminSalesPartnersController } from '../sales-partners/admin-sales-partners.controller';
 import { OfficialWhatsAppModule } from '../official-whatsapp/official-whatsapp.module';
 import { OfficialWhatsAppAdminController } from '../official-whatsapp/official-whatsapp.admin.controller';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [SecurityModule, BillingModule, AiModule, AssistantModule, SalesPartnersModule, VoiceAiModule, CreativeStudioCoreModule, OfficialWhatsAppModule],
+  imports: [
+    SecurityModule,
+    BillingModule,
+    AiModule,
+    AssistantModule,
+    LandingModule,
+    SalesPartnersModule,
+    VoiceAiModule,
+    CreativeStudioCoreModule,
+    OfficialWhatsAppModule,
+    StorageModule,
+  ],
   controllers: [
     AdminAuthController,
     AdminPlatformController,
@@ -58,6 +72,7 @@ import { OfficialWhatsAppAdminController } from '../official-whatsapp/official-w
     AdminSettingsService,
     AdminAnalyticsService,
     AdminOffersService,
+    AdminLandingService,
     AdminAssistantService,
     AdminVoiceService,
     AdminAuditService,

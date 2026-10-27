@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveAdminRoles } from '../staff-roles';
 import { AdminJwtPayload, AdminPrincipal } from '../types/admin-principal';
 
 @Injectable()
@@ -45,6 +46,7 @@ export class AdminJwtGuard implements CanActivate {
       userId: adminUser.userId,
       adminUserId: adminUser.id,
       role: adminUser.role,
+      roles: resolveAdminRoles(adminUser.role, adminUser.roles),
       email: adminUser.user.email,
       name: adminUser.user.name,
     };

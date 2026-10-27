@@ -45,6 +45,7 @@ import { AssistantModule } from './assistant/assistant.module';
 import { VoiceAiModule } from './voice-ai/voice-ai.module';
 import { CreativeStudioModule } from './creative-studio/creative-studio.module';
 import { OfficialWhatsAppModule } from './official-whatsapp/official-whatsapp.module';
+import { WebmailModule } from './webmail/webmail.module';
 
 function resolveEnvFilePath(): string {
   const candidates = [
@@ -86,7 +87,7 @@ function resolveEnvFilePath(): string {
         if (ctx.getType() !== 'http') return true;
         const req = ctx.switchToHttp().getRequest<{ originalUrl?: string; url?: string }>();
         const url = `${req.originalUrl ?? req.url ?? ''}`;
-        return /\/(webhooks|wayl-return|health|sdk-config)\b/i.test(url);
+        return /\/(webhooks|wayl-return|health|sdk-config|webhooks\/resend)\b/i.test(url);
       },
     }),
     MulterModule.register({
@@ -133,6 +134,7 @@ function resolveEnvFilePath(): string {
     VoiceAiModule,
     CreativeStudioModule,
     OfficialWhatsAppModule,
+    WebmailModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

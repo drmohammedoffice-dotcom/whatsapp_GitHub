@@ -63,3 +63,6 @@ apps/web/public/downloads/*.msi
 Thumbs.db
 .vscode
 .idea
+
+# API runtime uploads (WhatsApp media etc.) — never commit
+apps/api/storage/

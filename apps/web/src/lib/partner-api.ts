@@ -72,17 +72,25 @@ export type PartnerDashboard = {
   referrals: Array<{
     id: string;
     teamName: string;
+    email?: string | null;
     source: string;
     createdAt: string;
     subscriptionStatus: string | null;
+    planName?: string | null;
+    daysLeft?: number | null;
   }>;
   payouts: Array<{
     id: string;
     amountCents: number;
+    feeCents?: number;
+    netCents?: number;
+    method?: string | null;
+    accountName?: string | null;
     accountNumber: string;
     hasAccountImage: boolean;
     hasReceiptImage: boolean;
     status: string;
+    adminNote?: string | null;
     createdAt: string;
     paidAt: string | null;
   }>;
@@ -114,13 +122,22 @@ async function partnerUpload<T>(path: string, form: FormData): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function createPartnerPayout(input: { amountCents: number; accountNumber: string; withdrawAll: boolean; file?: File }) {
+export function createPartnerPayout(input: {
+  amountCents: number;
+  accountNumber: string;
+  withdrawAll?: boolean;
+  file?: File;
+  method?: 'ZAIN_CASH' | 'MASTERCARD' | 'SUPERQI';
+  accountName?: string;
+}) {
   const form = new FormData();
   form.append('amountCents', String(input.amountCents));
   form.append('accountNumber', input.accountNumber);
   form.append('withdrawAll', input.withdrawAll ? 'true' : 'false');
+  if (input.method) form.append('method', input.method);
+  if (input.accountName) form.append('accountName', input.accountName);
   if (input.file) form.append('file', input.file);
-  return partnerUpload<{ id: string; emailed: boolean }>('/me/payouts', form);
+  return partnerUpload<{ id: string; emailed: boolean; netCents?: number; feeCents?: number }>('/me/payouts', form);
 }
 
 export function confirmPartnerPayout(id: string, code: string) {
@@ -129,6 +146,10 @@ export function confirmPartnerPayout(id: string, code: string) {
 
 export function resendPartnerPayoutCode(id: string) {
   return partnerApi(`/me/payouts/${id}/resend`, { method: 'POST', body: '{}' });
+}
+
+export function cancelPartnerPayoutDraft(id: string) {
+  return partnerApi<{ cancelled: boolean }>(`/me/payouts/${id}/cancel`, { method: 'POST', body: '{}' });
 }
 
 export async function fetchPartnerPayoutImageUrl(id: string, kind: 'account' | 'receipt') {

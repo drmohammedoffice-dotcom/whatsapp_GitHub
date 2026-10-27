@@ -89,12 +89,20 @@ export type Messages = {
     tiktokBusinessDesc: string;
     tiktokPixelWizard: string;
     tiktokPixelWizardDesc: string;
+    tiktokTrackingPhones: string;
+    tiktokTrackingPhonesDesc: string;
     tiktokOrders: string;
     tiktokOrdersDesc: string;
+    storeOrders: string;
+    storeOrdersDesc: string;
     tiktokCreateAd: string;
     tiktokCreateAdDesc: string;
+    tiktokAdsBalance: string;
+    tiktokAdsBalanceDesc: string;
     successPartner: string;
     successPartnerDesc: string;
+    webmail: string;
+    webmailDesc: string;
     settings: string;
     settingsDesc: string;
     account: string;
@@ -1174,6 +1182,7 @@ export type Messages = {
       analytics: string;
       settings: string;
       eventSetDiagnostics: string;
+      adsBalance: string;
     };
     metrics: {
       spend: string;
@@ -1223,6 +1232,59 @@ export type Messages = {
       statusPermissionError: string;
       statusTokenExpired: string;
       statusUnsupported: string;
+    };
+  };
+  tiktokAdsBalance: {
+    title: string;
+    description: string;
+    paymentOnTikTokOnly: string;
+    selectAccount: string;
+    selectAccountHint: string;
+    selectAccountFirst: string;
+    searchAccounts: string;
+    searchPlaceholder: string;
+    refreshAccounts: string;
+    noAccounts: string;
+    goConnect: string;
+    noSearchResults: string;
+    linked: string;
+    amountOnTikTok: string;
+    goToTopUp: string;
+    howItWorks: string;
+    step1: string;
+    step2: string;
+    step3: string;
+    step4: string;
+    currentSession: string;
+    openAdsManager: string;
+    iReturned: string;
+    refreshBalance: string;
+    cancel: string;
+    redirectNotice: string;
+    mobileRedirectNotice: string;
+    mobileFriendlyHint: string;
+    returnUnverified: string;
+    balanceSnapshotHint: string;
+    unsafeUrl: string;
+    phasePreparing: string;
+    phaseOpening: string;
+    phaseWaiting: string;
+    historyTitle: string;
+    historyDesc: string;
+    noHistory: string;
+    viewDetails: string;
+    verified: string;
+    notAutoVerified: string;
+    balanceBefore: string;
+    balanceAfter: string;
+    status: {
+      INITIATED: string;
+      REDIRECTED: string;
+      PENDING_CONFIRMATION: string;
+      EXTERNAL_CHECKOUT: string;
+      CONFIRMED: string;
+      FAILED: string;
+      CANCELLED: string;
     };
   };
   tiktokAdsCreate: {
@@ -1444,6 +1506,7 @@ export type Messages = {
     subscription: Record<string, string>;
     plans: Record<string, string>;
     offers: Record<string, string>;
+    landing: Record<string, string>;
     staff: Record<string, string>;
   };
   staff: {
@@ -1454,6 +1517,12 @@ export type Messages = {
     nav: Record<string, string>;
     pageTitle: string;
     pageSubtitle: string;
+    partnerEarningsTitle: string;
+    partnerEarningsDesc: string;
+    partnerEarningsCode: string;
+    partnerEarningsLogin: string;
+    partnerEarningsSessionHint: string;
+    partnerEarningsOpenDashboard: string;
   };
   partners: Record<string, string>;
   errors: {

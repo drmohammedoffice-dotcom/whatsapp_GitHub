@@ -591,7 +591,10 @@ function DaypartEditor({ week, onChange }: { week: boolean[][]; onChange: (week:
         <Button type="button" variant="outline" onClick={() => onChange(applyHours(from, to))}>تطبيق على كل الأيام</Button>
         <Button type="button" variant="outline" onClick={() => onChange(fullWeek(true))}>طوال اليوم</Button>
       </div>
-      <p className="text-xs text-muted-foreground">الخانة البنفسجية هي ساعة ظهور الإعلان. اضغط أو اسحب للتعديل، واضغط اسم اليوم لتشغيله أو إيقافه كاملاً. الأسبوع يبدأ بالاثنين مثل تيك توك، والأوقات حسب توقيت الحساب.</p>
+      <p className="text-xs text-muted-foreground">
+        الخانة البنفسجية = ساعة ظهور الإعلان حسب «توقيت جدولة الحملة» أعلاه (مثل بغداد).
+        عند النشر نحوّلها تلقائياً لتوقيت حساب تيك توك. الأسبوع يبدأ بالاثنين.
+      </p>
       <div dir="ltr" className="overflow-x-auto rounded-xl border p-2">
         <div className="grid min-w-[680px] grid-cols-[92px_repeat(24,minmax(0,1fr))] items-center gap-1">
           <span />
@@ -3668,14 +3671,14 @@ function NewTikTokCampaignForm() {
                       ))}
                     </select>
                     <p className="text-xs text-muted-foreground">
-                      اختر بغداد إذا كانت تواريخ البدء/الانتهاء حسب توقيت العراق (+3).
-                      جات لورا تحوّل الوقت تلقائياً إلى توقيت حساب تيك توك قبل النشر حتى يعمل الإعلان في الوقت الصحيح.
+                      اختر بغداد إذا كانت تواريخ البدء/الانتهاء وساعات الظهور حسب توقيت العراق (+3).
+                      جات لورا تحوّل البداية والنهاية وجدول الساعات تلقائياً إلى توقيت حساب تيك توك قبل النشر.
                     </p>
                     {selectedAdvertiser?.timezone && (
                       <p className="text-xs text-amber-800 dark:text-amber-200">
-                        في مدير إعلانات تيك توك ستظهر الأوقات بتوقيت الحساب
+                        مثال: 09:00–21:00 بغداد تظهر في مدير تيك توك تقريباً 01:00–13:00 بتوقيت الحساب
                         {' '}({timezoneLabel(selectedAdvertiser.timezone)})
-                        {' '}بعد التحويل — هذا طبيعي ولا يعني أن الجدولة بقيت بتوقيت أمريكا بدون تحويل.
+                        {' '}— نفس الوقت الحقيقي بعد التحويل، وليس خطأ.
                       </p>
                     )}
                   </div>

@@ -195,6 +195,36 @@ export const FEATURE_REGISTRY: FeatureDefinitionMeta[] = [
     sortOrder: 111,
   },
   {
+    key: 'instant_forms_enabled',
+    category: 'tiktok',
+    valueType: 'BOOLEAN',
+    nameAr: 'الاستمارات الفورية',
+    nameEn: 'Instant forms',
+    descriptionAr: 'إنشاء صفحات استمارة فورية للمنتجات',
+    descriptionEn: 'Create instant form landing pages for products',
+    sortOrder: 112,
+  },
+  {
+    key: 'online_store_enabled',
+    category: 'other',
+    valueType: 'BOOLEAN',
+    nameAr: 'المتجر الإلكتروني',
+    nameEn: 'Online store',
+    descriptionAr: 'تفعيل المتجر الإلكتروني داخل المنصة',
+    descriptionEn: 'Enable the in-platform online store',
+    sortOrder: 113,
+  },
+  {
+    key: 'ai_campaign_review_enabled',
+    category: 'ai',
+    valueType: 'BOOLEAN',
+    nameAr: 'تحليل الحملات بالذكاء الاصطناعي',
+    nameEn: 'AI campaign analytics',
+    descriptionAr: 'تحليل نتائج الحملات الإعلانية بالذكاء الاصطناعي',
+    descriptionEn: 'AI-powered campaign performance analytics',
+    sortOrder: 114,
+  },
+  {
     key: 'appointments_enabled',
     category: 'other',
     valueType: 'BOOLEAN',
@@ -239,6 +269,9 @@ export type PlanLimits = {
   creativeImagesLimit: number;
   creativeVideoSecondsLimit: number;
   creative4kEnabled: boolean;
+  instantFormsEnabled: boolean;
+  onlineStoreEnabled: boolean;
+  aiCampaignReviewEnabled: boolean;
 };
 
 export const EMPTY_PLAN_LIMITS: PlanLimits = {
@@ -264,6 +297,9 @@ export const EMPTY_PLAN_LIMITS: PlanLimits = {
   creativeImagesLimit: 0,
   creativeVideoSecondsLimit: 0,
   creative4kEnabled: false,
+  instantFormsEnabled: false,
+  onlineStoreEnabled: false,
+  aiCampaignReviewEnabled: false,
 };
 
 /** Seed defaults for known slugs only. Runtime always prefers DB entitlements. */
@@ -271,42 +307,45 @@ export function seedLimitsForSlug(slug: string | null | undefined): PlanLimits {
   const key = (slug ?? '').toLowerCase();
   if (key === 'professional' || key === 'pro') {
     return {
-      maxTrackingPhones: 5,
+      maxTrackingPhones: 3,
       socialIntegrations: true,
-      aiEnabled: true,
+      aiEnabled: false,
       appointmentsEnabled: true,
       whatsappEnabled: true,
       maxWhatsappNumbers: 3,
       tiktokEnabled: true,
       maxTiktokWhatsappNumbers: 3,
-      maxTiktokPixels: 15,
-      maxPixels: 15,
+      maxTiktokPixels: 10,
+      maxPixels: 10,
       whatsappApiEnabled: true,
       facebookEnabled: true,
       instagramEnabled: true,
       telegramEnabled: true,
       maxTeamMembers: 5,
-      voiceAiEnabled: true,
-      voiceMinutesLimit: -1,
-      voiceCallsLimit: -1,
-      creativeStudioEnabled: true,
-      creativeImagesLimit: 50,
-      creativeVideoSecondsLimit: 120,
+      voiceAiEnabled: false,
+      voiceMinutesLimit: 0,
+      voiceCallsLimit: 0,
+      creativeStudioEnabled: false,
+      creativeImagesLimit: 0,
+      creativeVideoSecondsLimit: 0,
       creative4kEnabled: false,
+      instantFormsEnabled: true,
+      onlineStoreEnabled: false,
+      aiCampaignReviewEnabled: false,
     };
   }
   if (key === 'business' || key === 'enterprise') {
     return {
-      maxTrackingPhones: 10,
+      maxTrackingPhones: 5,
       socialIntegrations: true,
       aiEnabled: true,
       appointmentsEnabled: true,
       whatsappEnabled: true,
-      maxWhatsappNumbers: 10,
+      maxWhatsappNumbers: 5,
       tiktokEnabled: true,
-      maxTiktokWhatsappNumbers: 10,
-      maxTiktokPixels: -1,
-      maxPixels: -1,
+      maxTiktokWhatsappNumbers: 5,
+      maxTiktokPixels: 20,
+      maxPixels: 20,
       whatsappApiEnabled: true,
       facebookEnabled: true,
       instagramEnabled: true,
@@ -319,6 +358,9 @@ export function seedLimitsForSlug(slug: string | null | undefined): PlanLimits {
       creativeImagesLimit: -1,
       creativeVideoSecondsLimit: -1,
       creative4kEnabled: true,
+      instantFormsEnabled: true,
+      onlineStoreEnabled: true,
+      aiCampaignReviewEnabled: true,
     };
   }
   return {
@@ -344,6 +386,9 @@ export function seedLimitsForSlug(slug: string | null | undefined): PlanLimits {
     creativeImagesLimit: 0,
     creativeVideoSecondsLimit: 0,
     creative4kEnabled: false,
+    instantFormsEnabled: false,
+    onlineStoreEnabled: false,
+    aiCampaignReviewEnabled: false,
   };
 }
 
@@ -394,6 +439,9 @@ export function limitsFromEntitlements(rows: StoredEntitlement[], fallback: Plan
     creativeImagesLimit: limitVal('creative_images_limit', fallback.creativeImagesLimit),
     creativeVideoSecondsLimit: limitVal('creative_video_seconds_limit', fallback.creativeVideoSecondsLimit),
     creative4kEnabled: boolVal('creative_4k_enabled', fallback.creative4kEnabled),
+    instantFormsEnabled: boolVal('instant_forms_enabled', fallback.instantFormsEnabled),
+    onlineStoreEnabled: boolVal('online_store_enabled', fallback.onlineStoreEnabled),
+    aiCampaignReviewEnabled: boolVal('ai_campaign_review_enabled', fallback.aiCampaignReviewEnabled),
   };
 }
 
@@ -427,6 +475,9 @@ export function entitlementsFromLimits(limits: PlanLimits): StoredEntitlement[] 
       limitValue: limits.creativeVideoSecondsLimit,
     },
     { featureKey: 'creative_4k_enabled', enabled: limits.creative4kEnabled, limitValue: null },
+    { featureKey: 'instant_forms_enabled', enabled: limits.instantFormsEnabled, limitValue: null },
+    { featureKey: 'online_store_enabled', enabled: limits.onlineStoreEnabled, limitValue: null },
+    { featureKey: 'ai_campaign_review_enabled', enabled: limits.aiCampaignReviewEnabled, limitValue: null },
   ];
 }
 

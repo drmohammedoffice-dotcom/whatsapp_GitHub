@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { clearAdminToken, fetchAdminMe, getAdminToken } from '@/lib/admin-api';
+import { clearStaffToken, fetchAdminMe, getStaffToken, isEmployeeAccount } from '@/lib/admin-api';
 
 export function StaffGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -11,7 +11,7 @@ export function StaffGuard({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const token = getAdminToken();
+    const token = getStaffToken();
     if (!token) {
       if (pathname !== '/staff/login') router.replace('/staff/login');
       setReady(pathname === '/staff/login');
@@ -19,8 +19,8 @@ export function StaffGuard({ children }: { children: ReactNode }) {
     }
     fetchAdminMe()
       .then((me) => {
-        if (me.role !== 'STAFF') {
-          clearAdminToken();
+        if (!isEmployeeAccount(me)) {
+          clearStaffToken();
           router.replace('/staff/login');
           setReady(true);
           return;
@@ -28,7 +28,7 @@ export function StaffGuard({ children }: { children: ReactNode }) {
         setReady(true);
       })
       .catch(() => {
-        clearAdminToken();
+        clearStaffToken();
         setReady(true);
         router.replace('/staff/login');
       });

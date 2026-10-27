@@ -2,13 +2,20 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, EyeOff, MessageCircle, Minus, Pencil, Plus, Search, ShoppingBag } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, EyeOff, MessageCircle, Minus, Pencil, Plus, Search, ShoppingBag } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { API_URL } from '@/lib/utils';
 import { DEFAULT_STORE_THEME, type StoreThemeColors } from '@/lib/store-themes';
 import { tiktokPixelInlineScript } from '@/lib/tiktok-pixel-script';
 
 type Media = { id: string; kind: 'IMAGE' | 'VIDEO'; url: string };
+export type PublicProductColor = {
+  id: string;
+  name: string;
+  hex: string;
+  imageId: string | null;
+  imageUrl?: string | null;
+};
 export type PublicProduct = {
   id: string;
   name: string;
@@ -17,11 +24,19 @@ export type PublicProduct = {
   compareAtPrice?: number | null;
   currency: string;
   quantity: number;
+  hideQuantity?: boolean;
+  /** أقل كمية عند الإضافة للسلة (افتراضي 1) */
+  minOrderQuantity?: number;
   inStock: boolean;
   categoryId: string | null;
   categoryName: string | null;
   media: Media[];
+  colors?: PublicProductColor[];
   isActive?: boolean;
+  /** داخل إطار البطاقة الثابت — لا يغيّر حجم الأيقونة الخارجية */
+  imageObjectFit?: 'cover' | 'contain';
+  imageObjectPosition?: string;
+  imageZoom?: number;
 };
 
 export type StoreEditHandlers = {
@@ -65,6 +80,9 @@ export type PublicBanner = {
   subtitle: string | null;
   linkUrl: string | null;
   imageUrl: string;
+  imageObjectFit?: 'cover' | 'contain';
+  imageObjectPosition?: string;
+  imageZoom?: number;
 };
 export type PublicStore = {
   settings: PublicSettings;
@@ -74,7 +92,7 @@ export type PublicStore = {
   governorates: string[];
 };
 
-export type CartItem = { productId: string; quantity: number };
+export type CartItem = { productId: string; quantity: number; colorId?: string | null; colorName?: string | null };
 
 const copy = {
   ar: {
@@ -110,6 +128,10 @@ const copy = {
     details: 'التفاصيل',
     back: 'العودة للمتجر',
     qty: 'الكمية',
+    minQty: 'أقل كمية',
+    available: 'متوفر',
+    color: 'اللون',
+    chooseColor: 'اختر اللون',
     chat: 'واتساب',
     similar: 'اقتراحات',
     noResults: 'لا توجد نتائج',
@@ -151,6 +173,10 @@ const copy = {
     details: 'Details',
     back: 'Back to store',
     qty: 'Qty',
+    minQty: 'Min. qty',
+    available: 'In stock',
+    color: 'Color',
+    chooseColor: 'Choose a color',
     chat: 'WhatsApp',
     similar: 'Suggestions',
     noResults: 'No results',
@@ -160,6 +186,12 @@ const copy = {
     editHint: 'Builder mode — edits apply live',
   },
 };
+
+function productMinOrder(product: PublicProduct): number {
+  const configured = Math.max(1, Math.floor(Number(product.minOrderQuantity) || 1) || 1);
+  if (!product.quantity || product.quantity < 1) return configured;
+  return Math.min(configured, product.quantity);
+}
 
 function discountPct(price: number, compareAt?: number | null) {
   if (!compareAt || compareAt <= price) return null;
@@ -223,6 +255,29 @@ function flyToCart(source: HTMLElement, target: HTMLElement) {
   anim.finished.then(() => ghost.remove()).catch(() => ghost.remove());
 }
 
+function bannerImageStyle(banner: PublicBanner) {
+  const objectFit = banner.imageObjectFit === 'contain' ? 'contain' : 'cover';
+  const objectPosition = banner.imageObjectPosition || 'center';
+  const zoom = Math.min(200, Math.max(50, banner.imageZoom || 100));
+  const scale = zoom / 100;
+  const origin =
+    objectPosition === 'top'
+      ? 'center top'
+      : objectPosition === 'bottom'
+        ? 'center bottom'
+        : objectPosition === 'left'
+          ? 'left center'
+          : objectPosition === 'right'
+            ? 'right center'
+            : 'center center';
+  return {
+    objectFit: objectFit as 'cover' | 'contain',
+    objectPosition,
+    transform: scale !== 1 ? `scale(${scale})` : undefined,
+    transformOrigin: origin,
+  };
+}
+
 function BannerCarousel({ banners, accent }: { banners: PublicBanner[]; accent: string }) {
   const [index, setIndex] = useState(0);
   useEffect(() => {
@@ -232,10 +287,11 @@ function BannerCarousel({ banners, accent }: { banners: PublicBanner[]; accent: 
   }, [banners.length]);
   if (!banners.length) return null;
   const current = banners[Math.min(index, banners.length - 1)]!;
+  const imgStyle = bannerImageStyle(current);
   const inner = (
     <div className="relative aspect-[21/9] min-h-[160px] overflow-hidden rounded-3xl border shadow-xl sm:min-h-[220px]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={current.imageUrl} alt={current.title || ''} className="h-full w-full object-cover" />
+      <img src={current.imageUrl} alt={current.title || ''} className="h-full w-full" style={imgStyle} />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
       {(current.title || current.subtitle) && (
         <div className="absolute inset-x-0 bottom-0 p-5">
@@ -272,18 +328,61 @@ function BannerCarousel({ banners, accent }: { banners: PublicBanner[]; accent: 
   return <div className="mb-8">{inner}</div>;
 }
 
-function MediaCarousel({ media, accent }: { media: Media[]; accent: string }) {
+function MediaCarousel({
+  media,
+  accent,
+  objectFit = 'cover',
+  objectPosition = 'center',
+  zoom = 100,
+  activeMediaId,
+}: {
+  media: Media[];
+  accent: string;
+  objectFit?: 'cover' | 'contain';
+  objectPosition?: string;
+  zoom?: number;
+  activeMediaId?: string | null;
+}) {
   const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!activeMediaId) return;
+    const next = media.findIndex((m) => m.id === activeMediaId);
+    if (next >= 0) setIndex(next);
+  }, [activeMediaId, media]);
   if (!media.length) return <div className="aspect-[4/3] bg-black/20" />;
   const current = media[Math.min(index, media.length - 1)]!;
   const go = (dir: number) => setIndex((i) => (i + dir + media.length) % media.length);
+  const scale = Math.min(200, Math.max(50, zoom)) / 100;
+  const origin =
+    objectPosition === 'top'
+      ? 'center top'
+      : objectPosition === 'bottom'
+        ? 'center bottom'
+        : objectPosition === 'left'
+          ? 'left center'
+          : objectPosition === 'right'
+            ? 'right center'
+            : 'center center';
+  const mediaStyle = {
+    objectFit,
+    objectPosition,
+    transform: scale !== 1 ? `scale(${scale})` : undefined,
+    transformOrigin: origin,
+  } as const;
   return (
     <div className="relative aspect-[4/3] overflow-hidden bg-black/20">
       {current.kind === 'VIDEO' ? (
-        <video src={current.url} className="h-full w-full object-cover" muted playsInline controls={media.length === 1} />
+        <video
+          src={current.url}
+          className="h-full w-full"
+          style={mediaStyle}
+          muted
+          playsInline
+          controls={media.length === 1}
+        />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={current.url} alt="" className="store-product-shot h-full w-full object-cover" />
+        <img src={current.url} alt="" className="store-product-shot h-full w-full" style={mediaStyle} />
       )}
       {media.length > 1 && (
         <>
@@ -365,8 +464,26 @@ export function PublicStorefront({
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [actionMenu, setActionMenu] = useState<null | { kind: 'product' | 'category'; id: string }>(null);
+  const [selectedColorId, setSelectedColorId] = useState<string | null>(null);
+  const [detailQty, setDetailQty] = useState(1);
   const cartFabRef = useRef<HTMLAnchorElement>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    setSelectedColorId(null);
+  }, [productId]);
+
+  useEffect(() => {
+    if (mode !== 'product' || !productId || !data) return;
+    const product = data.products.find((p) => p.id === productId);
+    if (!product) return;
+    setDetailQty(productMinOrder(product));
+    if (!product.colors?.length) return;
+    setSelectedColorId((current) => {
+      if (current && product.colors!.some((c) => c.id === current)) return current;
+      return product.colors![0]!.id;
+    });
+  }, [mode, productId, data]);
 
   useEffect(() => {
     if (!actionMenu) return;
@@ -422,6 +539,32 @@ export function PublicStorefront({
     [slug],
   );
 
+  useEffect(() => {
+    if (!data?.products?.length || !cart.length) return;
+    let changed = false;
+    const next = cart
+      .map((item) => {
+        const product = data.products.find((p) => p.id === item.productId);
+        if (!product) return item;
+        const min = productMinOrder(product);
+        const qty = Math.min(product.quantity, Math.max(min, item.quantity));
+        if (qty !== item.quantity) {
+          changed = true;
+          return { ...item, quantity: qty };
+        }
+        return item;
+      })
+      .filter((item) => {
+        const product = data.products.find((p) => p.id === item.productId);
+        if (!product || !product.inStock || product.quantity < productMinOrder(product)) {
+          changed = true;
+          return false;
+        }
+        return true;
+      });
+    if (changed) persist(next);
+  }, [data, cart, persist]);
+
   const lines = useMemo(() => {
     if (!data) return [];
     return cart
@@ -436,22 +579,54 @@ export function PublicStorefront({
   const subtotal = lines.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
   const cartCount = cart.reduce((n, i) => n + i.quantity, 0);
 
-  function add(product: PublicProduct, origin?: HTMLElement | null) {
+  function sameCartLine(a: CartItem, productId: string, colorId?: string | null) {
+    return a.productId === productId && (a.colorId || null) === (colorId || null);
+  }
+
+  function add(
+    product: PublicProduct,
+    origin?: HTMLElement | null,
+    color?: { id: string; name: string } | null,
+    amount?: number,
+  ) {
     if (!product.inStock) return;
-    const existing = cart.find((c) => c.productId === product.id);
-    const qty = (existing?.quantity || 0) + 1;
-    if (qty > product.quantity) return;
-    persist(existing ? cart.map((c) => (c.productId === product.id ? { ...c, quantity: qty } : c)) : [...cart, { productId: product.id, quantity: 1 }]);
+    const min = productMinOrder(product);
+    if (product.quantity < min) return;
+    const colorId = color?.id || null;
+    const colorName = color?.name || null;
+    const existing = cart.find((c) => sameCartLine(c, product.id, colorId));
+    const qty = existing
+      ? existing.quantity + (amount != null ? Math.max(1, Math.floor(Number(amount) || 1)) : 1)
+      : Math.min(product.quantity, Math.max(min, Math.floor(Number(amount) || min)));
+    if (qty > product.quantity || qty < min) return;
+    persist(
+      existing
+        ? cart.map((c) => (sameCartLine(c, product.id, colorId) ? { ...c, quantity: qty, colorName } : c))
+        : [...cart, { productId: product.id, quantity: qty, colorId, colorName }],
+    );
     const target = cartFabRef.current;
     if (origin && target) flyToCart(origin, target);
   }
 
-  function buyNow(product: PublicProduct) {
+  function buyNow(product: PublicProduct, color?: { id: string; name: string } | null, amount?: number) {
     if (!product.inStock) return;
-    const existing = cart.find((c) => c.productId === product.id);
+    const min = productMinOrder(product);
+    if (product.quantity < min) return;
+    const colorId = color?.id || null;
+    const colorName = color?.name || null;
+    const existing = cart.find((c) => sameCartLine(c, product.id, colorId));
+    const startQty = Math.min(product.quantity, Math.max(min, Math.floor(Number(amount) || min)));
     const next = existing
-      ? cart.map((c) => (c.productId === product.id ? { ...c, quantity: Math.min(product.quantity, Math.max(1, c.quantity)) } : c))
-      : [...cart, { productId: product.id, quantity: 1 }];
+      ? cart.map((c) =>
+          sameCartLine(c, product.id, colorId)
+            ? {
+                ...c,
+                quantity: Math.min(product.quantity, Math.max(min, amount != null ? startQty : c.quantity)),
+                colorName,
+              }
+            : c,
+        )
+      : [...cart, { productId: product.id, quantity: startQty, colorId, colorName }];
     persist(next);
     router.push(`/s/${slug}/checkout`);
   }
@@ -544,6 +719,10 @@ export function PublicStorefront({
     ? `https://wa.me/${waPhone}?text=${encodeURIComponent(locale === 'ar' ? `مرحباً، أود الاستفسار من متجر ${settings.brandName}` : `Hi, I’d like to ask about ${settings.brandName}`)}`
     : null;
   const detail = mode === 'product' ? data.products.find((p) => p.id === productId) : undefined;
+  const activeColor =
+    detail?.colors?.length && selectedColorId
+      ? detail.colors.find((c) => c.id === selectedColorId) || null
+      : null;
 
   const arrivals = (!categoryId ? data.products : visible).slice(0, 12);
   const catalog = categoryId ? visible : data.products;
@@ -611,7 +790,19 @@ export function PublicStorefront({
                         <div className="h-12 w-12 overflow-hidden rounded-xl bg-black/20">
                           {product.media[0]?.kind === 'IMAGE' ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={product.media[0].url} alt="" className="h-full w-full object-cover" />
+                            <img
+                              src={product.media[0].url}
+                              alt=""
+                              className="h-full w-full"
+                              style={{
+                                objectFit: product.imageObjectFit || 'cover',
+                                objectPosition: product.imageObjectPosition || 'center',
+                                transform:
+                                  (product.imageZoom || 100) !== 100
+                                    ? `scale(${Math.min(200, Math.max(50, product.imageZoom || 100)) / 100})`
+                                    : undefined,
+                              }}
+                            />
                           ) : null}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -635,11 +826,7 @@ export function PublicStorefront({
               <Link href={`/s/${slug}/checkout`} className="hidden rounded-full px-4 py-2 text-sm font-medium sm:inline-flex" style={{ background: theme.accent, color: theme.accentText }}>
                 {t.checkout}
               </Link>
-            ) : (
-              <Link href={`/s/${slug}`} className="text-sm" style={{ color: theme.accent }}>
-                {t.back}
-              </Link>
-            )}
+            ) : null}
           </div>
         </div>
       </header>
@@ -793,7 +980,13 @@ export function PublicStorefront({
                   >
                     {!editMode ? <Link href={`/s/${slug}/p/${product.id}`} className="absolute inset-0 z-[5]" aria-label={product.name} /> : null}
                     <div className="relative">
-                      <MediaCarousel media={product.media} accent={theme.accent} />
+                      <MediaCarousel
+                        media={product.media}
+                        accent={theme.accent}
+                        objectFit={product.imageObjectFit}
+                        objectPosition={product.imageObjectPosition}
+                        zoom={product.imageZoom}
+                      />
                       {pct ? (
                         <span className="absolute start-2 top-2 z-10 rounded-md bg-rose-600 px-2 py-0.5 text-[11px] font-bold text-white">
                           {pct}%
@@ -870,46 +1063,161 @@ export function PublicStorefront({
 
         {mode === 'product' && (
           detail ? (
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
-              <div className="overflow-hidden rounded-3xl border shadow-xl" style={{ borderColor: theme.border, background: theme.card }}>
-                <MediaCarousel media={detail.media} accent={theme.accent} />
-              </div>
-              <div className="space-y-4 rounded-3xl border p-6" style={{ borderColor: theme.border, background: theme.card }}>
-                <p className="text-xs" style={{ color: theme.muted }}>
-                  {detail.categoryName}
-                </p>
-                <h1 className="text-3xl font-semibold">{detail.name}</h1>
-                <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: theme.muted }}>
-                  {detail.description}
-                </p>
-                <p className="text-2xl font-bold" style={{ color: theme.accent }}>
-                  {detail.price.toLocaleString()} {detail.currency}
-                </p>
-                <p className="text-sm" style={{ color: theme.muted }}>
-                  {detail.inStock ? `${t.qty}: ${detail.quantity}` : t.out}
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    disabled={!detail.inStock}
-                    onClick={(e) => {
-                      const shot = e.currentTarget.closest('div')?.parentElement?.querySelector('.store-product-shot') as HTMLElement | null;
-                      add(detail, shot);
-                    }}
-                    className="rounded-2xl border py-3 text-sm font-semibold disabled:opacity-40"
-                    style={{ borderColor: theme.border, color: theme.text, background: theme.card }}
-                  >
-                    {detail.inStock ? t.add : t.out}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!detail.inStock}
-                    onClick={() => buyNow(detail)}
-                    className="rounded-2xl py-3 text-sm font-semibold disabled:opacity-40"
-                    style={{ background: theme.accent, color: theme.accentText }}
-                  >
-                    {t.buyNow}
-                  </button>
+            <div className="space-y-4">
+              <Link
+                href={`/s/${slug}`}
+                className="sticky top-16 z-10 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-base font-bold shadow-lg sm:w-auto sm:justify-start"
+                style={{ background: theme.accent, color: theme.accentText }}
+              >
+                <ArrowRight className="h-5 w-5 shrink-0 rtl:rotate-0 ltr:rotate-180" />
+                {t.back}
+              </Link>
+              <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+                <div className="overflow-hidden rounded-3xl border shadow-xl" style={{ borderColor: theme.border, background: theme.card }}>
+                  <MediaCarousel
+                    media={detail.media}
+                    accent={theme.accent}
+                    objectFit={detail.imageObjectFit}
+                    objectPosition={detail.imageObjectPosition}
+                    zoom={detail.imageZoom}
+                    activeMediaId={activeColor?.imageId || null}
+                  />
+                </div>
+                <div className="space-y-4 rounded-3xl border p-6" style={{ borderColor: theme.border, background: theme.card }}>
+                  <p className="text-xs" style={{ color: theme.muted }}>
+                    {detail.categoryName}
+                  </p>
+                  <h1 className="text-3xl font-semibold">{detail.name}</h1>
+                  <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: theme.muted }}>
+                    {detail.description}
+                  </p>
+                  <p className="text-2xl font-bold" style={{ color: theme.accent }}>
+                    {detail.price.toLocaleString()} {detail.currency}
+                  </p>
+                  {detail.inStock ? (
+                    detail.hideQuantity ? (
+                      <p className="text-sm" style={{ color: theme.muted }}>
+                        {t.available}
+                      </p>
+                    ) : (
+                      <p className="text-sm" style={{ color: theme.muted }}>
+                        {t.qty}: {detail.quantity}
+                      </p>
+                    )
+                  ) : (
+                    <p className="text-sm" style={{ color: theme.muted }}>
+                      {t.out}
+                    </p>
+                  )}
+                  {detail.inStock && productMinOrder(detail) > 1 ? (
+                    <p className="text-sm font-medium" style={{ color: theme.accent }}>
+                      {t.minQty}: {productMinOrder(detail)}
+                    </p>
+                  ) : null}
+                  {detail.colors && detail.colors.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">
+                        {t.color}
+                        {activeColor ? (
+                          <span className="ms-2 font-normal" style={{ color: theme.muted }}>
+                            — {activeColor.name}
+                          </span>
+                        ) : (
+                          <span className="ms-2 font-normal" style={{ color: theme.muted }}>
+                            — {t.chooseColor}
+                          </span>
+                        )}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {detail.colors.map((color) => {
+                          const selected = activeColor?.id === color.id;
+                          return (
+                            <button
+                              key={color.id}
+                              type="button"
+                              onClick={() => setSelectedColorId(color.id)}
+                              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition"
+                              style={{
+                                borderColor: selected ? theme.accent : theme.border,
+                                background: selected ? `${theme.accent}18` : theme.card,
+                                color: theme.text,
+                                boxShadow: selected ? `0 0 0 1px ${theme.accent}` : undefined,
+                              }}
+                              title={color.name}
+                            >
+                              <span
+                                className="h-5 w-5 rounded-full border border-black/15 shadow-sm"
+                                style={{ background: color.hex }}
+                                aria-hidden
+                              />
+                              <span>{color.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  {detail.inStock ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium">{t.qty}</span>
+                      <div className="flex items-center gap-1 rounded-full border px-1 py-1" style={{ borderColor: theme.border }}>
+                        <button
+                          type="button"
+                          aria-label="decrease"
+                          disabled={detailQty <= productMinOrder(detail)}
+                          className="flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-40"
+                          style={{ background: `${theme.accent}22`, color: theme.accent }}
+                          onClick={() => setDetailQty((q) => Math.max(productMinOrder(detail), q - 1))}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <span className="min-w-10 text-center font-mono text-base tabular-nums">{detailQty}</span>
+                        <button
+                          type="button"
+                          aria-label="increase"
+                          disabled={detailQty >= detail.quantity}
+                          className="flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-40"
+                          style={{ background: theme.accent, color: theme.accentText }}
+                          onClick={() => setDetailQty((q) => Math.min(detail.quantity, q + 1))}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={
+                        !detail.inStock ||
+                        detail.quantity < productMinOrder(detail) ||
+                        (Boolean(detail.colors?.length) && !activeColor)
+                      }
+                      onClick={(e) => {
+                        const shot = e.currentTarget.closest('div')?.parentElement?.querySelector('.store-product-shot') as HTMLElement | null;
+                        add(detail, shot, activeColor ? { id: activeColor.id, name: activeColor.name } : null, detailQty);
+                      }}
+                      className="rounded-2xl border py-3 text-sm font-semibold disabled:opacity-40"
+                      style={{ borderColor: theme.border, color: theme.text, background: theme.card }}
+                    >
+                      {detail.inStock ? t.add : t.out}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        !detail.inStock ||
+                        detail.quantity < productMinOrder(detail) ||
+                        (Boolean(detail.colors?.length) && !activeColor)
+                      }
+                      onClick={() =>
+                        buyNow(detail, activeColor ? { id: activeColor.id, name: activeColor.name } : null, detailQty)
+                      }
+                      className="rounded-2xl py-3 text-sm font-semibold disabled:opacity-40"
+                      style={{ background: theme.accent, color: theme.accentText }}
+                    >
+                      {t.buyNow}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1010,7 +1318,10 @@ function CheckoutPanel({
   const total = subtotal + ship;
   const field = 'w-full rounded-2xl border px-4 py-3';
   const summaryText = lines
-    .map((l) => `${l.product.name} × ${l.quantity} = ${l.product.price * l.quantity} ${settings.currency}`)
+    .map((l) => {
+      const label = l.colorName ? `${l.product.name} (${l.colorName})` : l.product.name;
+      return `${label} × ${l.quantity} = ${l.product.price * l.quantity} ${settings.currency}`;
+    })
     .concat([`${t.delivery}: ${ship} ${settings.currency}`, `${t.total}: ${total} ${settings.currency}`])
     .join('\n');
 
@@ -1024,7 +1335,12 @@ function CheckoutPanel({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+          items: lines.map((l) => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            colorId: l.colorId || undefined,
+            colorName: l.colorName || undefined,
+          })),
           phone: String(form.get('phone') || ''),
           governorate: String(form.get('governorate') || gov),
           city: String(form.get('city') || ''),
@@ -1074,9 +1390,15 @@ function CheckoutPanel({
         ) : (
           <ul className="space-y-3">
             {lines.map((line) => {
-              const thumb = line.product.media.find((m) => m.kind === 'IMAGE') ?? line.product.media[0];
+              const colorMedia = line.colorId
+                ? line.product.media.find((m) => m.id === line.product.colors?.find((c) => c.id === line.colorId)?.imageId)
+                : null;
+              const thumb = colorMedia || line.product.media.find((m) => m.kind === 'IMAGE') || line.product.media[0];
+              const lineKey = `${line.productId}:${line.colorId || ''}`;
+              const sameLine = (l: CartItem) =>
+                l.productId === line.productId && (l.colorId || null) === (line.colorId || null);
               return (
-                <li key={line.productId} className="flex items-center gap-3 rounded-2xl bg-black/20 p-3">
+                <li key={lineKey} className="flex items-center gap-3 rounded-2xl bg-black/20 p-3">
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-black/30">
                     {thumb?.kind === 'IMAGE' ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1085,6 +1407,18 @@ function CheckoutPanel({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{line.product.name}</p>
+                    {line.colorName ? (
+                      <p className="mt-0.5 flex items-center gap-1.5 text-xs" style={{ color: theme.muted }}>
+                        <span
+                          className="inline-block h-3 w-3 rounded-full border border-white/30"
+                          style={{
+                            background:
+                              line.product.colors?.find((c) => c.id === line.colorId)?.hex || '#888',
+                          }}
+                        />
+                        {line.colorName}
+                      </p>
+                    ) : null}
                     <p className="text-sm" style={{ color: theme.muted }}>
                       {line.product.price.toLocaleString()} {settings.currency}
                     </p>
@@ -1097,12 +1431,13 @@ function CheckoutPanel({
                         className="flex h-8 w-8 items-center justify-center rounded-full"
                         style={{ background: `${theme.accent}22`, color: theme.accent }}
                         onClick={() => {
+                          const min = productMinOrder(line.product);
                           const qty = line.quantity - 1;
-                          if (qty < 1) {
-                            persist(lines.filter((l) => l.productId !== line.productId).map((l) => ({ productId: l.productId, quantity: l.quantity })));
+                          if (qty < min) {
+                            persist(lines.filter((l) => !sameLine(l)));
                             return;
                           }
-                          persist(lines.map((l) => ({ productId: l.productId, quantity: l.productId === line.productId ? qty : l.quantity })));
+                          persist(lines.map((l) => (sameLine(l) ? { ...l, quantity: qty } : l)));
                         }}
                       >
                         <Minus className="h-4 w-4" />
@@ -1116,13 +1451,13 @@ function CheckoutPanel({
                         style={{ background: theme.accent, color: theme.accentText }}
                         onClick={() => {
                           const qty = Math.min(line.product.quantity, line.quantity + 1);
-                          persist(lines.map((l) => ({ productId: l.productId, quantity: l.productId === line.productId ? qty : l.quantity })));
+                          persist(lines.map((l) => (sameLine(l) ? { ...l, quantity: qty } : l)));
                         }}
                       >
                         <Plus className="h-4 w-4" />
                       </button>
                     </div>
-                    <button type="button" className="text-xs text-red-300" onClick={() => persist(lines.filter((l) => l.productId !== line.productId).map((l) => ({ productId: l.productId, quantity: l.quantity })))}>
+                    <button type="button" className="text-xs text-red-300" onClick={() => persist(lines.filter((l) => !sameLine(l)))}>
                       {t.remove}
                     </button>
                   </div>

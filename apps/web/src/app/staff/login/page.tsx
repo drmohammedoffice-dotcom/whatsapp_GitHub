@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { adminLogin, setAdminToken } from '@/lib/admin-api';
+import { adminLogin, isEmployeeAccount, staffHasRole, setStaffToken } from '@/lib/admin-api';
 
 export default function StaffLoginPage() {
   const router = useRouter();
@@ -24,11 +24,14 @@ export default function StaffLoginPage() {
     setError(null);
     try {
       const { accessToken, admin } = await adminLogin(email, password, 'staff');
-      if (admin.role !== 'STAFF') {
-        throw new Error('هذا الحساب ليس حساب موظف');
+      if (!isEmployeeAccount(admin)) {
+        throw new Error('هذا الحساب ليس حساب موظف — استخدم /admin/login');
       }
-      setAdminToken(accessToken);
-      router.replace('/staff');
+      setStaffToken(accessToken);
+      const onlyMail =
+        staffHasRole(admin, 'MAILBOX_CREATOR') &&
+        !staffHasRole(admin, ['ACCOUNTANT', 'STAFF']);
+      router.replace(onlyMail ? '/staff/mail' : '/staff');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

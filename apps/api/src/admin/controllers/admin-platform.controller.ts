@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminRole } from '@watsapp/database';
 import { RequireAdminRoles } from '../decorators/require-admin-roles.decorator';
@@ -11,6 +11,7 @@ import { AdminAuditService } from '../services/admin-audit.service';
 import { AdminDashboardService } from '../services/admin-dashboard.service';
 import { AdminAssistantService } from '../services/admin-assistant.service';
 import { AdminSettingsService } from '../services/admin-settings.service';
+import { AdminLandingService } from '../services/admin-landing.service';
 import { AdminVoiceService } from '../services/admin-voice.service';
 import { AdminPrincipal } from '../types/admin-principal';
 
@@ -24,6 +25,7 @@ export class AdminPlatformController {
     private readonly analytics: AdminAnalyticsService,
     private readonly audit: AdminAuditService,
     private readonly settings: AdminSettingsService,
+    private readonly landing: AdminLandingService,
     private readonly assistant: AdminAssistantService,
     private readonly voice: AdminVoiceService,
     private readonly aiGateway: AdminAiGatewayService,
@@ -84,6 +86,30 @@ export class AdminPlatformController {
   @ApiOperation({ summary: 'Maintenance mode status' })
   maintenance() {
     return this.settings.getMaintenanceMode();
+  }
+
+  @Get('landing')
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.DEVELOPER, AdminRole.SUPPORT_AGENT)
+  @ApiOperation({ summary: 'Landing page CMS content' })
+  getLanding() {
+    return this.landing.get();
+  }
+
+  @Put('landing')
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.DEVELOPER)
+  @ApiOperation({ summary: 'Save landing page CMS content' })
+  saveLanding(
+    @CurrentAdmin() admin: AdminPrincipal,
+    @Body() body: { contentEn?: unknown; contentAr?: unknown; visibility?: Record<string, boolean> },
+  ) {
+    return this.landing.save(admin.adminUserId, body);
+  }
+
+  @Post('landing/reset')
+  @RequireAdminRoles(AdminRole.SUPER_ADMIN, AdminRole.DEVELOPER)
+  @ApiOperation({ summary: 'Reset landing page CMS to built-in defaults' })
+  resetLanding(@CurrentAdmin() admin: AdminPrincipal) {
+    return this.landing.reset(admin.adminUserId);
   }
 
   @Get('assistant/settings')

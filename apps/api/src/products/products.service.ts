@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { ProductMediaKind, Prisma } from '@watsapp/database';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
+import { PlanEntitlementsService } from '../billing/plan-entitlements.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocalStorageService } from '../storage/local-storage.service';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
@@ -54,6 +55,7 @@ export class ProductsService {
     private readonly storage: LocalStorageService,
     private readonly config: ConfigService,
     private readonly bookings: BookingsService,
+    private readonly entitlements: PlanEntitlementsService,
     @Optional()
     @Inject(forwardRef(() => TikTokIntegrationTrackingService))
     private readonly tiktokTracking?: TikTokIntegrationTrackingService,
@@ -85,6 +87,7 @@ export class ProductsService {
   }
 
   async updateSettings(teamId: string, dto: UpdateStoreSettingsDto) {
+    await this.entitlements.assertOnlineStoreEnabled(teamId);
     await this.ensureSettings(teamId);
     const updated = await this.prisma.storeSettings.update({
       where: { teamId },
@@ -167,6 +170,149 @@ export class ProductsService {
     return product;
   }
 
+  private normalizeColorHex(raw: unknown): string {
+    let hex = String(raw || '#000000').trim();
+    if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) hex = '#000000';
+    if (hex.length === 4) {
+      hex = `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+    }
+    return hex.toLowerCase();
+  }
+
+  private stableColorId(name: string, hex: string, fallbackIndex: number) {
+    const slug = name
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40);
+    return `c_${slug || fallbackIndex}_${hex.replace('#', '')}`.slice(0, 64);
+  }
+
+  private sanitizeProductColors(raw: unknown): Array<{
+    id: string;
+    name: string;
+    hex: string;
+    imageId: string | null;
+  }> {
+    if (!Array.isArray(raw)) return [];
+    const out: Array<{ id: string; name: string; hex: string; imageId: string | null }> = [];
+    for (const item of raw.slice(0, 24)) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const row = item as Record<string, unknown>;
+      const name = String(row.name || '').trim().slice(0, 60);
+      if (!name) continue;
+      const hex = this.normalizeColorHex(row.hex);
+      const imageId = String(row.imageId || '').trim() || null;
+      const id = String(row.id || '').trim() || this.stableColorId(name, hex, out.length + 1);
+      out.push({ id: id.slice(0, 64), name, hex, imageId });
+    }
+    return out;
+  }
+
+  private sanitizePaletteColors(raw: unknown): Array<{ id: string; name: string; hex: string }> {
+    return this.sanitizeProductColors(raw).map(({ id, name, hex }) => ({ id, name, hex }));
+  }
+
+  async getColorPalette(teamId: string) {
+    const settings = await this.ensureSettings(teamId);
+    return {
+      colors: this.sanitizePaletteColors(settings.productColorPalette),
+    };
+  }
+
+  async saveColorPalette(teamId: string, colors: unknown) {
+    await this.entitlements.assertOnlineStoreEnabled(teamId);
+    await this.ensureSettings(teamId);
+    const palette = this.sanitizePaletteColors(colors);
+    const updated = await this.prisma.storeSettings.update({
+      where: { teamId },
+      data: { productColorPalette: palette as Prisma.InputJsonValue },
+    });
+    return {
+      colors: this.sanitizePaletteColors(updated.productColorPalette),
+    };
+  }
+
+  async applyColorsToProducts(
+    teamId: string,
+    input: {
+      colors?: unknown;
+      productIds?: string[];
+      all?: boolean;
+      linkImagesByPosition?: boolean;
+      saveAsStorePalette?: boolean;
+    },
+  ) {
+    await this.entitlements.assertOnlineStoreEnabled(teamId);
+    await this.ensureSettings(teamId);
+
+    let palette = this.sanitizePaletteColors(input.colors);
+    if (!palette.length) {
+      const saved = await this.getColorPalette(teamId);
+      palette = saved.colors;
+    }
+    if (!palette.length) {
+      throw new BadRequestException('أضف لوناً واحداً على الأقل قبل التطبيق');
+    }
+
+    if (input.saveAsStorePalette !== false) {
+      await this.prisma.storeSettings.update({
+        where: { teamId },
+        data: { productColorPalette: palette as Prisma.InputJsonValue },
+      });
+    }
+
+    const linkByPosition = input.linkImagesByPosition !== false;
+    const where = input.all
+      ? { teamId }
+      : {
+          teamId,
+          id: { in: [...new Set((input.productIds || []).map((id) => String(id).trim()).filter(Boolean))] },
+        };
+    if (!input.all && !(where as { id?: { in: string[] } }).id?.in.length) {
+      throw new BadRequestException('اختر منتجات للتطبيق عليها، أو طبّق على الكل');
+    }
+
+    const products = await this.prisma.product.findMany({
+      where,
+      include: { images: { orderBy: { position: 'asc' } } },
+    });
+    if (!products.length) {
+      throw new BadRequestException('لا توجد منتجات مطابقة');
+    }
+
+    let updatedCount = 0;
+    for (const product of products) {
+      const imageOnly = product.images.filter((m) => m.kind === 'IMAGE');
+      const colors = palette.map((swatch, index) => ({
+        id: swatch.id,
+        name: swatch.name,
+        hex: swatch.hex,
+        imageId: linkByPosition && imageOnly[index] ? imageOnly[index]!.id : null,
+      }));
+      const prevMeta =
+        product.metadata && typeof product.metadata === 'object' && !Array.isArray(product.metadata)
+          ? { ...(product.metadata as Record<string, unknown>) }
+          : {};
+      await this.prisma.product.update({
+        where: { id: product.id },
+        data: {
+          metadata: {
+            ...prevMeta,
+            colors,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      updatedCount += 1;
+    }
+
+    return {
+      updatedCount,
+      colors: palette,
+      linkImagesByPosition: linkByPosition,
+    };
+  }
+
   private sanitizeProductMetadata(raw?: object): Prisma.InputJsonValue | undefined {
     if (raw === undefined) return undefined;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw as Prisma.InputJsonValue;
@@ -174,10 +320,33 @@ export class ProductsService {
     if ('metaPixelId' in rec) rec.metaPixelId = sanitizeMetaPixelId(rec.metaPixelId);
     if ('landingCopy' in rec) rec.landingCopy = sanitizeLandingCopy(rec.landingCopy) ?? null;
     if ('salePrice' in rec) rec.salePrice = parseIqdAmount(rec.salePrice);
+    if ('imageObjectFit' in rec) {
+      rec.imageObjectFit = rec.imageObjectFit === 'contain' ? 'contain' : 'cover';
+    }
+    if ('imageObjectPosition' in rec) {
+      const pos = String(rec.imageObjectPosition ?? 'center').trim().slice(0, 40);
+      rec.imageObjectPosition = pos || 'center';
+    }
+    if ('imageZoom' in rec) {
+      const z = Number(rec.imageZoom);
+      // 50–200%: تصغير/تكبير داخل إطار البطاقة دون تغيير حجم الأيقونة الخارجية
+      rec.imageZoom = Number.isFinite(z) ? Math.min(200, Math.max(50, Math.round(z))) : 100;
+    }
+    if ('hideQuantity' in rec) {
+      rec.hideQuantity = Boolean(rec.hideQuantity);
+    }
+    if ('minOrderQuantity' in rec) {
+      const min = Math.floor(Number(rec.minOrderQuantity) || 1);
+      rec.minOrderQuantity = Number.isFinite(min) ? Math.min(9999, Math.max(1, min)) : 1;
+    }
+    if ('colors' in rec) {
+      rec.colors = this.sanitizeProductColors(rec.colors);
+    }
     return rec as Prisma.InputJsonValue;
   }
 
   async create(teamId: string, data: ProductDto) {
+    await this.entitlements.assertOnlineStoreEnabled(teamId);
     const unitPrice = this.resolveUnitPrice(data);
     const last = await this.prisma.product.findFirst({ where: { teamId }, orderBy: { position: 'desc' } });
     return this.prisma.product.create({
@@ -533,6 +702,46 @@ export class ProductsService {
     return this.withStoreUrl(updated);
   }
 
+  private sanitizeBannerImageMeta(input?: {
+    imageObjectFit?: string;
+    imageObjectPosition?: string;
+    imageZoom?: number | string;
+    metadata?: unknown;
+  }): Prisma.InputJsonValue | undefined {
+    const base =
+      input?.metadata && typeof input.metadata === 'object' && !Array.isArray(input.metadata)
+        ? { ...(input.metadata as Record<string, unknown>) }
+        : {};
+    if (input?.imageObjectFit !== undefined) {
+      base.imageObjectFit = input.imageObjectFit === 'contain' ? 'contain' : 'cover';
+    }
+    if (input?.imageObjectPosition !== undefined) {
+      const pos = String(input.imageObjectPosition ?? 'center').trim().slice(0, 40);
+      base.imageObjectPosition = pos || 'center';
+    }
+    if (input?.imageZoom !== undefined) {
+      const z = Number(input.imageZoom);
+      base.imageZoom = Number.isFinite(z) ? Math.min(200, Math.max(50, Math.round(z))) : 100;
+    }
+    return Object.keys(base).length ? (base as Prisma.InputJsonValue) : undefined;
+  }
+
+  private readBannerImageMeta(metadata: unknown) {
+    const raw =
+      metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : {};
+    const zoomRaw = Number(raw.imageZoom);
+    return {
+      imageObjectFit: (raw.imageObjectFit === 'contain' ? 'contain' : 'cover') as 'cover' | 'contain',
+      imageObjectPosition:
+        typeof raw.imageObjectPosition === 'string' && raw.imageObjectPosition.trim()
+          ? raw.imageObjectPosition.trim().slice(0, 40)
+          : 'center',
+      imageZoom: Number.isFinite(zoomRaw) ? Math.min(200, Math.max(50, Math.round(zoomRaw))) : 100,
+    };
+  }
+
   listBanners(teamId: string) {
     return this.prisma.storeBanner.findMany({ where: { teamId }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] });
   }
@@ -540,7 +749,14 @@ export class ProductsService {
   async createBanner(
     teamId: string,
     file: UploadedMediaFile,
-    meta?: { title?: string; subtitle?: string; linkUrl?: string },
+    meta?: {
+      title?: string;
+      subtitle?: string;
+      linkUrl?: string;
+      imageObjectFit?: string;
+      imageObjectPosition?: string;
+      imageZoom?: number | string;
+    },
   ) {
     if (!file?.buffer?.length || !file.mimetype.startsWith('image/')) {
       throw new BadRequestException('Banner image is required');
@@ -548,6 +764,11 @@ export class ProductsService {
     await this.ensureSettings(teamId);
     const count = await this.prisma.storeBanner.count({ where: { teamId } });
     const stored = await this.storage.putMedia(teamId, file);
+    const metadata = this.sanitizeBannerImageMeta(meta) ?? {
+      imageObjectFit: 'cover',
+      imageObjectPosition: 'center',
+      imageZoom: 100,
+    };
     return this.prisma.storeBanner.create({
       data: {
         teamId,
@@ -556,6 +777,7 @@ export class ProductsService {
         title: meta?.title?.trim() || null,
         subtitle: meta?.subtitle?.trim() || null,
         linkUrl: meta?.linkUrl?.trim() || null,
+        metadata,
         position: count,
         enabled: true,
       },
@@ -565,10 +787,29 @@ export class ProductsService {
   async updateBanner(
     teamId: string,
     id: string,
-    dto: { title?: string; subtitle?: string; linkUrl?: string; enabled?: boolean; position?: number },
+    dto: {
+      title?: string;
+      subtitle?: string;
+      linkUrl?: string;
+      enabled?: boolean;
+      position?: number;
+      imageObjectFit?: string;
+      imageObjectPosition?: string;
+      imageZoom?: number | string;
+    },
   ) {
     const row = await this.prisma.storeBanner.findFirst({ where: { id, teamId } });
     if (!row) throw new NotFoundException('Banner not found');
+    const nextMeta = this.sanitizeBannerImageMeta({
+      metadata: row.metadata,
+      imageObjectFit: dto.imageObjectFit,
+      imageObjectPosition: dto.imageObjectPosition,
+      imageZoom: dto.imageZoom,
+    });
+    const touchImageMeta =
+      dto.imageObjectFit !== undefined ||
+      dto.imageObjectPosition !== undefined ||
+      dto.imageZoom !== undefined;
     return this.prisma.storeBanner.update({
       where: { id },
       data: {
@@ -577,6 +818,7 @@ export class ProductsService {
         ...(dto.linkUrl !== undefined ? { linkUrl: dto.linkUrl.trim() || null } : {}),
         ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
         ...(dto.position !== undefined ? { position: dto.position } : {}),
+        ...(touchImageMeta && nextMeta ? { metadata: nextMeta } : {}),
       },
     });
   }
@@ -770,27 +1012,50 @@ export class ProductsService {
       quantity: number;
       unitPrice: number;
       mediaId: string | null;
+      colorId?: string | null;
+      colorName?: string | null;
     }> = [];
     let subtotal = 0;
     const summary: string[] = [];
     for (const item of dto.items) {
       const product = byId.get(item.productId);
       if (!product) throw new BadRequestException('Product not found');
-      const qty = Math.max(1, Math.floor(Number(item.quantity) || 1));
+      const meta =
+        product.metadata && typeof product.metadata === 'object' && !Array.isArray(product.metadata)
+          ? (product.metadata as Record<string, unknown>)
+          : {};
+      const minOrder = Math.min(
+        9999,
+        Math.max(1, Math.floor(Number(meta.minOrderQuantity) || 1) || 1),
+      );
+      const qty = Math.max(minOrder, Math.floor(Number(item.quantity) || minOrder));
       if (!isProductInStock(product) || product.quantity < qty) {
         throw new BadRequestException(`Out of stock: ${product.name}`);
       }
+      if (product.quantity < minOrder) {
+        throw new BadRequestException(`Minimum order quantity for ${product.name} is ${minOrder}`);
+      }
       const price = displayPrice(product);
+      const colorName = String(item.colorName || '').trim().slice(0, 60) || null;
+      const colorId = String(item.colorId || '').trim().slice(0, 64) || null;
+      const colorRow = colorId
+        ? this.sanitizeProductColors(meta.colors).find((c) => c.id === colorId)
+        : null;
+      const resolvedColorName = colorRow?.name || colorName;
+      const mediaId = colorRow?.imageId || product.images[0]?.id || null;
+      const lineLabel = resolvedColorName ? `${product.name} (${resolvedColorName})` : product.name;
       subtotal += price * qty;
-      lines.push({ productId: product.id, quantity: qty, name: product.name });
+      lines.push({ productId: product.id, quantity: qty, name: lineLabel });
       snapshotLines.push({
         productId: product.id,
-        name: product.name,
+        name: lineLabel,
         quantity: qty,
         unitPrice: price,
-        mediaId: product.images[0]?.id ?? null,
+        mediaId,
+        colorId,
+        colorName: resolvedColorName,
       });
-      summary.push(`${product.name} × ${qty} = ${price * qty} ${settings.currency}`);
+      summary.push(`${lineLabel} × ${qty} = ${price * qty} ${settings.currency}`);
     }
     const delivery = resolveDeliveryFee(settings, governorate);
     const total = subtotal + delivery;
@@ -1186,6 +1451,26 @@ export class ProductsService {
     const price = displayPrice(product);
     const meta = parseLandingMeta(product.metadata);
     const compareAt = meta.compareAtPrice && meta.compareAtPrice > price ? meta.compareAtPrice : null;
+    const rawMeta =
+      product.metadata && typeof product.metadata === 'object' && !Array.isArray(product.metadata)
+        ? (product.metadata as Record<string, unknown>)
+        : {};
+    const objectFit = rawMeta.imageObjectFit === 'contain' ? 'contain' : 'cover';
+    const objectPosition =
+      typeof rawMeta.imageObjectPosition === 'string' && rawMeta.imageObjectPosition.trim()
+        ? rawMeta.imageObjectPosition.trim().slice(0, 40)
+        : 'center';
+    const zoomRaw = Number(rawMeta.imageZoom);
+    const imageZoom = Number.isFinite(zoomRaw) ? Math.min(200, Math.max(50, Math.round(zoomRaw))) : 100;
+    const media = product.images.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      url: `${this.apiBase()}/api/v1/store/public/${encodeURIComponent(slug)}/media/${m.id}`,
+    }));
+    const colors = this.sanitizeProductColors(rawMeta.colors).map((c) => ({
+      ...c,
+      imageUrl: c.imageId ? media.find((m) => m.id === c.imageId)?.url ?? null : null,
+    }));
     return {
       id: product.id,
       name: product.name,
@@ -1194,27 +1479,40 @@ export class ProductsService {
       compareAtPrice: compareAt,
       currency: product.currency,
       quantity: inStock ? product.quantity : 0,
+      hideQuantity: Boolean(rawMeta.hideQuantity),
+      minOrderQuantity: Math.min(
+        9999,
+        Math.max(1, Math.floor(Number(rawMeta.minOrderQuantity) || 1) || 1),
+      ),
       inStock,
       categoryId: product.categoryId,
       categoryName: product.storeCategory?.name ?? null,
-      media: product.images.map((m) => ({
-        id: m.id,
-        kind: m.kind,
-        url: `${this.apiBase()}/api/v1/store/public/${encodeURIComponent(slug)}/media/${m.id}`,
-      })),
+      imageObjectFit: objectFit,
+      imageObjectPosition: objectPosition,
+      imageZoom,
+      colors,
+      media,
     };
   }
 
   private publicBanner(
     slug: string,
-    banner: { id: string; title: string | null; subtitle: string | null; linkUrl: string | null },
+    banner: {
+      id: string;
+      title: string | null;
+      subtitle: string | null;
+      linkUrl: string | null;
+      metadata?: unknown;
+    },
   ) {
+    const fit = this.readBannerImageMeta(banner.metadata);
     return {
       id: banner.id,
       title: banner.title,
       subtitle: banner.subtitle,
       linkUrl: banner.linkUrl,
       imageUrl: `${this.apiBase()}/api/v1/store/public/${encodeURIComponent(slug)}/banner/${banner.id}`,
+      ...fit,
     };
   }
 

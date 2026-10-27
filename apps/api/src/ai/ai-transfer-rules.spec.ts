@@ -1,4 +1,4 @@
-﻿import { AiTransferReason } from '@watsapp/database';
+import { AiTransferReason } from '@watsapp/database';
 import {
   applyTransferRules,
   detectScriptedReplyIntent,
@@ -87,7 +87,7 @@ describe('ai-transfer-rules', () => {
 
 الرسالة الثانية:
 موقع المنصة
-www.chatloora.com
+www.almutamayiziq.com
 الباقات
 🟢 الأساسية 15$
 
@@ -108,7 +108,7 @@ https://youtu.be/Kxtc-8vPFNk
     expect(script).toHaveLength(4);
     expect(script[0]).toContain('أهلاً وسهلاً');
     expect(script[0]).toContain('Chatloora');
-    expect(script[1]).toContain('www.chatloora.com');
+    expect(script[1]).toContain('www.almutamayiziq.com');
     expect(script[2]).toContain('2606424980');
     expect(script[3]).toContain('youtu.be');
     expect(script[0]).not.toContain('ممنوع تقسيم');
@@ -124,7 +124,7 @@ https://youtu.be/Kxtc-8vPFNk
 ⸻
 
 موقع المنصة
-www.chatloora.com
+www.almutamayiziq.com
 ادخل على الموقع وسجل حساب جديد.
 
 ⸻
@@ -152,7 +152,7 @@ https://youtu.be/Kxtc-8vPFNk?si=test
     const script = extractOrderedMessageScript(training);
     expect(script).toHaveLength(3);
     expect(script[0]).toContain('أهلاً وسهلاً');
-    expect(script[1]).toContain('www.chatloora.com');
+    expect(script[1]).toContain('www.almutamayiziq.com');
     expect(script[1]).toContain('الباقات');
     expect(script[2]).toContain('2606424980');
     expect(script[2]).toContain('youtu.be');
@@ -177,7 +177,7 @@ https://youtu.be/Kxtc-8vPFNk?si=test
 =========================
 
 موقع المنصة
-www.chatloora.com
+www.almutamayiziq.com
 الباقات
 🟢 الأساسية
 15$ شهريًا = 22,000 دينار عراقي
@@ -213,7 +213,7 @@ https://youtu.be/Kxtc-8vPFNk?si=6st-6SorBOeaIQZy
 
     const packs = resolveScriptedRepliesForQuestion(training, 'شنو الباقات؟');
     expect(packs).toHaveLength(1);
-    expect(packs[0]).toContain('www.chatloora.com');
+    expect(packs[0]).toContain('www.almutamayiziq.com');
     expect(packs[0]).toContain('15$');
     expect(packs[0]).not.toContain('Chatloora');
     expect(packs[0]).not.toContain('2606424980');
@@ -223,7 +223,7 @@ https://youtu.be/Kxtc-8vPFNk?si=6st-6SorBOeaIQZy
     expect(chosen.join('\n')).toContain('الاحترافية');
     expect(chosen.join('\n')).toContain('25$');
     expect(chosen.join('\n')).toContain('2606424980');
-    expect(chosen.join('\n')).toContain('www.chatloora.com');
+    expect(chosen.join('\n')).toContain('www.almutamayiziq.com');
     expect(chosen.join('\n')).not.toContain('الأساسية');
     expect(chosen.join('\n')).not.toContain('الأعمال');
     expect(chosen.join('\n')).not.toContain('15$');

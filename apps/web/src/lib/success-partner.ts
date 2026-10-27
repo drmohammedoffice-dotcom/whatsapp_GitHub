@@ -100,6 +100,14 @@ export function confirmSuccessPayout(id: string, code: string) {
   return api<SuccessState>(`/success-partner/payouts/${id}/confirm`, { method: 'POST', body: JSON.stringify({ code }) });
 }
 
+export function resendSuccessPayoutCode(id: string) {
+  return api<{ emailed: boolean }>(`/success-partner/payouts/${id}/resend`, { method: 'POST', body: '{}' });
+}
+
+export function cancelSuccessPayoutDraft(id: string) {
+  return api<{ cancelled: boolean }>(`/success-partner/payouts/${id}/cancel`, { method: 'POST', body: '{}' });
+}
+
 export async function uploadSuccessAvatar(file: File) {
   const form = new FormData();
   form.append('file', file);
