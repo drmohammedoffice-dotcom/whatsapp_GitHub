@@ -16,9 +16,9 @@ export default function AdminSettingsPage() {
 
   return (
     <div>
-      <PageHeader title="System Settings" description="Pricing, feature flags, SMTP, AI, and storage" />
+      <PageHeader title="إعدادات النظام" description="الأسعار، مفاتيح الميزات، SMTP، والتخزين" />
       {loading ? (
-        <div className="mt-4 flex gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading...</div>
+        <div className="mt-4 flex gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />جاري التحميل...</div>
       ) : (
         <div className="mt-4 rounded-lg border">
           <Table>

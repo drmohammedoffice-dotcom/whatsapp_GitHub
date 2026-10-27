@@ -280,7 +280,7 @@ export default function MailPage() {
       )}
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-56 shrink-0 border-r bg-white p-3 md:block">
+        <aside className="hidden w-56 shrink-0 border-e bg-white p-3 md:block">
           <Button
             type="button"
             className="mb-3 w-full justify-start gap-2 bg-[#c2e7ff] text-slate-900 hover:bg-[#a8daff]"
@@ -317,7 +317,7 @@ export default function MailPage() {
         </aside>
 
         <section className="flex min-w-0 flex-1">
-          <div className={`w-full border-r bg-white md:w-[380px] lg:w-[420px] ${selected || composing ? 'hidden md:block' : ''}`}>
+          <div className={`w-full border-e bg-white md:w-[380px] lg:w-[420px] ${selected || composing ? 'hidden md:block' : ''}`}>
             <div className="border-b px-4 py-3">
               <h2 className="font-medium">{folderLabel}</h2>
               <p className="text-xs text-slate-500">{total} رسالة</p>
@@ -327,7 +327,7 @@ export default function MailPage() {
                 <button
                   key={msg.id}
                   type="button"
-                  className={`block w-full border-b px-4 py-3 text-right transition hover:bg-[#f2f6fc] ${
+                  className={`block w-full border-b px-4 py-3 text-start transition hover:bg-[#f2f6fc] ${
                     selected?.id === msg.id ? 'bg-[#e8f0fe]' : ''
                   } ${msg.seen ? 'opacity-80' : 'bg-[#f8fbff]'}`}
                   onClick={() => void openMessage(msg.id)}
@@ -361,7 +361,7 @@ export default function MailPage() {
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-lg font-medium">رسالة جديدة</h2>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setComposing(false)}>
-                    <ArrowLeft className="h-4 w-4" />
+                    <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
                   </Button>
                 </div>
                 <div className="space-y-3">

@@ -17,12 +17,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { unregisterPushDevice } from '@/lib/push-devices';
 import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { API_URL, clearSession, cn, getRefreshToken } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from '@/components/layout/sidebar';
 
 async function logout() {
+  // Unregister this device's push token while the session is still valid (best effort).
+  await unregisterPushDevice();
   const refreshToken = getRefreshToken();
   if (refreshToken) {
     try {
@@ -69,7 +72,9 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </span>
         </nav>
         {current && (
-          <p className="hidden truncate text-xs text-muted-foreground sm:block">{t(current.descKey)}</p>
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">
+            {t(isMobileApp && current.appDescKey ? current.appDescKey : current.descKey)}
+          </p>
         )}
       </div>
 

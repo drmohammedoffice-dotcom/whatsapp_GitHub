@@ -152,7 +152,7 @@ export function MailboxPreviewModal({ open, email, accessToken, onClose }: Props
         {error && <p className="border-b bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
 
         <div className="flex min-h-0 flex-1">
-          <div className="w-full max-w-sm overflow-y-auto border-l">
+          <div className="w-full max-w-sm overflow-y-auto border-e">
             {busy && !messages.length ? (
               <div className="flex justify-center p-8">
                 <Loader2 className="h-5 w-5 animate-spin text-[#1a73e8]" />
@@ -162,7 +162,7 @@ export function MailboxPreviewModal({ open, email, accessToken, onClose }: Props
                 <button
                   key={msg.id}
                   type="button"
-                  className={`block w-full border-b px-3 py-2.5 text-right hover:bg-slate-50 ${selected?.id === msg.id ? 'bg-blue-50' : ''}`}
+                  className={`block w-full border-b px-3 py-2.5 text-start hover:bg-slate-50 ${selected?.id === msg.id ? 'bg-blue-50' : ''}`}
                   onClick={() => void openMessage(msg.id)}
                 >
                   <p className={`truncate text-sm ${msg.seen ? '' : 'font-semibold'}`}>{msg.from || '—'}</p>

@@ -59,7 +59,8 @@ export function MessageMedia({ conversationId, message }: { conversationId: stri
   async function handleDownload() {
     setDownloading(true);
     try {
-      await downloadAuthedFile(`${basePath}?download=1`, fileName);
+      const saved = await downloadAuthedFile(`${basePath}?download=1`, fileName);
+      if (!saved) setError(true);
     } catch {
       setError(true);
     } finally {

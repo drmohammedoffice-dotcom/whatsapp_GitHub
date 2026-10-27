@@ -1,10 +1,13 @@
 export type PlanSlug = string;
 
+/**
+ * Plan limits as returned by the API. Only features that still exist in the
+ * product (TikTok ads + WhatsApp tracking core) are typed here. Retired
+ * features (AI, voice, creative studio, Facebook/Instagram/Telegram,
+ * appointments, AI campaign review) are intentionally not modelled.
+ */
 export type PlanLimits = {
   maxTrackingPhones: number;
-  socialIntegrations: boolean;
-  aiEnabled: boolean;
-  appointmentsEnabled: boolean;
   whatsappEnabled?: boolean;
   maxWhatsappNumbers?: number;
   tiktokEnabled?: boolean;
@@ -12,20 +15,9 @@ export type PlanLimits = {
   maxTiktokPixels?: number;
   maxPixels?: number;
   whatsappApiEnabled?: boolean;
-  facebookEnabled?: boolean;
-  instagramEnabled?: boolean;
-  telegramEnabled?: boolean;
   maxTeamMembers?: number;
-  voiceAiEnabled?: boolean;
-  voiceMinutesLimit?: number;
-  voiceCallsLimit?: number;
-  creativeStudioEnabled?: boolean;
-  creativeImagesLimit?: number;
-  creativeVideoSecondsLimit?: number;
-  creative4kEnabled?: boolean;
   instantFormsEnabled?: boolean;
   onlineStoreEnabled?: boolean;
-  aiCampaignReviewEnabled?: boolean;
 };
 
 export type PlanFeature =
@@ -34,18 +26,57 @@ export type PlanFeature =
   | 'whatsapp_api'
   | 'tiktok'
   | 'tiktok_pixel'
-  | 'facebook'
-  | 'instagram'
-  | 'telegram'
-  | 'social_integrations'
-  | 'ai'
-  | 'appointments'
-  | 'team_members'
-  | 'voice_ai'
-  | 'creative_studio'
   | 'instant_forms'
-  | 'online_store'
-  | 'ai_campaign_review';
+  | 'online_store';
+
+/**
+ * Comparison / limit keys of features that were removed from the product.
+ * The API marks them `retired: true` and is phasing them out; the web filters
+ * them defensively by key so they never show in pricing or plan editors.
+ */
+export const RETIRED_PLAN_FEATURE_KEYS: ReadonlySet<string> = new Set([
+  'facebook_integration_enabled',
+  'instagram_integration_enabled',
+  'telegram_integration_enabled',
+  'ai_reply_enabled',
+  'voice_ai_enabled',
+  'voice_minutes_limit',
+  'voice_calls_limit',
+  'creative_studio_enabled',
+  'creative_images_limit',
+  'creative_video_seconds_limit',
+  'creative_4k_enabled',
+  'ai_campaign_review_enabled',
+  'appointments_enabled',
+]);
+
+/**
+ * Keys that still exist in the API but are not enforced anywhere in the
+ * product, so they must not be advertised (team-member seats are not limited
+ * since agents/departments were removed).
+ */
+export const UNENFORCED_PLAN_FEATURE_KEYS: ReadonlySet<string> = new Set(['maximum_team_members']);
+
+/** True when a plan comparison/limit row belongs to a retired feature. */
+export function isRetiredPlanFeature(row: { key: string; retired?: boolean | null }) {
+  return Boolean(row.retired) || RETIRED_PLAN_FEATURE_KEYS.has(row.key);
+}
+
+/** True when a plan feature row must not be shown to customers or in plan editors. */
+export function isHiddenPlanFeature(row: { key: string; retired?: boolean | null }) {
+  return isRetiredPlanFeature(row) || UNENFORCED_PLAN_FEATURE_KEYS.has(row.key);
+}
+
+/**
+ * Free-text plan bullets (`features` / `featuresAr`) come from the API. Drop any
+ * line that still advertises a removed feature so stale copy never leaks.
+ */
+const RETIRED_FEATURE_TEXT =
+  /\bAI\b|artificial intelligence|ذكاء|\bvoice\b|صوت|creative|استوديو|instagram|إنستغرام|انستغرام|انستقرام|facebook|فيسبوك|فيس بوك|messenger|ماسنجر|telegram|تليغرام|تيليجرام|تلغرام|appointment|موعد|مواعيد|calendar|تقويم|partner|شريك|شركاء|team member|أعضاء الفريق|عضو فريق/i;
+
+export function isRetiredFeatureText(line: string) {
+  return RETIRED_FEATURE_TEXT.test(line);
+}
 
 export function resolvePlanSlug(slug?: string | null): PlanSlug {
   return slug?.trim() || 'basic';
@@ -57,16 +88,7 @@ export function planAllowsFeature(limits: PlanLimits | null | undefined, feature
   if (feature === 'whatsapp') return (limits.whatsappEnabled ?? true) && (limits.maxWhatsappNumbers ?? 1) !== 0;
   if (feature === 'whatsapp_api') return Boolean(limits.whatsappApiEnabled);
   if (feature === 'tiktok' || feature === 'tiktok_pixel') return Boolean(limits.tiktokEnabled ?? true);
-  if (feature === 'facebook') return Boolean(limits.facebookEnabled ?? limits.socialIntegrations);
-  if (feature === 'instagram') return Boolean(limits.instagramEnabled ?? limits.socialIntegrations);
-  if (feature === 'telegram') return Boolean(limits.telegramEnabled ?? limits.socialIntegrations);
-  if (feature === 'social_integrations') return Boolean(limits.socialIntegrations);
-  if (feature === 'appointments') return Boolean(limits.appointmentsEnabled);
-  if (feature === 'team_members') return (limits.maxTeamMembers ?? 1) !== 0;
-  if (feature === 'voice_ai') return Boolean(limits.voiceAiEnabled);
-  if (feature === 'creative_studio') return Boolean(limits.creativeStudioEnabled);
   if (feature === 'instant_forms') return Boolean(limits.instantFormsEnabled);
   if (feature === 'online_store') return Boolean(limits.onlineStoreEnabled);
-  if (feature === 'ai_campaign_review') return Boolean(limits.aiCampaignReviewEnabled);
-  return Boolean(limits.aiEnabled);
+  return false;
 }

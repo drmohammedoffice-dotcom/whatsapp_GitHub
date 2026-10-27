@@ -312,7 +312,6 @@ function TikTokPageInner() {
                   </>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">{t('tiktok.partnerNote')}</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -324,7 +323,6 @@ function TikTokPageInner() {
               { key: 'landingViews', label: t('tiktok.landingViews') },
               { key: 'whatsappOpens', label: t('tiktok.whatsappOpens') },
               { key: 'conversationStarted', label: t('tiktok.conversationStarted') },
-              { key: 'aiReplies', label: t('tiktok.aiReplies') },
               { key: 'sales', label: t('tiktok.sales') },
             ].map((item) => (
               <Card key={item.key} className="border-0 shadow-card">

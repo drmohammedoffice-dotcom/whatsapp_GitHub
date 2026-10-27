@@ -103,9 +103,9 @@ export default function StaffSubscribersPage() {
       />
 
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground rtl:left-auto rtl:right-3" />
+        <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          className="pl-9 rtl:pl-3 rtl:pr-9"
+          className="ps-9"
           placeholder="بحث بالاسم أو الإيميل..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -151,7 +151,7 @@ export default function StaffSubscribersPage() {
                   </TableCell>
                   <TableCell className="text-end">
                     <Button size="sm" variant="outline" onClick={() => openSubscription(user)}>
-                      <Settings2 className="mr-1 h-4 w-4" />
+                      <Settings2 className="me-1 h-4 w-4" />
                       إدارة الباقة
                     </Button>
                   </TableCell>

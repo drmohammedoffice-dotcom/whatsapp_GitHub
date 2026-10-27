@@ -184,7 +184,7 @@ export default function AdminMailPage() {
       />
       <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
         <p className="font-medium">إعداد الاستقبال (مرة واحدة في Resend + DNS)</p>
-        <ol className="mt-2 list-decimal space-y-1 pr-5">
+        <ol className="mt-2 list-decimal space-y-1 ps-5">
           <li>في Resend → Domains → chatloora.com → فعّل Receiving وأضف سجل MX الذي يظهر.</li>
           <li>
             أنشئ Webhook على{' '}
@@ -300,7 +300,7 @@ export default function AdminMailPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="border-b text-left text-muted-foreground">
+              <tr className="border-b text-start text-muted-foreground">
                 <th className="px-2 py-2">البريد</th>
                 <th className="px-2 py-2">الاسم</th>
                 <th className="px-2 py-2">الحالة</th>

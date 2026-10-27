@@ -16,6 +16,8 @@ export type NavItem = {
   href: string;
   labelKey: string;
   descKey: string;
+  /** Description used inside the native app (no subscription/billing wording). */
+  appDescKey?: string;
   icon?: LucideIcon;
   brand?: BrandKey;
   featured?: boolean;
@@ -33,7 +35,7 @@ export const navGroups: NavGroup[] = [
     items: [
       {
         href: '/inbox/whatsapp',
-        labelKey: 'nav.whatsapp',
+        labelKey: 'nav.inboxWhatsapp',
         descKey: 'nav.inboxWhatsappDesc',
         brand: 'whatsapp',
         featured: true,
@@ -41,7 +43,7 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    labelKey: 'nav.intelligence',
+    labelKey: 'nav.tiktokTracking',
     items: [
       { href: '/tiktok', labelKey: 'nav.tiktok', descKey: 'nav.tiktokDesc', icon: Share2 },
       { href: '/tiktok/integration', labelKey: 'nav.tiktokPixelWizard', descKey: 'nav.tiktokPixelWizardDesc', icon: Target },
@@ -54,14 +56,17 @@ export const navGroups: NavGroup[] = [
       { href: '/tiktok/integration/forms/orders', labelKey: 'nav.tiktokOrders', descKey: 'nav.tiktokOrdersDesc', icon: ClipboardList },
       { href: '/tiktok/ads/create', labelKey: 'nav.tiktokCreateAd', descKey: 'nav.tiktokCreateAdDesc', icon: Megaphone },
       { href: '/tiktok/ads/balance', labelKey: 'nav.tiktokAdsBalance', descKey: 'nav.tiktokAdsBalanceDesc', icon: CreditCard },
-      { href: '/mail', labelKey: 'nav.webmail', descKey: 'nav.webmailDesc', icon: Mail },
     ],
+  },
+  {
+    labelKey: 'nav.mail',
+    items: [{ href: '/mail', labelKey: 'nav.webmail', descKey: 'nav.webmailDesc', icon: Mail }],
   },
   {
     labelKey: 'nav.system',
     items: [
       { href: '/plans', labelKey: 'nav.plans', descKey: 'nav.plansDesc', icon: CreditCard },
-      { href: '/account', labelKey: 'nav.account', descKey: 'nav.accountDesc', icon: UserRound },
+      { href: '/account', labelKey: 'nav.account', descKey: 'nav.accountDesc', appDescKey: 'nav.accountDescApp', icon: UserRound },
       { href: '/settings', labelKey: 'nav.settings', descKey: 'nav.settingsDesc', icon: Settings },
     ],
   },
@@ -69,7 +74,7 @@ export const navGroups: NavGroup[] = [
 
 export const allNavItems = navGroups.flatMap((group) => group.items);
 
-const HIDDEN_NAV_HREFS = new Set(['/inbox/whatsapp', '/settings/integrations']);
+const HIDDEN_NAV_HREFS = new Set(['/settings/integrations']);
 
 /** `mobileApp`: inside the native app, hide plans / pricing / billing / ad-balance top-up entries. */
 export function visibleNavGroups(options?: { mobileApp?: boolean }) {

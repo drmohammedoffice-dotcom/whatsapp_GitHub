@@ -95,7 +95,7 @@ const FIELD_LABELS: Record<string, string> = {
   home: 'الرئيسية',
   login: 'تسجيل الدخول',
   startTrial: 'ابدأ التجربة',
-  becomePartner: 'كن شريكاً',
+  signInWeb: 'تسجيل الدخول من الويب',
 };
 
 function labelFor(key: string) {

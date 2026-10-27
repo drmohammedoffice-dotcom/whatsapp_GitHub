@@ -1,6 +1,6 @@
 import { API_URL, api } from './utils';
 import { normalizeList } from './safe-href';
-import type { PlanLimits, PlanSlug } from './plan-limits';
+import { isHiddenPlanFeature, isRetiredFeatureText, type PlanLimits, type PlanSlug } from './plan-limits';
 
 export type { PlanSlug, PlanLimits };
 
@@ -34,6 +34,8 @@ export type BillingPlan = {
     valueType: string;
     enabled: boolean;
     limit: number | null;
+    /** Set by the API for features removed from the product; never shown. */
+    retired?: boolean;
   }>;
   limits?: PlanLimits;
 };
@@ -119,48 +121,33 @@ export function planButtonKey(slug: string) {
   return 'billing.choosePlan';
 }
 
+/**
+ * Strip retired / unenforced features from a plan before it is shown anywhere
+ * (pricing, plans page, checkout). The API marks retired rows with
+ * `retired: true`; keys are also filtered defensively on the web.
+ */
+export function sanitizeBillingPlan(plan: BillingPlan): BillingPlan {
+  const cleanLines = (lines: string[] | undefined) =>
+    Array.isArray(lines) ? lines.filter((line) => typeof line === 'string' && !isRetiredFeatureText(line)) : lines;
+  return {
+    ...plan,
+    features: cleanLines(plan.features) ?? [],
+    featuresAr: cleanLines(plan.featuresAr),
+    comparison: Array.isArray(plan.comparison) ? plan.comparison.filter((row) => !isHiddenPlanFeature(row)) : plan.comparison,
+  };
+}
+
 export function fetchPublicPlans() {
   return fetch(`${API_URL}/api/v1/billing/plans`)
     .then(async (response) => {
       if (!response.ok) return [];
       const data = await response.json();
-      return normalizeList<BillingPlan>(data);
+      return normalizeList<BillingPlan>(data).map(sanitizeBillingPlan);
     });
 }
 
 export function fetchSubscriptionStatus() {
   return api<SubscriptionState>('/billing/status');
-}
-
-export function buildWhatsAppUpgradeUrl(
-  locale: 'en' | 'ar',
-  feature: 'tracking_phone' | 'social_integrations' | 'ai' | 'appointments',
-) {
-  const text =
-    locale === 'ar'
-      ? [
-          'مرحباً، أريد ترقية اشتراك ChatLoora.',
-          feature === 'tracking_phone'
-            ? 'أحتاج ربط أرقام واتساب إضافية لإنشاء بكسلات TikTok.'
-            : feature === 'social_integrations'
-              ? 'أحتاج تفعيل ربط منصات التواصل (واتساب، إنستغرام، فيسبوك، تليغرام).'
-              : feature === 'appointments'
-                ? 'أحتاج تفعيل نظام المواعيد الذكي وربط Google Calendar.'
-                : 'أحتاج تفعيل الرد الذكي بالذكاء الاصطناعي.',
-          'أرجو المساعدة. شكراً',
-        ].join('\n')
-      : [
-          'Hello, I would like to upgrade my ChatLoora subscription.',
-          feature === 'tracking_phone'
-            ? 'I need to connect more WhatsApp numbers for TikTok pixels.'
-            : feature === 'social_integrations'
-              ? 'I need social channel integrations (WhatsApp inbox, Instagram, Facebook, Telegram).'
-              : feature === 'appointments'
-                ? 'I need the AI Appointment System and Google Calendar booking.'
-                : 'I need full AI smart replies enabled.',
-          'Please help me. Thank you!',
-        ].join('\n');
-  return `https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${encodeURIComponent(text)}`;
 }
 
 export function buildWhatsAppRenewalUrl(

@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { fetchTikTokBusinessAdvertisers } from '@/lib/tiktok-business';
 import { syncTikTokBusiness } from '@/lib/tiktok-business';
 import { parseApiError } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
 
 export default function TikTokBusinessAdvertisersPage() {
   const { t, locale } = useTranslation();
@@ -43,15 +42,14 @@ export default function TikTokBusinessAdvertisersPage() {
     load().catch(console.error);
   }, [load]);
 
-  const router = useRouter();
-
   async function syncAdvertiser(advertiserId: string) {
     setError(null);
     setSyncingAdvertiserId(advertiserId);
     try {
       await syncTikTokBusiness(advertiserId);
       await load();
-      router.push(`/tiktok/business/whatsapp-mapping?advertiserId=${encodeURIComponent(advertiserId)}`);
+      // Previously redirected to /tiktok/business/whatsapp-mapping, which is hidden
+      // (it calls the non-existent /api/tiktok/* prefix). Stay on this page.
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -96,7 +94,7 @@ export default function TikTokBusinessAdvertisersPage() {
                   <TableHead>{t('tiktokBusiness.advertiserId')}</TableHead>
                   <TableHead>{t('tiktokBusiness.currency')}</TableHead>
                   <TableHead>{t('tiktokBusiness.status')}</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="text-end">{locale === 'ar' ? 'إجراءات' : 'Actions'}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -106,7 +104,7 @@ export default function TikTokBusinessAdvertisersPage() {
                     <TableCell className="font-mono text-xs">{a.advertiserId}</TableCell>
                     <TableCell>{a.currency ?? '—'}</TableCell>
                     <TableCell>{a.status ?? '—'}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <Button
                         variant="outline"
                         size="sm"

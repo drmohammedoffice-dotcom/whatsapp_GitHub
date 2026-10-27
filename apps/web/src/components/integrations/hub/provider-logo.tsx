@@ -7,16 +7,6 @@ const brandStyles: Record<
   IntegrationProvider,
   { bg: string; ring: string; label: string }
 > = {
-  'facebook-messenger': {
-    bg: 'bg-[#1877F2]',
-    ring: 'ring-[#1877F2]/20',
-    label: 'Messenger',
-  },
-  instagram: {
-    bg: 'bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#FCAF45]',
-    ring: 'ring-pink-500/20',
-    label: 'Instagram',
-  },
   whatsapp: {
     bg: 'bg-[#25D366]',
     ring: 'ring-emerald-500/20',
@@ -26,11 +16,6 @@ const brandStyles: Record<
     bg: 'bg-black dark:bg-zinc-900',
     ring: 'ring-zinc-500/20',
     label: 'TT',
-  },
-  telegram: {
-    bg: 'bg-[#229ED9]',
-    ring: 'ring-sky-500/20',
-    label: 'TG',
   },
 };
 

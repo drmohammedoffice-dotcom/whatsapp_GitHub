@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
   Res,
   UseGuards,
@@ -49,9 +50,10 @@ export class BookingsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('mark') mark?: string,
     @Res() res?: Response,
   ) {
-    const buffer = await this.bookings.exportExcel(principal.teamId, this.parseRange(from, to));
+    const buffer = await this.bookings.exportExcel(principal.teamId, this.parseRange(from, to), mark !== '0');
     res!.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res!.setHeader('Content-Disposition', 'attachment; filename="orders.xlsx"');
     res!.send(buffer);
@@ -63,12 +65,20 @@ export class BookingsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('mark') mark?: string,
     @Res() res?: Response,
   ) {
-    const buffer = await this.bookings.exportPdf(principal.teamId, this.parseRange(from, to));
+    const buffer = await this.bookings.exportPdf(principal.teamId, this.parseRange(from, to), mark !== '0');
     res!.setHeader('Content-Type', 'application/pdf');
     res!.setHeader('Content-Disposition', 'attachment; filename="orders.pdf"');
     res!.send(buffer);
+  }
+
+  /** Called after the exported file was saved, when the export was fetched with mark=0. */
+  @Post('export/mark')
+  @RequirePermissions(Permission.INBOX_READ)
+  markExported(@CurrentPrincipal() principal: AuthenticatedPrincipal, @Body() body: { from?: number; to?: number }) {
+    return this.bookings.markExportedRange(principal.teamId, this.parseRange(body?.from != null ? String(body.from) : undefined, body?.to != null ? String(body.to) : undefined));
   }
 
   @Patch(':id')

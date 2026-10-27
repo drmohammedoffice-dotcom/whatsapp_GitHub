@@ -17,6 +17,7 @@ import {
   type InstantFormOrder,
   type InstantFormOrderStatus,
 } from '@/lib/instant-forms/api';
+import { downloadFile } from '@/lib/native-bridge';
 import { API_URL, authedFetch } from '@/lib/utils';
 import { buildOrderDisplay, formatMoney } from '@/lib/instant-forms/order-summary';
 
@@ -129,13 +130,13 @@ export function InstantFormOrdersPageClient() {
         }
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download =
-        mode === 'new' ? 'instant-form-orders-new.csv' : 'instant-form-orders-all.csv';
-      a.click();
-      URL.revokeObjectURL(url);
+      const fileName = mode === 'new' ? 'instant-form-orders-new.csv' : 'instant-form-orders-all.csv';
+      const saved = await downloadFile(fileName, blob.type || 'text/csv;charset=utf-8', blob);
+      if (!saved) {
+        // Do NOT advance the "new orders since last export" marker: nothing reached the user.
+        setError(t('instantForms.exportDownloadFailed'));
+        return;
+      }
       if (cursor) {
         writeExportCursor(cursor, formId);
         setLastExportAt(cursor);

@@ -387,10 +387,10 @@ function MediaCarousel({
       {media.length > 1 && (
         <>
           <button type="button" className="absolute start-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-1.5" onClick={() => go(-1)}>
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
           </button>
           <button type="button" className="absolute end-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-1.5" onClick={() => go(1)}>
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4 rtl:rotate-180" />
           </button>
           <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1">
             {media.map((item, i) => (

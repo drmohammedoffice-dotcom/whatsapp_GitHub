@@ -236,7 +236,7 @@ export default function TikTokAdsBalancePage() {
           description={t('tiktokAdsBalance.description')}
           actions={
             <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading || busy}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`me-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               {t('tiktokAdsBalance.refreshAccounts')}
             </Button>
           }
@@ -363,7 +363,7 @@ export default function TikTokAdsBalancePage() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
                     <a href={selected.destinationUrl} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                      <ExternalLink className="me-1 h-3.5 w-3.5" />
                       {t('tiktokAdsBalance.openAdsManager')}
                     </a>
                   </Button>
@@ -415,7 +415,7 @@ export default function TikTokAdsBalancePage() {
                   {isSafeTikTokUrl(row.destinationUrl) && (
                     <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
                       <a href={row.destinationUrl} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                        <ExternalLink className="me-1 h-3.5 w-3.5" />
                         {t('tiktokAdsBalance.openAdsManager')}
                       </a>
                     </Button>

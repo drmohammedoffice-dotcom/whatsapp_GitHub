@@ -210,10 +210,16 @@ export default function BookingsPage() {
     setError(null);
     try {
       const ext = exportFormat === 'excel' ? 'xlsx' : 'pdf';
-      await downloadAuthedFile(
-        `/bookings/export/${exportFormat}?from=${from}&to=${to}`,
+      // mark=0: the range is only marked as exported after the file was really saved.
+      const saved = await downloadAuthedFile(
+        `/bookings/export/${exportFormat}?from=${from}&to=${to}&mark=0`,
         `orders-${from}-${to}.${ext}`,
       );
+      if (!saved) {
+        setError(t('instantForms.exportDownloadFailed'));
+        return;
+      }
+      await api('/bookings/export/mark', { method: 'POST', body: JSON.stringify({ from, to }) });
       setExportOpen(false);
       await load();
     } catch (err) {

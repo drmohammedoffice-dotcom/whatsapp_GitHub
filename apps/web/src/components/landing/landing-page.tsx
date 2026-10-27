@@ -45,8 +45,9 @@ function LandingJsonLd() {
         : {
             offers: {
               '@type': 'AggregateOffer',
+              // Must match the published plans (Basic / Professional / Business).
               lowPrice: '15',
-              highPrice: '49',
+              highPrice: '35',
               priceCurrency: 'USD',
               offerCount: 3,
             },

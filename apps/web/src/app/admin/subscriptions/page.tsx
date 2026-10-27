@@ -24,6 +24,7 @@ import {
   type AdminSubscriptionRow,
   type AdminUserRow,
 } from '@/lib/admin-api';
+import { isDeletedAccount } from '@/lib/admin-subscription-utils';
 
 function statusVariant(status: string) {
   if (status === 'ACTIVE') return 'success';
@@ -85,9 +86,21 @@ export default function AdminSubscriptionsPage() {
     void load(q, statusFilter);
   }, [load, q, statusFilter]);
 
+  const [showDeleted, setShowDeleted] = useState(false);
+  // Self-deleted (anonymised) accounts are hidden by default.
+  const visibleUsers = useMemo(
+    () => (showDeleted ? users : users.filter((u) => !isDeletedAccount(u))),
+    [users, showDeleted],
+  );
+  const visibleSubs = useMemo(
+    () => (showDeleted ? subs : subs.filter((sub) => !isDeletedAccount(sub.owner))),
+    [subs, showDeleted],
+  );
+  const deletedCount = users.length - users.filter((u) => !isDeletedAccount(u)).length;
+
   const usersWithoutSub = useMemo(
-    () => users.filter((u) => !u.teamMembers[0]?.team?.subscription),
-    [users],
+    () => visibleUsers.filter((u) => !u.teamMembers[0]?.team?.subscription),
+    [visibleUsers],
   );
 
   function openSubscriptionForUser(user: AdminUserRow) {
@@ -147,9 +160,9 @@ export default function AdminSubscriptionsPage() {
 
       <div className="mt-4 flex flex-wrap gap-2">
         <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            className="pl-9"
+            className="ps-9"
             placeholder="Search by name or email..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -168,14 +181,18 @@ export default function AdminSubscriptionsPage() {
           <Plus className="me-2 h-4 w-4" />
           Add subscriber
         </Button>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
+          إظهار الحسابات المحذوفة ({deletedCount})
+        </label>
       </div>
 
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
       <Tabs value={tab} onValueChange={setTab} className="mt-6">
         <TabsList>
-          <TabsTrigger value="subscribers">Subscribers ({total})</TabsTrigger>
-          <TabsTrigger value="subscriptions">Subscriptions ({subs.length})</TabsTrigger>
+          <TabsTrigger value="subscribers">Subscribers ({showDeleted ? total : visibleUsers.length})</TabsTrigger>
+          <TabsTrigger value="subscriptions">Subscriptions ({visibleSubs.length})</TabsTrigger>
           <TabsTrigger value="no-plan">No plan ({usersWithoutSub.length})</TabsTrigger>
           <TabsTrigger value="plans">Plans ({plans.length})</TabsTrigger>
         </TabsList>
@@ -202,7 +219,7 @@ export default function AdminSubscriptionsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((u) => {
+                    {visibleUsers.map((u) => {
                       const team = u.teamMembers[0]?.team;
                       const sub = team?.subscription;
                       return (
@@ -290,7 +307,7 @@ export default function AdminSubscriptionsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {subs.map((sub) => {
+                    {visibleSubs.map((sub) => {
                       const remaining = daysLeft(sub.currentPeriodEnd);
                       return (
                         <TableRow key={sub.id}>
@@ -319,7 +336,7 @@ export default function AdminSubscriptionsPage() {
                         </TableRow>
                       );
                     })}
-                    {!subs.length && (
+                    {!visibleSubs.length && (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center text-muted-foreground">
                           No subscriptions match this filter

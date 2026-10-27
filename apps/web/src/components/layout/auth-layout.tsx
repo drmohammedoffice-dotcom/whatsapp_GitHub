@@ -19,8 +19,8 @@ export function AuthLayout({
   const { t } = useTranslation();
   const features = [
     t('auth.featureInbox'),
-    t('auth.featureAi'),
-    t('auth.featureWebhooks'),
+    t('auth.featureAds'),
+    t('auth.featureTracking'),
   ];
 
   return (

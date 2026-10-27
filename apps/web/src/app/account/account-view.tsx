@@ -83,7 +83,7 @@ export function AccountView() {
 
   return (
     <AppShell>
-      <PageHeader title={t('account.title')} description={t('account.subtitle')} />
+      <PageHeader title={t('account.title')} description={t(isMobileApp ? 'account.subtitleApp' : 'account.subtitle')} />
 
       <div className="mt-4 space-y-3">
         {error && <AlertBanner message={error} onDismiss={() => setError(null)} />}

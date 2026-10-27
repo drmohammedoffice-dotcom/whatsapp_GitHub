@@ -234,7 +234,7 @@ export default function StaffMailPage() {
       <section className="overflow-x-auto rounded-2xl border">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
-            <tr className="border-b text-right text-muted-foreground">
+            <tr className="border-b text-start text-muted-foreground">
               <th className="px-3 py-2">البريد</th>
               <th className="px-3 py-2">الاسم</th>
               <th className="px-3 py-2">الحالة</th>

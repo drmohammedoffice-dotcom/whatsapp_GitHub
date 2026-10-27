@@ -445,7 +445,7 @@ export function StoreVisualEditor() {
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild size="sm" variant="ghost" className="text-white hover:bg-white/10 hover:text-white">
               <Link href="/ai/store">
-                <ArrowLeft className="me-1 h-4 w-4" />
+                <ArrowLeft className="me-1 h-4 w-4 rtl:rotate-180" />
                 {t('store.editorBack')}
               </Link>
             </Button>
@@ -598,9 +598,9 @@ export function StoreVisualEditor() {
 
       <Dialog open={Boolean(categoryDialog)} onOpenChange={(open) => !open && setCategoryDialog(null)}>
         <DialogContent className="max-w-md" dir="rtl">
-          <DialogHeader className="text-right sm:text-right">
+          <DialogHeader className="text-start sm:text-start">
             <DialogTitle>{categoryDialog?.id ? t('store.saveCategory') : t('store.addCategory')}</DialogTitle>
-            <DialogDescription className="text-right">{t('store.categoryName')}</DialogDescription>
+            <DialogDescription className="text-start">{t('store.categoryName')}</DialogDescription>
           </DialogHeader>
           {categoryDialog ? (
             <form className="grid gap-3" onSubmit={saveCategory}>
@@ -631,9 +631,9 @@ export function StoreVisualEditor() {
 
       <Dialog open={bannerDialogOpen} onOpenChange={setBannerDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
-          <DialogHeader className="text-right sm:text-right">
+          <DialogHeader className="text-start sm:text-start">
             <DialogTitle>{t('store.banners')}</DialogTitle>
-            <DialogDescription className="text-right">{t('store.bannersDesc')}</DialogDescription>
+            <DialogDescription className="text-start">{t('store.bannersDesc')}</DialogDescription>
           </DialogHeader>
           <form className="grid gap-3" onSubmit={(e) => void uploadBanner(e)}>
             <Input name="title" placeholder={t('store.bannerTitle')} />
@@ -750,9 +750,9 @@ export function StoreVisualEditor() {
 
       <Dialog open={colorsOpen} onOpenChange={setColorsOpen}>
         <DialogContent className="max-w-lg" dir="rtl">
-          <DialogHeader className="text-right sm:text-right">
+          <DialogHeader className="text-start sm:text-start">
             <DialogTitle>{t('store.colors')}</DialogTitle>
-            <DialogDescription className="text-right">{t('store.colorsDesc')}</DialogDescription>
+            <DialogDescription className="text-start">{t('store.colorsDesc')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 sm:grid-cols-2">
             {STORE_THEME_PRESETS.map((preset) => (

@@ -34,3 +34,15 @@ export function toDateInputValue(value: string | null | undefined) {
 }
 
 export const BILLING_CYCLE_DAYS = { MONTHLY: 30, YEARLY: 365 } as const;
+
+/**
+ * Accounts anonymised by self-service deletion (see API account-deletion
+ * service): email `deleted-<id>@deleted.chatloora.invalid`, name `Deleted user`.
+ */
+const DELETED_ACCOUNT_EMAIL_SUFFIX = '@deleted.chatloora.invalid';
+
+export function isDeletedAccount(user: { email?: string | null; name?: string | null } | null | undefined) {
+  if (!user) return false;
+  const email = (user.email ?? '').trim().toLowerCase();
+  return email.endsWith(DELETED_ACCOUNT_EMAIL_SUFFIX) || (user.name ?? '').trim() === 'Deleted user';
+}

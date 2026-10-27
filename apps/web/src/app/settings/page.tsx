@@ -186,7 +186,7 @@ export default function SettingsPage() {
                       size="sm"
                       onClick={() => runForm(async () => {
                         const accountId = channel.whatsAppCloudAccountId;
-                        if (!accountId) throw new Error('WhatsApp Cloud account id missing');
+                        if (!accountId) throw new Error(locale === 'ar' ? 'تعذّر تحديد حساب واتساب Cloud لهذا الرقم.' : 'WhatsApp Cloud account id missing');
                         await api(`/whatsapp-cloud/accounts/${accountId}/disconnect`, {
                           method: 'POST',
                           body: '{}',
@@ -219,7 +219,7 @@ export default function SettingsPage() {
               </form>
               <div className="space-y-3">
                 {webhooks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No webhooks configured.</p>
+                  <p className="text-sm text-muted-foreground">{t('settings.noWebhooks')}</p>
                 ) : webhooks.map((hook) => (
                   <div key={hook.id} className="rounded-lg border p-4">
                     <p className="font-medium break-all">{hook.url}</p>
@@ -240,7 +240,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               {notifications.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No notifications yet.</p>
+                <p className="text-sm text-muted-foreground">{t('settings.noNotifications')}</p>
               ) : (
                 <div className="space-y-3">
                   {notifications.map((item) => (

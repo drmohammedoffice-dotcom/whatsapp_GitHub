@@ -605,7 +605,7 @@ function DaypartEditor({ week, onChange }: { week: boolean[][]; onChange: (week:
             <div key={label} className="contents">
               <button
                 type="button"
-                className="px-1 text-right text-xs"
+                className="px-1 text-start text-xs"
                 onClick={() => {
                   const enable = !week[day]?.every(Boolean);
                   onChange(week.map((row, index) => (index === day ? row.map(() => enable) : row)));
@@ -2319,9 +2319,9 @@ function NewTikTokCampaignForm() {
         }}
       >
         <DialogContent className="max-w-md" dir="rtl">
-          <DialogHeader className="text-right sm:text-right">
+          <DialogHeader className="text-start sm:text-start">
             <DialogTitle>مسودة حملة غير مكتملة</DialogTitle>
-            <DialogDescription className="text-right">
+            <DialogDescription className="text-start">
               لديك إعدادات حملة سابقة لم تُنشَر بعد
               {draftPrompt?.campaignName ? (
                 <>
@@ -2383,7 +2383,7 @@ function NewTikTokCampaignForm() {
               <div className={`rounded-lg p-1.5 ${step === 1 ? 'bg-primary text-primary-foreground' : ''}`}>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 text-right text-xs"
+                  className="flex w-full items-center gap-2 text-start text-xs"
                   onClick={() => setStep(1)}
                 >
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
@@ -2422,7 +2422,7 @@ function NewTikTokCampaignForm() {
                       ) : (
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 text-right text-xs"
+                          className="flex w-full items-center gap-2 text-start text-xs"
                           onClick={() => { selectGroup(group.id); setStep(2); }}
                         >
                           <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
@@ -2470,7 +2470,7 @@ function NewTikTokCampaignForm() {
                           <p className="px-1 py-1 text-[10px] text-muted-foreground">أضف فيديو من خطوة الإعلان</p>
                         ) : smartPlus ? (
                           <div className={`rounded-lg p-1.5 ${step === 3 ? 'bg-primary/10' : ''}`}>
-                            <div className="flex w-full items-center gap-1 text-right text-[11px]">
+                            <div className="flex w-full items-center gap-1 text-start text-[11px]">
                               <button
                                 type="button"
                                 className="rounded p-0.5 text-muted-foreground hover:bg-muted"
@@ -2534,7 +2534,7 @@ function NewTikTokCampaignForm() {
                               ) : (
                                 <button
                                   type="button"
-                                  className="flex w-full items-center gap-2 text-right text-[11px]"
+                                  className="flex w-full items-center gap-2 text-start text-[11px]"
                                   onClick={() => { selectGroup(group.id); setStep(3); }}
                                 >
                                   <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${
@@ -2675,7 +2675,7 @@ function NewTikTokCampaignForm() {
                         <button
                           key={id}
                           type="button"
-                          className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-right text-sm ${selected ? 'border-teal-500 bg-teal-50' : 'hover:bg-muted'}`}
+                          className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-start text-sm ${selected ? 'border-teal-500 bg-teal-50' : 'hover:bg-muted'}`}
                           onClick={() => selectMenuObjective(menuId)}
                         >
                           <span className="flex items-center gap-2">
@@ -3723,7 +3723,7 @@ function NewTikTokCampaignForm() {
                     {videoViewsGoal === 'ENGAGED_VIEW' && (
                       <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
                         للفيديوهات بطول 8 ثوانٍ أو أكثر نوصي باختيار مشاهدات 15 ثانية (مشاهدة مركّزة).
-                        <button type="button" className="mr-2 underline" onClick={() => setVideoViewsGoal('ENGAGED_VIEW_FIFTEEN')}>تطبيق</button>
+                        <button type="button" className="ms-2 underline" onClick={() => setVideoViewsGoal('ENGAGED_VIEW_FIFTEEN')}>تطبيق</button>
                       </p>
                     )}
                     <Label>تحديد عدد مرات الظهور</Label>
@@ -4004,7 +4004,7 @@ function NewTikTokCampaignForm() {
                           <button
                             key={`${identity.identityType}:${identity.identityId}`}
                             type="button"
-                            className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-right text-sm hover:bg-muted ${identityKey === key ? 'bg-muted' : ''}`}
+                            className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start text-sm hover:bg-muted ${identityKey === key ? 'bg-muted' : ''}`}
                             onClick={() => selectIdentityAccount(key)}
                           >
                             <AccountAvatar src={identity.imageUrl} name={identity.displayName} />

@@ -8,6 +8,7 @@ import { SubscriptionProvider } from '@/components/providers/subscription-provid
 import { SubscriptionWarningModal } from '@/components/billing/subscription-warning-modal';
 import { SubscriptionExpiredBlock } from '@/components/billing/subscription-expired-block';
 import { PlanOverLimitBanner } from '@/components/billing/plan-over-limit-banner';
+import { PushRegistration } from '@/components/native/push-registration';
 import { cn } from '@/lib/utils';
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -45,6 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <SubscriptionWarningModal />
         <SubscriptionExpiredBlock />
+        <PushRegistration />
       </SubscriptionProvider>
     </AuthGuard>
   );

@@ -18,7 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChannelBrandIcon } from '@/components/channels/channel-brand-icon';
 import { AppShell } from '@/components/layout/app-shell';
@@ -135,6 +135,9 @@ async function emojiToStickerFile(emoji: string): Promise<File | null> {
 export function InboxView({ channel }: InboxViewProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  /** Deep link from a push notification: /inbox/whatsapp?c=<conversationId>. */
+  const linkedConversationId = searchParams.get('c');
   const ChannelIcon = channel.icon;
   const [items, setItems] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -161,6 +164,8 @@ export function InboxView({ channel }: InboxViewProps) {
   const viewRef = useRef(view);
   const selectedIdRef = useRef(selectedId);
   const loadSeqRef = useRef(0);
+  /** Conversation opened via deep link; kept selected even if it is not in the current list page. */
+  const deepLinkIdRef = useRef<string | null>(linkedConversationId);
   viewRef.current = view;
   selectedIdRef.current = selectedId;
 
@@ -217,6 +222,9 @@ export function InboxView({ channel }: InboxViewProps) {
       const currentSelected = selectedIdRef.current;
       if (!currentSelected && conversations[0]) {
         setSelectedId(conversations[0].id);
+      } else if (currentSelected && currentSelected === deepLinkIdRef.current) {
+        // Deep-linked thread may be outside the loaded list (archived / older); keep it open.
+        void loadDetail(currentSelected).catch(console.error);
       } else if (currentSelected && !conversations.some((c) => c.id === currentSelected)) {
         if (conversations[0]) setSelectedId(conversations[0].id);
         else {
@@ -240,17 +248,38 @@ export function InboxView({ channel }: InboxViewProps) {
   }
 
   useEffect(() => {
-    setSelectedId(null);
+    const linked = deepLinkIdRef.current;
+    setSelectedId(linked);
+    selectedIdRef.current = linked;
     setDetail(null);
+    if (linked) setMobilePanel('thread');
     void load().catch(console.error);
   }, [view, channel.provider]);
+
+  useEffect(() => {
+    // Notification tapped while the inbox is already open (client-side navigation).
+    if (!linkedConversationId || linkedConversationId === selectedIdRef.current) return;
+    deepLinkIdRef.current = linkedConversationId;
+    setSelectedId(linkedConversationId);
+    setMobilePanel('thread');
+  }, [linkedConversationId]);
 
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
       return;
     }
-    loadDetail(selectedId).catch(console.error);
+    loadDetail(selectedId).catch((err) => {
+      console.error(err);
+      // A deep-linked conversation that cannot be opened (deleted / not in this workspace):
+      // drop the link and fall back to the normal list selection.
+      if (deepLinkIdRef.current === selectedId) {
+        deepLinkIdRef.current = null;
+        selectedIdRef.current = null;
+        setSelectedId(null);
+        void load().catch(console.error);
+      }
+    });
   }, [selectedId]);
 
   useEffect(() => {
@@ -478,10 +507,10 @@ export function InboxView({ channel }: InboxViewProps) {
         <Card className={cn('flex min-h-0 flex-col overflow-hidden rounded-none border-0 border-e shadow-none', mobilePanel !== 'list' && 'hidden xl:flex')}>
           <CardHeader className="space-y-4 pb-3">
             <form onSubmit={(event) => { event.preventDefault(); load().catch(console.error); }} className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('inbox.search')} className="ps-9" />
             </form>
-            <Tabs value={view} onValueChange={(v) => setView(v as typeof view)}>
+            <Tabs value={view} onValueChange={(v) => { deepLinkIdRef.current = null; setView(v as typeof view); }}>
               <TabsList className="flex h-auto flex-wrap gap-1">
                 {(
                   [
@@ -519,9 +548,9 @@ title={t('inbox.noConversations')}
                     <motion.button
                       key={conversation.id}
                       whileHover={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}
-                      onClick={() => { setSelectedId(conversation.id); setMobilePanel('thread'); }}
+                      onClick={() => { deepLinkIdRef.current = null; setSelectedId(conversation.id); setMobilePanel('thread'); }}
                       className={cn(
-                        'flex w-full gap-3 p-4 text-left transition-colors',
+                        'flex w-full gap-3 p-4 text-start transition-colors',
                         selectedId === conversation.id && 'bg-accent',
                       )}
                     >
@@ -561,7 +590,7 @@ title={t('inbox.noConversations')}
           <CardHeader className="flex !flex-row items-center justify-between gap-3 space-y-0 border-b !pb-4">
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
               <Button variant="ghost" size="icon" className="shrink-0 xl:hidden" onClick={() => setMobilePanel('list')}>
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
               </Button>
               {selected && (
                 <Avatar className="h-10 w-10 shrink-0">
@@ -726,7 +755,7 @@ title={t('inbox.noConversations')}
                           <button
                             type="button"
                             onClick={() => removePendingAttachment(attachment.id)}
-                            className="absolute -right-1.5 -top-1.5 rounded-full bg-background p-0.5 shadow"
+                            className="absolute -end-1.5 -top-1.5 rounded-full bg-background p-0.5 shadow"
                             title={t('inbox.removeAttachment')}
                           >
                             <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -817,7 +846,7 @@ title={t('inbox.noConversations')}
           <CardHeader className="flex !flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">{t('inbox.tools')}</CardTitle>
             <Button variant="ghost" size="icon" className="xl:hidden" onClick={() => setMobilePanel('thread')}>
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
             </Button>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">

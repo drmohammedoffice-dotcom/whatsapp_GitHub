@@ -143,26 +143,26 @@ export default function EventSetDiagnosticsPage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <Card className="border-0 shadow-card">
             <CardHeader>
-              <CardTitle className="text-base">Connection</CardTitle>
-              <CardDescription>Advertiser ID: {data.advertiserId}</CardDescription>
+              <CardTitle className="text-base">{t('tiktokBusiness.eventSet.connectionTitle')}</CardTitle>
+              <CardDescription>{t('tiktokBusiness.eventSet.advertiserIdLabel')}: <span dir="ltr">{data.advertiserId}</span></CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Connected</span>
+                <span className="text-muted-foreground">{t('tiktokBusiness.eventSet.connected')}</span>
                 <Badge variant={data.connected ? 'success' : 'destructive'}>
-                  {data.connected ? 'Yes' : 'No'}
+                  {data.connected ? t('common.yes') : t('common.no')}
                 </Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Token expired</span>
+                <span className="text-muted-foreground">{t('tiktokBusiness.eventSet.tokenExpired')}</span>
                 <Badge variant={data.tokenExpired ? 'destructive' : 'success'}>
-                  {data.tokenExpired ? 'Yes' : 'No'}
+                  {data.tokenExpired ? t('common.yes') : t('common.no')}
                 </Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Requires reconnect</span>
+                <span className="text-muted-foreground">{t('tiktokBusiness.eventSet.requiresReconnect')}</span>
                 <Badge variant={data.requiresReconnect ? 'destructive' : 'success'}>
-                  {data.requiresReconnect ? 'Yes' : 'No'}
+                  {data.requiresReconnect ? t('common.yes') : t('common.no')}
                 </Badge>
               </div>
               {data.reconnectReason && (
@@ -176,7 +176,7 @@ export default function EventSetDiagnosticsPage() {
               )}
               {data.connectedAt && (
                 <div>
-                  <p className="font-medium">Connected at</p>
+                  <p className="font-medium">{t('tiktokBusiness.eventSet.connectedAt')}</p>
                   <p className="text-xs">{new Date(data.connectedAt).toLocaleString()}</p>
                 </div>
               )}

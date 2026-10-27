@@ -19,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LEGAL_ROUTES } from '@/lib/company-info';
+import { clearStoredPushToken } from '@/lib/push-devices';
 import { API_URL, authedFetch, clearSession, parseApiError, setRememberedEmail } from '@/lib/utils';
 
 const CONFIRM_WORDS = ['DELETE', 'حذف'];
@@ -96,6 +97,8 @@ async function readMessage(response: Response, fallback: string) {
 }
 
 function clearLocalAuthState() {
+  // The account (and its registered devices) is gone server-side; just forget the token locally.
+  clearStoredPushToken();
   clearSession();
   setRememberedEmail(null);
   try {

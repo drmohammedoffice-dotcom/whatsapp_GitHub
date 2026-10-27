@@ -343,33 +343,34 @@ export default function TikTokTrackingPhonesPage() {
           {t('common.loading')}
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-4">
+          {/* auto-fill: cards wrap instead of being squeezed / cut off next to the two sidebars */}
           {phones.length === 0 ? (
-            <Card className="border-0 shadow-card md:col-span-2 xl:col-span-3">
+            <Card className="col-span-full border-0 shadow-card">
               <CardContent className="py-12 text-center text-muted-foreground">
                 {t('tiktokIntegration.trackingPhones.empty')}
               </CardContent>
             </Card>
           ) : (
             phones.map((phone) => (
-              <Card key={phone.channelId} className="border-0 shadow-card">
-                <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Card key={phone.channelId} className="min-w-0 border-0 shadow-card">
+                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <Phone className="h-5 w-5" />
                     </div>
-                    <div>
-                      <CardTitle className="text-base">
+                    <div className="min-w-0">
+                      <CardTitle className="break-words text-base" dir="auto">
                         {phoneLabel(phone, t('tiktokIntegration.trackingPhones.pending'))}
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="break-words text-xs text-muted-foreground">
                         {phone.pixelName
                           ? `${t('tiktokIntegration.trackingPhones.linkedPixel')}: ${phone.pixelName}`
                           : t('tiktokIntegration.trackingPhones.trackingOnly')}
                       </p>
                     </div>
                   </div>
-                  <Badge variant={statusVariant(phone.status)}>
+                  <Badge variant={statusVariant(phone.status)} className="shrink-0">
                     {phone.status === 'CONNECTED' ? (
                       <span className="flex items-center gap-1">
                         <Wifi className="h-3 w-3" />
@@ -386,7 +387,7 @@ export default function TikTokTrackingPhonesPage() {
                 <CardContent className="space-y-3">
                   <div className="flex items-center gap-2">
                     <select
-                      className="h-9 flex-1 rounded-md border bg-background px-2 text-xs"
+                      className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs"
                       value={phone.integrationId ?? ''}
                       disabled={linkingId === phone.channelId || pixels.length === 0}
                       onChange={(e) => void handleLink(phone.channelId, e.target.value)}

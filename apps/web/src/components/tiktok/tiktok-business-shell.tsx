@@ -7,11 +7,14 @@ import { Share2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { useTranslation } from '@/components/providers/locale-provider';
 import { cn } from '@/lib/utils';
-import { tiktokBusinessNavItems } from '@/lib/tiktok-business';
+import { visibleTikTokBusinessNavItems } from '@/lib/tiktok-business';
+import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 
 export function TikTokBusinessShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const isMobileApp = useIsMobileApp();
+  const navItems = visibleTikTokBusinessNavItems({ mobileApp: isMobileApp });
 
   return (
     <AppShell>
@@ -22,7 +25,7 @@ export function TikTokBusinessShell({ children }: { children: ReactNode }) {
             <h2 className="text-lg font-semibold">{t('tiktokBusiness.title')}</h2>
           </div>
           <nav className="flex flex-row flex-wrap gap-1 lg:flex-col">
-            {tiktokBusinessNavItems.map((item) => {
+            {navItems.map((item) => {
               const active =
                 item.href === '/tiktok/business'
                   ? pathname === item.href

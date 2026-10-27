@@ -23,6 +23,7 @@ import {
   type AdminPlanRow,
 } from '@/lib/admin-api';
 import { formatPrice } from '@/lib/billing';
+import { isHiddenPlanFeature } from '@/lib/plan-limits';
 
 type FeatureDef = {
   key: string;
@@ -30,6 +31,8 @@ type FeatureDef = {
   valueType: 'BOOLEAN' | 'LIMIT';
   nameAr: string;
   nameEn: string;
+  /** Set by the API for features removed from the product. */
+  retired?: boolean;
 };
 
 type LimitMode = 'disabled' | 'limited' | 'unlimited';
@@ -123,9 +126,18 @@ export function PlanManageDialog({ open, onOpenChange, plan, onSaved }: Props) {
     setValues(next);
   }, [open, plan, features]);
 
+  /**
+   * Retired / unenforced features are not editable. They are still sent back
+   * unchanged on save (see `entitlements` below) so nothing is silently reset.
+   */
+  const visibleFeatures = useMemo(
+    () => features.filter((feature) => !isHiddenPlanFeature(feature)),
+    [features],
+  );
+
   const grouped = useMemo(() => {
     const map = new Map<string, FeatureDef[]>();
-    for (const feature of features) {
+    for (const feature of visibleFeatures) {
       const list = map.get(feature.category) ?? [];
       list.push(feature);
       map.set(feature.category, list);
@@ -134,10 +146,10 @@ export function PlanManageDialog({ open, onOpenChange, plan, onSaved }: Props) {
       key,
       items: map.get(key) ?? [],
     }));
-  }, [features]);
+  }, [visibleFeatures]);
 
   const previewBullets = useMemo(() => {
-    return features.map((feature) => {
+    return visibleFeatures.map((feature) => {
       const state = values[feature.key];
       const label = locale === 'ar' ? feature.nameAr : feature.nameEn;
       if (!state) return { label, included: false, detail: '' };
@@ -150,7 +162,7 @@ export function PlanManageDialog({ open, onOpenChange, plan, onSaved }: Props) {
       }
       return { label, included: true, detail: state.limit || '0' };
     });
-  }, [features, values, locale]);
+  }, [visibleFeatures, values, locale]);
 
   function setFeature(key: string, patch: Partial<EntitlementState>) {
     setValues((current) => ({ ...current, [key]: { ...current[key], ...patch } }));

@@ -169,11 +169,8 @@ function IntegrationsHubInner() {
 
   function connectLabel(provider: IntegrationProvider) {
     const keys: Record<IntegrationProvider, string> = {
-      'facebook-messenger': 'integrationsHub.connectFacebook',
-      instagram: 'integrationsHub.connectInstagram',
       whatsapp: 'integrationsHub.connectWhatsApp',
       tiktok: 'integrationsHub.connectTikTok',
-      telegram: 'integrationsHub.connectTelegram',
     };
     return t(keys[provider] as never);
   }

@@ -1,3 +1,4 @@
+import { MOBILE_APP_HIDDEN_NAV_HREFS } from '@/lib/app-mode';
 import { API_URL, api, getAccessToken } from '@/lib/utils';
 
 export type TikTokBusinessStatus = {
@@ -229,6 +230,12 @@ export function saveTikTokWhatsAppMapping(input: {
   });
 }
 
+/**
+ * NOTE (pending owner decision): `/api/tiktok/*` does not exist on the API, so
+ * every call below fails. They back /tiktok/business/whatsapp-mapping and
+ * /tiktok/business/settings/event-set-diagnostics, whose nav entries and links
+ * are hidden (see HIDDEN_TIKTOK_BUSINESS_HREFS). Pages are kept, not deleted.
+ */
 async function tiktokApi<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAccessToken();
   if (!token) throw new Error('Not authenticated');
@@ -607,19 +614,6 @@ export function replaceTikTokCampaignVideo(input: {
   });
 }
 
-export function reviewTikTokCampaign(input: {
-  advertiserId: string;
-  campaignId: string;
-  startDate?: string;
-  endDate?: string;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-}) {
-  return businessApi<{ reply: string }>('/ads/review', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
-}
-
 export function updateTikTokAdBudget(input: { advertiserId: string; adGroupId: string; budget: number }) {
   return businessApi<{ adGroupId: string; budget: number }>('/ads/budget', {
     method: 'POST',
@@ -903,3 +897,21 @@ export const tiktokBusinessNavItems = [
   { href: '/tiktok/business/settings', labelKey: 'tiktokBusiness.nav.settings' },
   { href: '/tiktok/business/settings/event-set-diagnostics', labelKey: 'tiktokBusiness.nav.eventSetDiagnostics' },
 ] as const;
+
+/**
+ * Hidden from navigation until the owner decides what to do with them: both
+ * pages call the non-existent `/api/tiktok/*` prefix (see `tiktokApi`). The
+ * pages themselves are intentionally kept.
+ */
+export const HIDDEN_TIKTOK_BUSINESS_HREFS: ReadonlySet<string> = new Set([
+  '/tiktok/business/whatsapp-mapping',
+  '/tiktok/business/settings/event-set-diagnostics',
+]);
+
+/** TikTok Business sub-nav; `mobileApp` also hides ad-balance top-up (store billing rules). */
+export function visibleTikTokBusinessNavItems(options?: { mobileApp?: boolean }) {
+  const mobileApp = options?.mobileApp ?? false;
+  return tiktokBusinessNavItems.filter(
+    (item) => !HIDDEN_TIKTOK_BUSINESS_HREFS.has(item.href) && !(mobileApp && MOBILE_APP_HIDDEN_NAV_HREFS.has(item.href)),
+  );
+}

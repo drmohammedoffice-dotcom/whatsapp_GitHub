@@ -1,14 +1,13 @@
 ﻿'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowRight, Download, Play, Star } from 'lucide-react';
+import { ArrowRight, LogIn, Play, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useLocale } from '@/components/providers/locale-provider';
 import { Button } from '@/components/ui/button';
 import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { cn } from '@/lib/utils';
 import { LandingReveal } from './landing-ui';
-import { CHATLOORA_WINDOWS_DOWNLOAD_FILENAME, CHATLOORA_WINDOWS_DOWNLOAD_URL } from '@/lib/chatloora-downloads';
 import { useLandingCopy } from './use-landing-copy';
 
 function DashboardPreview() {
@@ -147,20 +146,17 @@ export function LandingHero() {
                 {copy.hero.ctaSecondary}
               </Button>
             </a>
-            {!isMobileApp && (
-            <a href={CHATLOORA_WINDOWS_DOWNLOAD_URL} download={CHATLOORA_WINDOWS_DOWNLOAD_FILENAME}>
+            <Link href="/login">
               <Button
                 size="lg"
                 variant="outline"
                 className="h-12 rounded-full border-violet-200 bg-violet-50/90 px-7 text-base text-violet-900 backdrop-blur hover:bg-violet-100"
               >
-                <Download className="h-4 w-4" />
-                {copy.hero.downloadWindows}
+                <LogIn className={cn('h-4 w-4', dir === 'rtl' && 'rotate-180')} />
+                {isMobileApp ? copy.nav.login : copy.hero.signInWeb}
               </Button>
-            </a>
-            )}
+            </Link>
           </div>
-          {!isMobileApp && <p className="mt-3 text-center text-xs text-slate-500">{copy.hero.downloadWindowsHint}</p>}
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-600">
             <div className="flex items-center gap-0.5 text-amber-400">

@@ -34,7 +34,7 @@ export function AdminSidebar() {
   });
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r bg-card">
+    <aside className="flex h-full w-64 flex-col border-e bg-card">
       <div className="flex items-center justify-between gap-2 border-b px-4 py-4">
         <ChatLooraBrand href="/admin" size="sm" showTagline tagline={t('admin.tagline')} />
         <LanguageToggle />
@@ -47,7 +47,7 @@ export function AdminSidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'block rounded-md px-3 py-2 text-sm transition-colors',
+                'block rounded-md px-3 py-2 text-start text-sm transition-colors',
                 active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
               )}
             >
@@ -58,7 +58,7 @@ export function AdminSidebar() {
       </nav>
       <div className="border-t p-3">
         <Button variant="outline" className="w-full justify-start gap-2" onClick={logout}>
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-4 w-4 rtl:-scale-x-100" />
           {t('admin.signOut')}
         </Button>
       </div>

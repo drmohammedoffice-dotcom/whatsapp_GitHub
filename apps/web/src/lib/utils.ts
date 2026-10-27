@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getMessage, LOCALE_STORAGE_KEY, type Locale } from '@/lib/i18n';
+import { downloadFile } from '@/lib/native-bridge';
 import { clearAccessCookies } from '@/lib/subscription-cookie';
 
 export function cn(...inputs: ClassValue[]) {
@@ -460,15 +461,16 @@ export async function fetchAuthedBlobUrl(path: string): Promise<string> {
   return URL.createObjectURL(blob);
 }
 
-export async function downloadAuthedFile(path: string, fileName: string): Promise<void> {
-  const url = await fetchAuthedBlobUrl(path);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+/**
+ * Download an authenticated API file. Uses the native app bridge inside the
+ * ChatLoora app (a plain `<a download>` does nothing in the WebView).
+ * Resolves `true` only when the file was actually handed to the user.
+ */
+export async function downloadAuthedFile(path: string, fileName: string): Promise<boolean> {
+  const response = await authedFetch(`${API_URL}/api/v1${path}`, {}, { redirectOnInvalid: false });
+  if (!response.ok) throw new Error(await readApiError(response));
+  const blob = await response.blob();
+  return downloadFile(fileName, blob.type || response.headers.get('content-type') || '', blob);
 }
 
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {

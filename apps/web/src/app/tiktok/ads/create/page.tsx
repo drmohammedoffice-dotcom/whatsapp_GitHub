@@ -3,9 +3,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { ChevronDown, Copy, Loader2, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Wallet } from 'lucide-react';
+import { ChevronDown, Copy, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Wallet } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
-import { useSubscription } from '@/components/providers/subscription-provider';
 import { TikTokVideoThumb } from '@/components/tiktok/video-thumb';
 import { AlertBanner } from '@/components/shared/alert-banner';
 import { PageHeader } from '@/components/shared/page-header';
@@ -29,10 +28,6 @@ import { useIsMobileApp } from '@/lib/use-is-mobile-app';
 import { parseApiError } from '@/lib/utils';
 import { useTranslation } from '@/components/providers/locale-provider';
 
-const CampaignReviewDialog = dynamic(
-  () => import('@/components/tiktok/campaign-review-dialog').then((mod) => mod.CampaignReviewDialog),
-  { ssr: false },
-);
 const CampaignVideosPanel = dynamic(
   () => import('@/components/tiktok/campaign-videos-panel').then((mod) => mod.CampaignVideosPanel),
   { ssr: false },
@@ -150,7 +145,6 @@ function TikTokCampaignsInner() {
   const [budgetDrafts, setBudgetDrafts] = useState<Record<string, string>>({});
   const [pickedId, setPickedId] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [review, setReview] = useState<TikTokCampaignStat | null>(null);
   const [statusBusy, setStatusBusy] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [renamingId, setRenamingId] = useState('');
@@ -158,8 +152,6 @@ function TikTokCampaignsInner() {
   /** Keep local ENABLE/DISABLE for a while so stale TikTok reads don't flip the switch back. */
   const statusOverridesRef = useRef<Map<string, { status: string; until: number }>>(new Map());
   const statsRef = useRef<TikTokCampaignStat[]>([]);
-  const { status: subscription } = useSubscription();
-  const canReview = Boolean(subscription?.isActive) && Boolean(subscription?.limits?.aiCampaignReviewEnabled);
 
   useEffect(() => {
     statsRef.current = stats;
@@ -903,11 +895,6 @@ function TikTokCampaignsInner() {
                       <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void removeCampaigns([row.campaignId])}>
                         <Trash2 className="h-4 w-4" /> {t('tiktokAdsCreate.delete')}
                       </Button>
-                      {canReview && (
-                        <Button type="button" size="sm" variant="outline" onClick={() => setReview(row)}>
-                          <Sparkles className="h-4 w-4" /> {t('tiktokAdsCreate.askAi')}
-                        </Button>
-                      )}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
                       <Input className="h-8 w-24" dir="ltr" type="number" value={budgetDrafts[row.campaignId] ?? String(row.budget || '')} onChange={(event) => setBudgetDrafts((current) => ({ ...current, [row.campaignId]: event.target.value }))} />
@@ -1037,16 +1024,6 @@ function TikTokCampaignsInner() {
           )}
         </CardContent>
       </Card>
-      {review && (
-        <CampaignReviewDialog
-          advertiserId={advertiserId}
-          campaignId={review.campaignId}
-          campaignName={review.name}
-          startDate={startDate}
-          endDate={endDate}
-          onClose={() => setReview(null)}
-        />
-      )}
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setPreview(null)}>
           <div className="w-[420px] max-w-full overflow-hidden rounded-2xl bg-black shadow-2xl" onClick={(event) => event.stopPropagation()}>

@@ -53,7 +53,6 @@ export default function AdminDashboardPage() {
         <StatCard label="Active workspaces" value={stats.activeWorkspaces} />
         <StatCard label="Connected WhatsApp" value={stats.connectedWhatsAppNumbers} />
         <StatCard label="Connected TikTok" value={stats.connectedTikTokAccounts} />
-        <StatCard label="Connected Meta" value={stats.connectedMetaAccounts} />
       </div>
       <Card className="mt-4 border-0 shadow-card">
         <CardContent className="pt-6">

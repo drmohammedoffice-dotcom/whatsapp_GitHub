@@ -219,7 +219,11 @@ export class BookingsService {
     });
   }
 
-  async exportExcel(teamId: string, range?: BookingExportRange) {
+  /**
+   * `markExported: false` lets the client confirm with markExportedRange() only after the
+   * file was really saved (the mobile app saves through the native share sheet).
+   */
+  async exportExcel(teamId: string, range?: BookingExportRange, markExported = true) {
     const rows = await this.list(teamId, range);
     if (!rows.length) throw new BadRequestException('No orders in the selected range');
 
@@ -240,11 +244,11 @@ export class BookingsService {
     );
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, 'Orders');
-    await this.markExportRange(teamId, rows);
+    if (markExported) await this.markExportRange(teamId, rows);
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
-  async exportPdf(teamId: string, range?: BookingExportRange) {
+  async exportPdf(teamId: string, range?: BookingExportRange, markExported = true) {
     const rows = await this.list(teamId, range);
     if (!rows.length) throw new BadRequestException('No orders in the selected range');
 
@@ -300,7 +304,7 @@ export class BookingsService {
     }
 
     doc.end();
-    await this.markExportRange(teamId, rows);
+    if (markExported) await this.markExportRange(teamId, rows);
     return done;
   }
 
@@ -351,6 +355,13 @@ export class BookingsService {
           }
         : {}),
     };
+  }
+
+  /** Confirms a successful export of the given range (see exportExcel `markExported`). */
+  async markExportedRange(teamId: string, range?: BookingExportRange) {
+    const rows = await this.list(teamId, range);
+    await this.markExportRange(teamId, rows);
+    return this.getExportMeta(teamId);
   }
 
   private async markExportRange(

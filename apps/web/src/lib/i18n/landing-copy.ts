@@ -12,7 +12,6 @@ const landingEn = {
     contact: 'Contact',
     login: 'Login',
     startTrial: 'Start Free Trial',
-    becomePartner: 'Become a Partner',
     menu: 'Menu',
   },
   hero: {
@@ -23,27 +22,9 @@ const landingEn = {
       'Link WhatsApp numbers and pixels, create campaigns, and top up ad accounts inside ChatLoora. Ads publish on TikTok alone — without the extra platforms that stay locked beside TikTok in Ads Manager.',
     ctaPrimary: 'Start Free Trial',
     ctaSecondary: 'See How It Works',
-    downloadWindows: 'Download ChatLoora for Windows',
-    downloadWindowsHint: 'Windows installer (.exe) — run to install',
+    signInWeb: 'Sign in on the web',
     trusted: 'Trusted by Businesses',
     stars: 'Rated 5.0 by growing teams',
-  },
-  audience: {
-    eyebrow: 'Who it’s for',
-    title: 'Built for teams that live in customer chats',
-    subtitle: 'From clinics to ecommerce — ChatLoora adapts to how you sell and support.',
-    items: [
-      { title: 'E-commerce', desc: 'Answer product questions and close orders faster.' },
-      { title: 'Clinics', desc: 'Book, reschedule, and guide patients 24/7.' },
-      { title: 'Medical Centers', desc: 'Route urgent cases and manage appointments.' },
-      { title: 'Restaurants', desc: 'Handle reservations, menus, and delivery chats.' },
-      { title: 'Real Estate', desc: 'Qualify leads and schedule property tours.' },
-      { title: 'Agencies', desc: 'Run client WhatsApp + ads ops in one place.' },
-      { title: 'Education', desc: 'Enroll students and answer course questions.' },
-      { title: 'Beauty Clinics', desc: 'Book treatments and follow up automatically.' },
-      { title: 'Support Teams', desc: 'Unify channels and hand off with context.' },
-      { title: 'Sales Teams', desc: 'Qualify, upsell, and never miss a hot lead.' },
-    ],
   },
   problems: {
     eyebrow: 'The problem',
@@ -117,48 +98,6 @@ const landingEn = {
     shotSolution:
       'The campaign is created inside ChatLoora and published on TikTok alone. Those extra platforms are not added, so the views stay on TikTok.',
   },
-  meta: {
-    eyebrow: 'Meta',
-    title: 'Facebook, Instagram & Messenger — connected',
-    subtitle:
-      'Bring Meta conversations into the same inbox your team already uses for WhatsApp and Telegram.',
-    items: ['Facebook Pages', 'Instagram DMs', 'Messenger threads', 'Unified team replies'],
-  },
-  clinics: {
-    eyebrow: 'AI for clinics',
-    title: 'A smart receptionist for your clinic — working 24 hours',
-    subtitle:
-      'Your AI receptionist answers patients, books appointments, and protects your staff from repetitive questions.',
-    capabilities: [
-      'Answer patient questions instantly',
-      'Book appointments automatically',
-      'Reschedule and cancel bookings',
-      'Share clinic location & working hours',
-      'Remember patient information',
-      'Transfer urgent cases to staff',
-    ],
-    calendarTitle: 'Google Calendar Integration',
-    calendarDesc:
-      'Check availability, book directly, prevent double bookings, send confirmations, and remind patients automatically.',
-    previewLabel: 'Clinic dashboard preview',
-  },
-  sales: {
-    eyebrow: 'AI for sales',
-    title: 'An AI closer that never sleeps',
-    subtitle: 'From first message to qualified lead — ChatLoora helps your sales engine run around the clock.',
-    items: [
-      { title: 'Prices & Products', desc: 'Accurate answers from your catalog and training.' },
-      { title: 'Delivery & Availability', desc: 'Clear logistics answers that reduce drop-off.' },
-      { title: 'Orders', desc: 'Collect details and confirm orders conversationally.' },
-      { title: 'Upsell & Cross-sell', desc: 'Recommend the right next product naturally.' },
-      { title: 'Lead Qualification', desc: 'Score intent and route hot leads to humans.' },
-    ],
-  },
-  integrations: {
-    eyebrow: 'Integrations',
-    title: 'Your stack, connected',
-    subtitle: 'ChatLoora sits at the center of messaging, ads, calendar, and AI.',
-  },
   how: {
     eyebrow: 'How it works',
     title: 'From signup to a TikTok campaign',
@@ -187,10 +126,10 @@ const landingEn = {
       {
         quote:
           'I create the campaign in ChatLoora and it stays on TikTok. I no longer fight the extra platforms that Ads Manager will not let me remove.',
-        name: 'Dr. Sara Al-Hassan',
-        role: 'Clinic Director',
-        company: 'Nour Medical Clinic',
-        industry: 'Medical Clinic',
+        name: 'Sara Al-Hassan',
+        role: 'Marketing Manager',
+        company: 'Nour Store',
+        industry: 'Online store',
       },
       {
         quote:
@@ -254,7 +193,7 @@ const landingEn = {
   pricing: {
     eyebrow: 'Pricing',
     title: 'Simple plans that scale with you',
-    subtitle: 'WhatsApp numbers, pixels, TikTok campaigns, instant forms, and AI analytics on the top plan.',
+    subtitle: 'WhatsApp numbers, tracking pixels, TikTok campaigns, instant forms, and an online store on the top plan.',
     monthly: 'Monthly',
     perMonth: '/month',
     popular: 'Most Popular',
@@ -286,9 +225,8 @@ const landingEn = {
         features: [
           '5 WhatsApp numbers',
           '20 tracking pixels',
-          'AI campaign analytics',
+          'Link account and create campaigns',
           'Instant forms and online store',
-          'Special reports and priority support',
         ],
       },
     ],
@@ -308,7 +246,7 @@ const landingEn = {
       },
       {
         q: 'How do I activate the trial?',
-        a: 'Create an account, send your registered email, and our team activates your workspace and sends training videos.',
+        a: 'Create an account, send your registered email, and our team activates your workspace and sends setup tutorials.',
       },
       {
         q: 'Can I use the site on my phone?',
@@ -324,7 +262,7 @@ const landingEn = {
       },
       {
         q: 'What can I do in the panel?',
-        a: 'Link WhatsApp numbers, create pixels, build TikTok campaigns, and top up ad accounts.',
+        a: 'Link WhatsApp numbers, reply from the WhatsApp inbox, create pixels, build TikTok campaigns, publish instant forms, and top up ad accounts.',
       },
       {
         q: 'What is the minimum top-up?',
@@ -352,7 +290,7 @@ const landingEn = {
       },
       {
         q: 'What happens after the free trial?',
-        a: 'Choose Basic, Professional, or Business and continue without losing your training or connections.',
+        a: 'Choose Basic, Professional, or Business and continue without losing your data or connections.',
       },
       {
         q: 'How do I get support?',
@@ -381,7 +319,7 @@ const landingEn = {
     terms: 'Terms',
     companyInfo: 'Company information',
     whatsappApi: 'WhatsApp Cloud API',
-    windowsApp: 'Windows desktop app',
+    signInWeb: 'Sign in on the web',
   },
   seo: {
     title: 'ChatLoora — TikTok ads from your phone',
@@ -404,7 +342,6 @@ const landingAr: LandingCopy = {
     contact: 'تواصل معنا',
     login: 'تسجيل الدخول',
     startTrial: 'ابدأ التجربة المجانية',
-    becomePartner: 'كن شريكاً',
     menu: 'القائمة',
   },
   hero: {
@@ -415,27 +352,9 @@ const landingAr: LandingCopy = {
       'اربط رقم الواتساب والبكسل، أنشئ الحملة، وعبّئ رصيد الحساب الإعلاني من جات لورا. الإعلان ينزل على تيك توك وحدها، بدون المنصات المقفلة التي تظهر بجانب تيك توك داخل مدير الإعلانات ولا يمكن حذفها.',
     ctaPrimary: 'ابدأ التجربة المجانية',
     ctaSecondary: 'شاهد طريقة العمل',
-    downloadWindows: 'تنزيل ChatLoora لـ Windows',
-    downloadWindowsHint: 'ملف تثبيت Windows (.exe) — شغّله مباشرة للتثبيت',
+    signInWeb: 'تسجيل الدخول من الويب',
     trusted: 'موثوق به من قبل الشركات',
     stars: 'تقييم 5.0 من فرق متنامية',
-  },
-  audience: {
-    eyebrow: 'لمن صُممت',
-    title: 'مصممة للفرق التي تعيش داخل محادثات العملاء',
-    subtitle: 'من العيادات إلى المتاجر الإلكترونية — ChatLoora تتكيف مع طريقة بيعك ودعمك.',
-    items: [
-      { title: 'التجارة الإلكترونية', desc: 'أجب عن أسئلة المنتجات وأغلق الطلبات أسرع.' },
-      { title: 'العيادات', desc: 'احجز، أعد الجدولة، ووجّه المرضى على مدار الساعة.' },
-      { title: 'المراكز الطبية', desc: 'حوّل الحالات العاجلة وأدر المواعيد باحتراف.' },
-      { title: 'المطاعم', desc: 'إدارة الحجوزات والقائمة ومحادثات التوصيل.' },
-      { title: 'العقارات', desc: 'أهّل العملاء واحجز معاينات العقارات.' },
-      { title: 'الوكالات', desc: 'شغّل واتساب وإعلانات العملاء من مكان واحد.' },
-      { title: 'مراكز التعليم', desc: 'سجّل الطلاب وأجب عن أسئلة الدورات فوراً.' },
-      { title: 'عيادات التجميل', desc: 'احجز الجلسات وتابع العملاء تلقائياً.' },
-      { title: 'فرق الدعم', desc: 'وحّد القنوات وسلّم المحادثة مع السياق الكامل.' },
-      { title: 'فرق المبيعات', desc: 'أهّل العملاء ولا تفوّت أي فرصة ساخنة.' },
-    ],
   },
   problems: {
     eyebrow: 'المشكلة',
@@ -508,46 +427,6 @@ const landingAr: LandingCopy = {
     shotSolution:
       'الحملة تُنشأ من داخل جات لورا وتُنشر على تيك توك وحدها. هذه المنصات لا تُضاف، فتبقى المشاهدات على تيك توك.',
   },
-  meta: {
-    eyebrow: 'Meta',
-    title: 'فيسبوك وإنستغرام وماسنجر — متصلون',
-    subtitle: 'اجلب محادثات Meta إلى نفس الصندوق الذي يستخدمه فريقك لواتساب وتيليجرام.',
-    items: ['صفحات فيسبوك', 'رسائل إنستغرام', 'محادثات ماسنجر', 'ردود فريق موحّدة'],
-  },
-  clinics: {
-    eyebrow: 'ذكاء اصطناعي للعيادات',
-    title: 'موظف استقبال ذكي لعيادتك يعمل 24 ساعة',
-    subtitle: 'يجيب المرضى، يحجز المواعيد، ويحمي فريقك من الأسئلة المتكررة.',
-    capabilities: [
-      'الرد على أسئلة المرضى فوراً',
-      'حجز المواعيد تلقائياً',
-      'إعادة الجدولة والإلغاء',
-      'إرسال موقع العيادة وساعات العمل',
-      'تذكر معلومات المريض',
-      'تحويل الحالات العاجلة للموظفين',
-    ],
-    calendarTitle: 'تكامل Google Calendar',
-    calendarDesc:
-      'تحقق من الأوقات المتاحة، احجز مباشرة، امنع الحجز المزدوج، أرسل التأكيدات والتذكيرات تلقائياً.',
-    previewLabel: 'معاينة لوحة العيادة',
-  },
-  sales: {
-    eyebrow: 'ذكاء اصطناعي للمبيعات',
-    title: 'مندوب مبيعات ذكي لا ينام',
-    subtitle: 'من أول رسالة إلى عميل مؤهل — ChatLoora تشغّل محرك مبيعاتك على مدار الساعة.',
-    items: [
-      { title: 'الأسعار والمنتجات', desc: 'إجابات دقيقة من كتالوجك وتدريبك.' },
-      { title: 'التوصيل والتوفر', desc: 'إجابات لوجستية واضحة تقلل الانسحاب.' },
-      { title: 'الطلبات', desc: 'جمع التفاصيل وتأكيد الطلب محادثةً.' },
-      { title: 'البيع الإضافي والمتقاطع', desc: 'اقتراح المنتج المناسب بشكل طبيعي.' },
-      { title: 'تأهيل العملاء', desc: 'تقييم النية وتحويل الفرص الساخنة للبشر.' },
-    ],
-  },
-  integrations: {
-    eyebrow: 'التكاملات',
-    title: 'أدواتك... متصلة',
-    subtitle: 'ChatLoora في مركز الرسائل والإعلانات والتقويم والذكاء الاصطناعي.',
-  },
   how: {
     eyebrow: 'طريقة العمل',
     title: 'من التسجيل إلى حملة على تيك توك',
@@ -576,10 +455,10 @@ const landingAr: LandingCopy = {
       {
         quote:
           'أنشئ الحملة من جات لورا فتبقى على تيك توك. ما عاد أواجه المنصات التي لا يمكن حذفها من مدير الإعلانات.',
-        name: 'د. سارة الحسن',
-        role: 'مديرة العيادة',
-        company: 'عيادة نور الطبية',
-        industry: 'عيادة طبية',
+        name: 'سارة الحسن',
+        role: 'مديرة التسويق',
+        company: 'متجر نور',
+        industry: 'متجر إلكتروني',
       },
       {
         quote: 'أربط رقم الواتساب والبكسل ثم أطلق الحملة. كل الخطوات داخل جات لورا.',
@@ -638,7 +517,7 @@ const landingAr: LandingCopy = {
   pricing: {
     eyebrow: 'الأسعار',
     title: 'باقات بسيطة تنمو معك',
-    subtitle: 'أرقام واتساب وبكسلات وحملات تيك توك واستمارات فورية، مع تحليل الذكاء الاصطناعي في الباقة المفضلة.',
+    subtitle: 'أرقام واتساب وبكسلات تتبع وحملات تيك توك واستمارات فورية، مع المتجر الإلكتروني في باقة الأعمال.',
     monthly: 'شهري',
     perMonth: '/شهر',
     popular: 'الأكثر طلباً',
@@ -670,9 +549,8 @@ const landingAr: LandingCopy = {
         features: [
           '5 أرقام واتساب',
           '20 بكسل تتبع',
-          'تحليل نتائج الحملة بالذكاء الاصطناعي',
+          'ربط الحساب وإنشاء الحملات',
           'الاستمارات الفورية والمتجر الإلكتروني',
-          'تقارير خاصة ودعم ممتاز وفوري',
         ],
       },
     ],
@@ -692,7 +570,7 @@ const landingAr: LandingCopy = {
       },
       {
         q: 'كيف أفعّل التجربة؟',
-        a: 'أنشئ حساباً، أرسل بريدك المسجّل، ونفعّل مساحة عملك ونرسل فيديوهات التدريب.',
+        a: 'أنشئ حساباً وأرسل بريدك المسجّل، فنفعّل مساحة عملك ونرسل لك شروحات الإعداد.',
       },
       {
         q: 'هل يعمل الموقع على الجوال؟',
@@ -708,7 +586,7 @@ const landingAr: LandingCopy = {
       },
       {
         q: 'ماذا أفعل من اللوحة؟',
-        a: 'ربط أرقام الواتساب، إنشاء البكسلات، بناء حملات تيك توك، وتعبئة الحسابات الإعلانية.',
+        a: 'ربط أرقام الواتساب، الرد من صندوق واتساب، إنشاء البكسلات، بناء حملات تيك توك، نشر الاستمارات الفورية، وتعبئة الحسابات الإعلانية.',
       },
       {
         q: 'ما الحد الأدنى للتعبئة؟',
@@ -736,7 +614,7 @@ const landingAr: LandingCopy = {
       },
       {
         q: 'ماذا بعد انتهاء التجربة؟',
-        a: 'اختر Basic أو Professional أو Business وتابع دون فقدان التدريب أو الربط.',
+        a: 'اختر Basic أو Professional أو Business وتابع دون فقدان بياناتك أو الربط.',
       },
       {
         q: 'كيف أحصل على الدعم؟',
@@ -765,7 +643,7 @@ const landingAr: LandingCopy = {
     terms: 'الشروط',
     companyInfo: 'معلومات الشركة',
     whatsappApi: 'واتساب Cloud API',
-    windowsApp: 'تطبيق Windows',
+    signInWeb: 'تسجيل الدخول من الويب',
   },
   seo: {
     title: 'جات لورا — إعلانات تيك توك من جوالك',

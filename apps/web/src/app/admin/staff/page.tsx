@@ -238,7 +238,7 @@ export default function AdminStaffPage() {
         description={t('admin.staff.subtitle')}
         actions={
           <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="me-2 h-4 w-4" />
             {t('admin.staff.add')}
           </Button>
         }
@@ -380,7 +380,7 @@ export default function AdminStaffPage() {
                     </TableCell>
                     <TableCell>{row.residence || '—'}</TableCell>
                     <TableCell>{formatWhen(row.createdAt)}</TableCell>
-                    <TableCell className="space-x-2 text-end rtl:space-x-reverse">
+                    <TableCell className="space-x-2 text-end">
                       <Badge variant={row.isActive ? 'default' : 'secondary'}>
                         {row.isActive ? t('admin.staff.active') : t('admin.staff.inactive')}
                       </Badge>

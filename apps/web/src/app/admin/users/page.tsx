@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, CreditCard, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/shared/page-header';
@@ -22,6 +22,7 @@ import {
   type AdminSubscriptionRow,
   type AdminUserRow,
 } from '@/lib/admin-api';
+import { isDeletedAccount } from '@/lib/admin-subscription-utils';
 
 function subscriptionBadge(sub: AdminSubscriptionRow | null | undefined) {
   if (!sub) return <Badge variant="secondary">No plan</Badge>;
@@ -54,6 +55,14 @@ export default function AdminUsersPage() {
 
   const PAGE_SIZE = 100;
   const [skip, setSkip] = useState(0);
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  // Self-deleted (anonymised) accounts are hidden by default.
+  const deletedCount = useMemo(() => users.filter((u) => isDeletedAccount(u)).length, [users]);
+  const visibleUsers = useMemo(
+    () => (showDeleted ? users : users.filter((u) => !isDeletedAccount(u))),
+    [users, showDeleted],
+  );
 
   const load = useCallback(async (search?: string, pageSkip = 0) => {
     setLoading(true);
@@ -123,9 +132,9 @@ export default function AdminUsersPage() {
 
       <div className="mt-4 flex flex-wrap gap-2">
         <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            className="pl-9"
+            className="ps-9"
             placeholder="Search by name or email..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -144,6 +153,10 @@ export default function AdminUsersPage() {
           <Plus className="me-2 h-4 w-4" />
           Add subscriber
         </Button>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
+          إظهار الحسابات المحذوفة ({deletedCount})
+        </label>
       </div>
 
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
@@ -168,7 +181,7 @@ export default function AdminUsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((u) => {
+              {visibleUsers.map((u) => {
                 const team = u.teamMembers[0]?.team;
                 return (
                   <TableRow key={u.id}>

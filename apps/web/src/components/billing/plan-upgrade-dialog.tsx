@@ -21,18 +21,8 @@ const TITLE_KEYS: Record<PlanFeature, string> = {
   whatsapp_api: 'billing.upgradeLockedTitle',
   tiktok: 'billing.upgradeLockedTitle',
   tiktok_pixel: 'billing.upgradeLimitTitle',
-  facebook: 'billing.upgradeLockedTitle',
-  instagram: 'billing.upgradeLockedTitle',
-  telegram: 'billing.upgradeLockedTitle',
-  social_integrations: 'billing.upgradeSocialTitle',
-  ai: 'billing.upgradeAiTitle',
-  appointments: 'billing.upgradeAppointmentsTitle',
-  team_members: 'billing.upgradeLimitTitle',
-  voice_ai: 'billing.upgradeAiTitle',
-  creative_studio: 'billing.upgradeAiTitle',
   instant_forms: 'billing.upgradeLockedTitle',
   online_store: 'billing.upgradeLockedTitle',
-  ai_campaign_review: 'billing.upgradeAiTitle',
 };
 
 const BODY_KEYS: Record<PlanFeature, string> = {
@@ -41,18 +31,8 @@ const BODY_KEYS: Record<PlanFeature, string> = {
   whatsapp_api: 'billing.upgradeLockedBody',
   tiktok: 'billing.upgradeLockedBody',
   tiktok_pixel: 'billing.upgradeLimitBody',
-  facebook: 'billing.upgradeLockedBody',
-  instagram: 'billing.upgradeLockedBody',
-  telegram: 'billing.upgradeLockedBody',
-  social_integrations: 'billing.upgradeSocialBody',
-  ai: 'billing.upgradeAiBody',
-  appointments: 'billing.upgradeAppointmentsBody',
-  team_members: 'billing.upgradeLimitBody',
-  voice_ai: 'billing.upgradeAiBody',
-  creative_studio: 'billing.upgradeAiBody',
   instant_forms: 'billing.upgradeLockedBody',
   online_store: 'billing.upgradeLockedBody',
-  ai_campaign_review: 'billing.upgradeAiBody',
 };
 
 export function PlanUpgradeDialog({ feature, title, description }: PlanUpgradeDialogProps) {

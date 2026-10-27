@@ -377,7 +377,7 @@ function WizardInner() {
       <div className="flex flex-wrap gap-2 pt-2">
         {showBack && step > 1 && (
           <Button type="button" variant="outline" onClick={goBack} disabled={busy}>
-            <ChevronLeft className="me-2 h-4 w-4" />
+            <ChevronLeft className="me-2 h-4 w-4 rtl:rotate-180" />
             {t('common.back')}
           </Button>
         )}
@@ -433,7 +433,7 @@ function WizardInner() {
                   )}
                   {state?.marketingConnected && (
                     <Button onClick={() => setStep(2)}>
-                      {t('tiktokIntegration.continue')} <ChevronRight className="ms-2 h-4 w-4" />
+                      {t('tiktokIntegration.continue')} <ChevronRight className="ms-2 h-4 w-4 rtl:rotate-180" />
                     </Button>
                   )}
                 </div>
@@ -468,7 +468,7 @@ function WizardInner() {
                         key={a.advertiserId}
                         type="button"
                         className={cn(
-                          'flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted',
+                          'flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-start text-sm hover:bg-muted',
                           selectedAdvertiser === a.advertiserId && 'bg-primary/10 font-medium ring-1 ring-primary',
                         )}
                         onClick={() => setSelectedAdvertiser(a.advertiserId)}
@@ -610,7 +610,7 @@ function WizardInner() {
                         </select>
                         {instantForms.length === 0 ? (
                           <p className="text-xs text-teal-800/80">
-                            لا توجد استمارات بعد — سيتم إنشاء استمارة أساسية وربطها. يمكنك لاحقاً إنشاء استمارة بالذكاء الاصطناعي وربطها من هنا أو من صفحة البكسل.
+                            لا توجد استمارات بعد — سيتم إنشاء استمارة أساسية وربطها. يمكنك لاحقاً إنشاء استمارة من قالب جاهز وربطها من هنا أو من صفحة البكسل.
                           </p>
                         ) : (
                           <p className="text-xs text-teal-800/80">

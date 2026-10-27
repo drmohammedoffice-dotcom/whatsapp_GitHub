@@ -145,7 +145,7 @@ export function InstantFormLibraryModal({
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 md:grid-cols-[280px_1fr]">
-          <div className="border-l bg-muted/20 p-4">
+          <div className="border-e bg-muted/20 p-4">
             <div className="mx-auto flex h-[420px] w-[220px] flex-col overflow-hidden rounded-[28px] border bg-zinc-900 text-white shadow-lg">
               {selected?.thumbnail || selected?.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -182,8 +182,8 @@ export function InstantFormLibraryModal({
                   <thead className="sticky top-0 bg-muted/80 text-xs text-muted-foreground">
                     <tr>
                       <th className="w-10 p-2" />
-                      <th className="p-2 text-right">الاسم</th>
-                      <th className="p-2 text-right">الحالة</th>
+                      <th className="p-2 text-start">الاسم</th>
+                      <th className="p-2 text-start">الحالة</th>
                     </tr>
                   </thead>
                   <tbody>

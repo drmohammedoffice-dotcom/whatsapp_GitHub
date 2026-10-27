@@ -10,12 +10,7 @@ export type IntegrationConnectionStatus =
 
 export type IntegrationHealth = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
-export type IntegrationProvider =
-  | 'facebook-messenger'
-  | 'instagram'
-  | 'whatsapp'
-  | 'tiktok'
-  | 'telegram';
+export type IntegrationProvider = 'whatsapp' | 'tiktok';
 
 export type IntegrationAccount = {
   id: string;

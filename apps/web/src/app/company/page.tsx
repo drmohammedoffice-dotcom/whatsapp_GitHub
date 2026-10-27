@@ -68,8 +68,8 @@ export default function CompanyPage() {
           <section className="mt-8 rounded-2xl border border-violet-100 bg-violet-50/60 p-6 sm:p-8">
             <h2 className="text-lg font-bold text-slate-900">Platform operator</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-700">
-              {COMPANY_LEGAL.tradeName} is a software platform for customer conversations, AI replies, and
-              advertising integrations. The website and services at{' '}
+              {COMPANY_LEGAL.tradeName} is a software platform for TikTok advertising, WhatsApp conversion
+              tracking, and customer conversations on WhatsApp. The website and services at{' '}
               <a href={baseUrl} className="font-medium text-violet-700 hover:underline">
                 {baseUrl.replace(/^https?:\/\//, '')}
               </a>{' '}
