@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ChannelPurpose, MessageDirection, MessageStatus, MessageType, WhatsAppConnectionLogEvent, WhatsAppSessionStatus } from '@watsapp/database';
 import QRCode from 'qrcode';
@@ -329,6 +330,9 @@ export class WhatsAppEventsService {
   }
 
   private async handleContactsUpdate(context: SessionContext, contacts: unknown[]) {
+    // Tracking numbers only feed TikTok conversions: never copy their address book.
+    const channel = await this.channels.ensureWhatsAppChannel(context.teamId, context.sessionId);
+    if (channel.purpose === ChannelPurpose.TRACKING || isTrackingChannel(channel)) return;
     for (const contact of contacts) {
       const item = contact as { id?: string; notify?: string; name?: string };
       if (!item.id) continue;
@@ -390,8 +394,6 @@ export class WhatsAppEventsService {
 
     const timestamp = Number(raw.messageTimestamp || Date.now());
     const receivedAt = new Date(timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp);
-    const media = await this.downloadIncomingMedia(context, raw, unwrapped, type);
-
     const channel = await this.channels.ensureWhatsAppChannel(context.teamId, context.sessionId);
     const tracking = channel.purpose === ChannelPurpose.TRACKING || isTrackingChannel(channel);
 
@@ -408,6 +410,9 @@ export class WhatsAppEventsService {
       });
       return;
     }
+
+    // Media is only kept for the inbox; tracking numbers never download it.
+    const media = await this.downloadIncomingMedia(context, raw, unwrapped, type, providerMessageId);
 
     const chat = await this.repository.upsertChat({
       teamId: context.teamId,
@@ -552,11 +557,22 @@ export class WhatsAppEventsService {
     raw: Record<string, unknown>,
     messageContent: Record<string, unknown> | undefined,
     type: MessageType,
+    providerMessageId: string,
   ) {
     const mediaTypes: MessageType[] = [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT, MessageType.STICKER];
     if (!mediaTypes.includes(type)) return null;
     const info = extractMediaInfo(messageContent);
     if (!info) return null;
+    // Our own sends come back as `append` echoes with the same id: reuse what is stored.
+    const known = await this.channelMessages.findStoredMedia(context.teamId, providerMessageId);
+    if (known?.mediaStorageKey && (await this.storage.exists(known.mediaStorageKey))) {
+      return {
+        storageKey: known.mediaStorageKey,
+        mimeType: known.mediaMimeType ?? info.mimeType ?? 'application/octet-stream',
+        fileName: known.mediaFileName ?? info.fileName,
+        sizeBytes: known.mediaSizeBytes ?? undefined,
+      };
+    }
     const socket = this.sessionManager.getSocket(context.sessionId);
     if (!socket) return null;
     try {
@@ -566,6 +582,17 @@ export class WhatsAppEventsService {
       const normalizedMessage = { key: raw.key, message: messageContent, messageTimestamp: raw.messageTimestamp };
       const buffer = await this.baileysProvider.downloadMedia(socket, normalizedMessage);
       if (!buffer || buffer.length === 0) return null;
+      // Same file sent to many customers (campaign/broadcast): keep a single copy.
+      const checksum = createHash('sha256').update(buffer).digest('hex');
+      const sharedKey = await this.channelMessages.findMediaKeyByChecksum(context.teamId, checksum);
+      if (sharedKey && (await this.storage.exists(sharedKey))) {
+        return {
+          storageKey: sharedKey,
+          mimeType: info.mimeType ?? 'application/octet-stream',
+          fileName: info.fileName,
+          sizeBytes: buffer.length,
+        };
+      }
       const stored = await this.storage.putBuffer(context.teamId, buffer, info.mimeType ?? 'application/octet-stream', info.fileName ?? undefined);
       return {
         storageKey: stored.storageKey,

@@ -18,7 +18,7 @@ FROM base AS build
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Generate the Prisma client, build shared deps, then build only the API.
 RUN pnpm --filter @watsapp/database prisma:generate \
@@ -27,15 +27,15 @@ RUN pnpm --filter @watsapp/database prisma:generate \
  && pnpm --filter @watsapp/api build
 
 # ---------------------------------------------------------------------------
-# Runtime stage: sync the schema to the database, then start the API.
-# This project uses `prisma db push` as the schema source of truth; the pgvector
-# extension + embedding table are applied via raw SQL (non-fatal so the API
-# still boots on a Postgres without the vector extension available).
-# The API reads process.env.PORT (Railway injects it); CORS_ORIGINS must include
-# the web app's public URL.
+# Runtime stage: apply pending Prisma migrations, then start the API.
+# `prisma migrate deploy` only runs reviewed migrations from
+# packages/database/prisma/migrations and never drops data on its own. Never use
+# `db push --accept-data-loss` here: it silently drops tables/columns that are not
+# in schema.prisma (it would delete paying customers' data).
+# The API reads process.env.PORT; CORS_ORIGINS must include the web app's public URL.
 # ---------------------------------------------------------------------------
 FROM build AS runner
 ENV NODE_ENV=production
 EXPOSE 4000
 
-CMD ["sh", "-c", "pnpm --filter @watsapp/database exec prisma db push --skip-generate --accept-data-loss && (pnpm --filter @watsapp/database exec prisma db execute --schema prisma/schema.prisma --file prisma/migrations/20260625223000_ai_pgvector/migration.sql || echo 'pgvector step skipped') && pnpm --filter @watsapp/api start"]
+CMD ["sh", "-c", "pnpm --filter @watsapp/database exec prisma migrate deploy && pnpm --filter @watsapp/api start"]

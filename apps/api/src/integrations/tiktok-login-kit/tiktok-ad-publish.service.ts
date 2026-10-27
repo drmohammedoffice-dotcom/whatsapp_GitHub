@@ -319,12 +319,11 @@ export class TikTokAdPublishService {
       advertiser_id: input.advertiserId,
       objective_type: objective,
       optimization_goal: OBJECTIVE_SPECS[objective].optimizationGoal,
-      placement_type: input.placementMode === 'AUTOMATIC' ? 'PLACEMENT_TYPE_AUTOMATIC' : 'PLACEMENT_TYPE_NORMAL',
+      // Same TikTok-only placement as publishing, so the estimate matches what runs.
+      placement_type: 'PLACEMENT_TYPE_NORMAL',
+      placements: ['PLACEMENT_TIKTOK'],
       location_ids: input.locationIds,
     };
-    if (input.placementMode !== 'AUTOMATIC') {
-      body.placements = input.placements?.length ? input.placements : ['PLACEMENT_TIKTOK'];
-    }
     if (input.gender && input.gender !== 'GENDER_UNLIMITED') body.gender = input.gender;
     const ages = (input.ageGroups ?? []).filter((age) => (AGE_GROUPS as readonly string[]).includes(age));
     if (ages.length) body.age_groups = ages;
@@ -1098,9 +1097,12 @@ export class TikTokAdPublishService {
         `[Marketing API] schedule convert ${startRaw} (${userZone}) → ${start} (${tikTokZone})`,
       );
     }
-    const automatic = input.placementMode === 'AUTOMATIC';
-    const placements = (input.placements?.length ? input.placements : ['PLACEMENT_TIKTOK'])
-      .filter((item) => ['PLACEMENT_TIKTOK', 'PLACEMENT_PANGLE', 'PLACEMENT_GLOBAL_APP_BUNDLE'].includes(item));
+    // ChatLoora's core promise: classic campaigns always run on TikTok only.
+    // Automatic placement (TikTok + Pangle + app bundle) and Pangle are never sent,
+    // whatever the client requests. Smart+ ad groups set their own placement in
+    // createSmartPlusAdGroup because TikTok rejects manual placement there.
+    const automatic = false;
+    const placements = ['PLACEMENT_TIKTOK'];
 
     let promotionType: string = spec.promotionType;
     if (input.objective === 'TRAFFIC') {

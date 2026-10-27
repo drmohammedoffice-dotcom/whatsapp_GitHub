@@ -22,16 +22,18 @@ export class BillingWebhooksController {
     const rawBody = req.rawBody;
     const payload = this.wayl.parseWebhookPayload(body);
 
+    let signatureVerified = false;
     if (signature && rawBody) {
       const valid = this.wayl.verifyWebhookSignature(rawBody, signature);
       if (!valid) {
         this.logger.warn('Wayl webhook signature verification failed');
         throw new ForbiddenException('Invalid webhook signature');
       }
+      signatureVerified = true;
     } else {
       this.logger.warn('Wayl webhook missing signature — confirming payment via Wayl API only');
     }
 
-    return this.billing.handleWaylWebhook(payload);
+    return this.billing.handleWaylWebhook(payload, signatureVerified);
   }
 }

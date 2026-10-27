@@ -192,6 +192,31 @@ export class ChannelMessageService {
     return { contact: contact.contact, identity: contact.identity, conversation, message };
   }
 
+  /**
+   * Media already stored for this provider message (our own send echoed back, or a
+   * re-delivery). Lets the WhatsApp ingest skip downloading the same file again.
+   */
+  async findStoredMedia(teamId: string, providerMessageId: string) {
+    return this.prisma.conversationMessage.findFirst({
+      where: { teamId, providerMessageId, mediaStorageKey: { not: null } },
+      select: { mediaStorageKey: true, mediaMimeType: true, mediaFileName: true, mediaSizeBytes: true },
+    });
+  }
+
+  /**
+   * Storage key of an identical file already kept for this team's inbox. Keys embed the
+   * sha256 of the content (`media/<team>/<ts>-<sha256>.<ext>`), so one copy can be shared
+   * when the same video/image is sent to many customers.
+   */
+  async findMediaKeyByChecksum(teamId: string, checksum: string) {
+    const row = await this.prisma.conversationMessage.findFirst({
+      where: { teamId, mediaStorageKey: { contains: `-${checksum}` } },
+      orderBy: { createdAt: 'desc' },
+      select: { mediaStorageKey: true },
+    });
+    return row?.mediaStorageKey ?? null;
+  }
+
   /** Nudge connected inbox clients to reload after a bulk/history sync. */
   emitConversationsRefreshed(teamId: string) {
     this.realtime.emitTeam(teamId, SOCKET_EVENTS.CONVERSATION_UPDATED, { refreshedAt: new Date().toISOString() });

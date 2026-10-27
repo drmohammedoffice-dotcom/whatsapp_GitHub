@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { TeamRole } from '@watsapp/database';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AdminAuditService } from './admin-audit.service';
@@ -87,10 +87,14 @@ export class AdminWorkspacesService {
     return { disabled: true, teamId };
   }
 
-  deleteWorkspace(adminUserId: string, teamId: string) {
-    return this.prisma.team.delete({ where: { id: teamId } }).then(async (team) => {
-      await this.audit.log({ adminUserId, action: 'workspace.delete', resource: 'team', resourceId: teamId });
-      return team;
-    });
+  async deleteWorkspace(adminUserId: string, teamId: string) {
+    // A team delete cascades to its subscription, payments and invoices.
+    const paid = await this.prisma.payment.count({ where: { teamId } });
+    if (paid > 0) {
+      throw new BadRequestException('لا يمكن حذف مساحة عمل لها مدفوعات مسجّلة. أوقف الاشتراك أو ألغِه بدلاً من الحذف.');
+    }
+    const team = await this.prisma.team.delete({ where: { id: teamId } });
+    await this.audit.log({ adminUserId, action: 'workspace.delete', resource: 'team', resourceId: teamId });
+    return team;
   }
 }

@@ -3272,33 +3272,14 @@ function NewTikTokCampaignForm() {
                   </div>
                 ) : (
                   <>
-                {!isReachObjective && !isTrafficObjective && !isVideoViewsObjective && !isEngagementObjective && (
-                  <div className="flex flex-wrap gap-4 text-sm">
-                    <label className="flex items-center gap-2"><input type="radio" checked={placementMode === 'AUTOMATIC'} onChange={() => setPlacementMode('AUTOMATIC')} /> الموضع التلقائي</label>
-                    <label className="flex items-center gap-2"><input type="radio" checked={placementMode === 'MANUAL'} onChange={() => setPlacementMode('MANUAL')} /> تحديد الموضع</label>
-                  </div>
-                )}
-                {(isReachObjective || isTrafficObjective || isVideoViewsObjective || isEngagementObjective || placementMode === 'MANUAL') && (
+                {/* ChatLoora runs classic campaigns on TikTok only (no automatic placement, no Pangle). */}
+                {(
                   <div className="grid gap-2 text-sm">
-                    <p className="text-xs text-muted-foreground">ستظهر إعلاناتك في المواضع الإعلانية التي تختارها.</p>
-                    {(isReachObjective || isVideoViewsObjective || isEngagementObjective
-                      ? [['PLACEMENT_TIKTOK', 'TikTok']]
-                      : isTrafficObjective
-                        ? [
-                            ['PLACEMENT_TIKTOK', 'TikTok، بما في ذلك نتائج البحث'],
-                            ['PLACEMENT_PANGLE', 'TikTok Ad Network'],
-                          ]
-                        : [
-                          ['PLACEMENT_TIKTOK', 'TikTok'],
-                          ['PLACEMENT_GLOBAL_APP_BUNDLE', 'حزمة التطبيقات العالمية'],
-                          ['PLACEMENT_PANGLE', 'شبكة إعلانات تيك توك'],
-                        ]
-                    ).map(([id, label]) => (
-                      <label key={id} className="flex items-center gap-2">
-                        <input type="checkbox" checked={placements.includes(id)} onChange={() => setPlacements((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])} />
-                        {label}
-                      </label>
-                    ))}
+                    <p className="text-xs text-muted-foreground">ستظهر إعلاناتك على تيك توك فقط، وكل الميزانية تُصرف هناك.</p>
+                    <label className="flex items-center gap-2 font-medium">
+                      <input type="checkbox" checked disabled />
+                      {isTrafficObjective ? 'TikTok، بما في ذلك نتائج البحث' : 'TikTok'}
+                    </label>
                     {placements.includes('PLACEMENT_TIKTOK') && isReachObjective && (
                       <div className="mt-2 grid gap-2 rounded-lg border p-3">
                         <p className="text-xs font-medium text-muted-foreground">مواضع TikTok الفرعية</p>

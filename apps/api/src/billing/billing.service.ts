@@ -34,9 +34,14 @@ export function sanitizePaymentId(raw: string | undefined | null): string {
   return id;
 }
 
-function isWaylPaid(status?: string | null, event?: string | null) {
+/**
+ * Paid state from Wayl's API status, optionally confirmed by the webhook `event`.
+ * Only pass `event` when the webhook signature was verified: an unsigned body can be
+ * forged, and Wayl's link status can still read "Created" after payment.
+ */
+function isWaylPaid(status?: string | null, verifiedEvent?: string | null) {
   const s = (status ?? '').toLowerCase();
-  const e = (event ?? '').toLowerCase();
+  const e = (verifiedEvent ?? '').toLowerCase();
   return (
     s === 'complete' ||
     s === 'completed' ||
@@ -45,8 +50,7 @@ function isWaylPaid(status?: string | null, event?: string | null) {
     s === 'success' ||
     e === 'order.completed' ||
     e === 'order.delivered' ||
-    e === 'order.paid' ||
-    (e === 'order.created' && s === 'paid')
+    e === 'order.paid'
   );
 }
 
@@ -875,7 +879,7 @@ export class BillingService {
    * Handle a Wayl webhook event (payment status change).
    * Called by the webhook controller after signature verification.
    */
-  async handleWaylWebhook(payload: WaylWebhookPayload) {
+  async handleWaylWebhook(payload: WaylWebhookPayload, signatureVerified = false) {
     const { referenceId, event, paymentStatus } = payload;
 
     this.logger.log(`Wayl webhook: event=${event} referenceId=${referenceId} status=${paymentStatus}`);
@@ -916,7 +920,12 @@ export class BillingService {
       return { received: true, matched: true, pendingConfirmation: true };
     }
 
-    const isComplete = isWaylPaid(confirmedStatus, event);
+    const isComplete = isWaylPaid(confirmedStatus, signatureVerified ? event : null);
+    if (!isComplete && !signatureVerified && isWaylPaid(null, event)) {
+      this.logger.warn(
+        `Wayl webhook unsigned: ignoring event=${event} for referenceId=${referenceId} (API status=${confirmedStatus})`,
+      );
+    }
 
     if (!isComplete) {
       await this.prisma.payment.update({

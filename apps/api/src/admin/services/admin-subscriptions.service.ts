@@ -428,6 +428,11 @@ export class AdminSubscriptionsService {
   }
 
   async deleteSubscription(adminUserId: string, subscriptionId: string) {
+    // Deleting cascades to payments, invoices and commissions; billing history must survive.
+    const paid = await this.prisma.payment.count({ where: { subscriptionId } });
+    if (paid > 0) {
+      throw new BadRequestException('لا يمكن حذف اشتراك له مدفوعات مسجّلة. استخدم الإلغاء بدلاً من الحذف.');
+    }
     await this.audit.log({
       adminUserId,
       action: 'subscription.delete',

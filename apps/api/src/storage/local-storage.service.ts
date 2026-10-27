@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
-import { mkdir, unlink, writeFile, readFile } from 'fs/promises';
+import { access, mkdir, unlink, writeFile, readFile } from 'fs/promises';
 import { resolve, sep, extname, join, normalize } from 'path';
 import { UploadedMediaFile } from '../common/uploaded-media-file';
 
@@ -48,6 +48,15 @@ export class LocalStorageService {
       await unlink(this.resolvePath(storageKey));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+
+  async exists(storageKey: string) {
+    try {
+      await access(this.resolvePath(storageKey));
+      return true;
+    } catch {
+      return false;
     }
   }
 

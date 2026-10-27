@@ -233,6 +233,14 @@ export class AdminUsersService {
   }
 
   async deleteUser(adminUserId: string, userId: string) {
+    // Removing the owner of a paying team leaves its subscription without an owner,
+    // which stops renewal reminders. Keep such accounts; disable them instead.
+    const ownsPaidTeam = await this.prisma.teamMember.count({
+      where: { userId, role: TeamRole.OWNER, team: { subscriptions: { some: { payments: { some: {} } } } } },
+    });
+    if (ownsPaidTeam > 0) {
+      throw new BadRequestException('هذا المستخدم مالك لمساحة عمل لها مدفوعات مسجّلة، فلا يمكن حذفه.');
+    }
     await this.audit.log({ adminUserId, action: 'user.delete', resource: 'user', resourceId: userId });
     return this.prisma.user.delete({ where: { id: userId } });
   }
