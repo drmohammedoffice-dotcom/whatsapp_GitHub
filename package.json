@@ -17,8 +17,8 @@
     "mobile:android": "npm --prefix apps/mobile run android"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "prettier": "latest",
+    "@types/node": "26.6.5",
+    "prettier": "3.9.10",
     "typescript": "6.0.3"
   },
   "pnpm": {

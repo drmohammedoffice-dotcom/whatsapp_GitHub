@@ -1,6 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,7 +21,8 @@ class DeleteAccountDto {
 
 @ApiTags('Account')
 @ApiBearerAuth()
-@UseGuards(ThrottlerGuard, JwtAuthGuard)
+// ThrottlerGuard is global (APP_GUARD); adding it here again would count each request twice.
+@UseGuards(JwtAuthGuard)
 @Controller('account')
 export class AccountController {
   constructor(private readonly deletion: AccountDeletionService) {}
