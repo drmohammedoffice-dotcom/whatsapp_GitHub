@@ -73,17 +73,31 @@ export function ChatLooraLogoFull({
   priority?: boolean;
 }) {
   const height = sizeMap[size].fullHeight;
+  const width = Math.round(height * 1.64);
+  // Two images instead of a CSS content swap, so the dark logo also works in Firefox.
   return (
-    <Image
-      src="/chatloora-logo.png"
-      alt="ChatLoora"
-      width={Math.round(height * 1.64)}
-      height={height}
-      className={cn('h-auto w-auto object-contain', className)}
-      style={{ height, width: 'auto' }}
-      priority={priority}
-      unoptimized
-    />
+    <>
+      <Image
+        src="/chatloora-logo.png"
+        alt="ChatLoora"
+        width={width}
+        height={height}
+        className={cn('h-auto w-auto object-contain dark:hidden', className)}
+        style={{ height, width: 'auto' }}
+        priority={priority}
+        unoptimized
+      />
+      <Image
+        src="/chatloora-logo-dark.png"
+        alt="ChatLoora"
+        width={width}
+        height={height}
+        className={cn('hidden h-auto w-auto object-contain dark:block', className)}
+        style={{ height, width: 'auto' }}
+        priority={priority}
+        unoptimized
+      />
+    </>
   );
 }
 

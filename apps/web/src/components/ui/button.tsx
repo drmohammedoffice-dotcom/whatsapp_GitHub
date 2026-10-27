@@ -8,9 +8,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25 hover:from-violet-500 hover:to-indigo-500',
-        destructive: 'bg-destructive text-destructive-foreground shadow-soft hover:bg-destructive/90',
-        outline: 'border border-input bg-background shadow-soft hover:bg-accent hover:text-accent-foreground',
+        // Solid token colours (no background-image) so `className="bg-*"` overrides
+        // keep working. In dark mode globals.css deepens the fill to violet-600
+        // (white text 5.7:1) while --primary itself stays #8B5CF6 for accents.
+        default:
+          'bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary-hover hover:shadow-primary/30',
+        destructive: 'bg-destructive text-destructive-foreground shadow-soft hover:bg-destructive-hover',
+        outline: 'border border-input bg-card text-foreground shadow-soft hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',

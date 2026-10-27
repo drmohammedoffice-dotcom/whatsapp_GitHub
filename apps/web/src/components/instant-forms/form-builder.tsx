@@ -424,7 +424,8 @@ export function InstantFormBuilder({
             setDragType(null);
           }}
         >
-          <div className="mx-auto max-w-[480px] overflow-hidden rounded-[1.5rem] border bg-white shadow-xl">
+          {/* Customers always see the public form in light mode, so the preview stays light. */}
+          <div data-theme="light" className="mx-auto max-w-[480px] overflow-hidden rounded-[1.5rem] border bg-white shadow-xl">
             <InstantFormRenderer
               document={doc}
               mode="preview"
